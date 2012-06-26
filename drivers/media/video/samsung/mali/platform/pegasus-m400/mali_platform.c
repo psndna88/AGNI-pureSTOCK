@@ -479,13 +479,13 @@ static _mali_osk_errcode_t enable_mali_clocks(void)
 	MALI_DEBUG_PRINT(3,("enable_mali_clocks mali_clock %p error %d \n", mali_clock, err));
 
 	// set clock rate
-	if (get_mali_dvfs_control_status() != 0 || mali_gpu_clk >= mali_runtime_resume.clk)
+//	if (get_mali_dvfs_control_status() != 0 || mali_gpu_clk >= mali_runtime_resume.clk)
 		mali_clk_set_rate(mali_gpu_clk, GPU_MHZ);
-	else {
-		mali_regulator_set_voltage(mali_runtime_resume.vol, mali_runtime_resume.vol);
-		mali_clk_set_rate(mali_runtime_resume.clk, GPU_MHZ);
-	}
-	if (mali_gpu_clk <= mali_runtime_resume.clk)
+//	else {
+//		mali_regulator_set_voltage(mali_runtime_resume.vol, mali_runtime_resume.vol);
+//		mali_clk_set_rate(mali_runtime_resume.clk, GPU_MHZ);
+//	}
+//	if (mali_gpu_clk <= mali_runtime_resume.clk)
 
 	MALI_SUCCESS;
 }
