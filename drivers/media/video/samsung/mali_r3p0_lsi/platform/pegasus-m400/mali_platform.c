@@ -51,7 +51,7 @@
 #define CLK_DIV_STAT_G3D 	0x1003C62C
 #define CLK_DESC 			"clk-divider-status"
 
-#define MALI_BOTTOMLOCK_VOL	900000
+#define MALI_BOTTOMLOCK_VOL	600000
 
 typedef struct mali_runtime_resumeTag{
 	int clk;
@@ -171,7 +171,7 @@ void mali_regulator_set_voltage(int min_uV, int max_uV)
 	min_uV = mali_gpu_vol;
 	max_uV = mali_gpu_vol;
 #endif
-#if MALI_VOLTAGE_LOCK
+/*#if MALI_VOLTAGE_LOCK
 	if (mali_vol_lock_flag == MALI_FALSE) {
 		if (min_uV < MALI_BOTTOMLOCK_VOL || max_uV < MALI_BOTTOMLOCK_VOL) {
 			min_uV = MALI_BOTTOMLOCK_VOL;
@@ -193,7 +193,7 @@ void mali_regulator_set_voltage(int min_uV, int max_uV)
 		}
 	}
 #endif
-
+*/
 	_mali_osk_lock_wait(mali_dvfs_lock, _MALI_OSK_LOCKMODE_RW);
 
 	if( IS_ERR_OR_NULL(g3d_regulator) )

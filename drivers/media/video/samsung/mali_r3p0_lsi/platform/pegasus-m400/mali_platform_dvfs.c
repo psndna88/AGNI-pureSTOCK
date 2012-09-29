@@ -456,7 +456,7 @@ static unsigned int decideNextStatus(unsigned int utilization)
 			step[i].clk = mali_dvfs_all[i].clock;
 		}
 #ifdef EXYNOS4_ASV_ENABLED
-		mali_dvfs_table_update();
+		//mali_dvfs_table_update();
 #endif
 		i = 0;
 		for (i = 0; i < MALI_DVFS_STEPS; i++) {

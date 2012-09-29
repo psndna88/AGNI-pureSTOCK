@@ -51,7 +51,7 @@
 #define CLK_DIV_STAT_G3D 	0x1003C62C
 #define CLK_DESC 			"clk-divider-status"
 
-#define MALI_BOTTOMLOCK_VOL	900000
+#define MALI_BOTTOMLOCK_VOL	600000
 
 typedef struct mali_runtime_resumeTag{
 	int clk;
