@@ -325,7 +325,7 @@ static unsigned int decideNextStatus(unsigned int utilization)
 	}
 
 	if (utilization > (int)(255 * mali_dvfs_threshold[maliDvfsStatus.currentStep].upthreshold / 100) &&
-			level < MALI_DVFS_STEPS - 1) {
+			level < MALI_DVFS_STEPS - 2) {
 		level++;
 	}
 	if (utilization < (int)(255 * mali_dvfs_threshold[maliDvfsStatus.currentStep].downthreshold / 100) &&
