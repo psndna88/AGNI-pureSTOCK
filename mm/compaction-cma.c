@@ -303,7 +303,7 @@ isolate_migratepages_range(struct zone *zone, struct compact_control *cc,
 		}
 
 		/* Try isolate the page */
-		if (__isolate_lru_page(page, ISOLATE_BOTH, 0) != 0)
+		if (__isolate_lru_page(page, (ISOLATE_ACTIVE|ISOLATE_INACTIVE), 0) != 0)
 			continue;
 
 		VM_BUG_ON(PageTransCompound(page));
