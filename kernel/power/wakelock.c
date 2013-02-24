@@ -48,7 +48,7 @@ struct workqueue_struct *suspend_work_queue;
 struct workqueue_struct *sync_work_queue;
 struct wake_lock main_wake_lock;
 struct wake_lock sync_wake_lock;
-suspend_state_t requested_suspend_state = PM_SUSPEND_MEM;
+suspend_state_t requested_suspend_state = PM_SUSPEND_FREEZE;
 static struct wake_lock unknown_wakeup;
 static struct wake_lock suspend_backoff_lock;
 
