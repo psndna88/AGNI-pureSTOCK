@@ -1559,8 +1559,10 @@ static void if_hsi_read_done(struct hsi_device *dev, unsigned int size)
 			if (ret)
 				mipi_err("send_cmd fail=%d\n", ret);
 
+#if DEBUG_PRINT
 			print_hex_dump_bytes("[HSI]", DUMP_PREFIX_OFFSET,
 					channel->rx_data, channel->packet_size);
+#endif
 
 			/* to clean the all wrong packet */
 			channel->packet_size = 0;
