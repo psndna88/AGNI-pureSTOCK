@@ -91,6 +91,8 @@ static unsigned int exynos_get_safe_armvolt(unsigned int old_index, unsigned int
 	return safe_arm_volt;
 }
 
+unsigned int smooth_level = L4;
+
 static int exynos_target(struct cpufreq_policy *policy,
 			  unsigned int target_freq,
 			  unsigned int relation)
@@ -138,8 +140,8 @@ static int exynos_target(struct cpufreq_policy *policy,
 
 #if defined(CONFIG_CPU_EXYNOS4210)
 	/* Do NOT step up max arm clock directly to reduce power consumption */
-	if (index == exynos_info->max_support_idx && old_index > 3)
-		index = 3;
+	if (index <= 4 && old_index > smooth_level && smooth_level >= L4)
+		index = smooth_level;
 #endif
 
 	freqs.new = freq_table[index].frequency;
@@ -729,7 +731,17 @@ static int exynos_cpufreq_cpu_init(struct cpufreq_policy *policy)
 		cpumask_setall(policy->cpus);
 	}
 
-	return cpufreq_frequency_table_cpuinfo(policy, exynos_info->freq_table);
+	cpufreq_frequency_table_cpuinfo(policy, exynos_info->freq_table);
+
+	/* Safe default startup limits */
+#ifdef CONFIG_CPU_EXYNOS4210
+	policy->max = 1200000;
+#else
+	policy->max = 1400000;
+#endif
+	policy->min = 200000;
+
+	return 0;
 }
 
 static int exynos_cpufreq_reboot_notifier_call(struct notifier_block *this,
