@@ -123,6 +123,32 @@ config CPU_FREQ_DEFAULT_GOV_PEGASUSQ
 	bool "pegasusq"
 	select CPU_FREQ_GOV_PEGASUSQ
 
+config CPU_FREQ_DEFAULT_GOV_HOTPLUG
+       bool "hotplug"
+       select CPU_FREQ_GOV_HOTPLUG
+       help
+         'hotplug' - this driver mimics the frequency scaling behavior
+         in 'ondemand', but with several key differences.  First is
+         that frequency transitions use the CPUFreq table directly,
+         instead of incrementing in a percentage of the maximum
+         available frequency.  Second 'hotplug' will offline auxillary
+         CPUs when the system is idle, and online those CPUs once the
+         system becomes busy again.  This last feature is needed for
+         architectures which transition to low power states when only
+         the "master" CPU is online, or for thermally constrained
+         devices.
+
+         If you don't have one of these architectures or devices, use
+         'ondemand' instead.
+
+         If in doubt, say N.
+
+config CPU_FREQ_DEFAULT_GOV_LULZACTIVEQ
+        bool "lulzactiveq"
+        select CPU_FREQ_GOV_LULZACTIVEQ
+        help
+          'lulzactiveq' - hotplug mechanism added in lulzactive
+
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
