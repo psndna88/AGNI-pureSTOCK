@@ -2,13 +2,9 @@
 export KERNELDIR=`readlink -f .`
 CROSS_COMPILE=/Working_Directory/android_prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
 
-export KBUILD_BUILD_USER=AGNi
-export KBUILD_BUILD_HOST=PSN-pureSTOCK
-
-
 if [ ! -f $KERNELDIR/.config ];
 then
-  make defconfig android_espresso_omap4430_r04_user_defconfig
+  make defconfig psn_p31xx_oc_defconfig
 fi
 
 . $KERNELDIR/.config
