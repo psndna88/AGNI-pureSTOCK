@@ -41,8 +41,10 @@
 #include <linux/cpu.h>
 #include <linux/notifier.h>
 #include <linux/rculist.h>
+#include "printk_interface.h"
 
 #include <asm/uaccess.h>
+#include <mach/sec_debug.h>
 
 /*
  * Architectures can override it:
@@ -148,7 +150,7 @@ static int console_may_schedule;
 
 #ifdef CONFIG_PRINTK
 
-static char __log_buf[__LOG_BUF_LEN];
+static char __log_buf[__LOG_BUF_LEN] __nosavedata;
 static char *log_buf = __log_buf;
 static int log_buf_len = __LOG_BUF_LEN;
 static unsigned logged_chars; /* Number of chars produced since last read+clear operation */
@@ -215,7 +217,6 @@ void __init setup_log_buf(int early)
 			new_log_buf_len);
 		return;
 	}
-
 	spin_lock_irqsave(&logbuf_lock, flags);
 	log_buf_len = new_log_buf_len;
 	log_buf = new_log_buf;
@@ -712,6 +713,27 @@ static void call_console_drivers(unsigned start, unsigned end)
 	_call_console_drivers(start_print, end, msg_level);
 }
 
+#ifdef CONFIG_SEC_LOG
+static void (*log_char_hook)(char c);
+
+void register_log_char_hook(void (*f) (char c))
+{
+	unsigned start;
+	unsigned long flags;
+
+	spin_lock_irqsave(&logbuf_lock, flags);
+
+	start = min(con_start, log_start);
+	while (start != log_end)
+		f(__log_buf[start++ & (__LOG_BUF_LEN - 1)]);
+
+	log_char_hook = f;
+
+	spin_unlock_irqrestore(&logbuf_lock, flags);
+}
+EXPORT_SYMBOL(register_log_char_hook);
+#endif
+
 static void emit_log_char(char c)
 {
 	LOG_BUF(log_end) = c;
@@ -722,6 +744,11 @@ static void emit_log_char(char c)
 		con_start = log_end - log_buf_len;
 	if (logged_chars < log_buf_len)
 		logged_chars++;
+
+#ifdef CONFIG_SEC_LOG
+	if (log_char_hook)
+		log_char_hook(c);
+#endif
 }
 
 /*
@@ -805,6 +832,12 @@ asmlinkage int printk(const char *fmt, ...)
 {
 	va_list args;
 	int r;
+
+// if printk mode is disabled, terminate instantly
+  	if (printk_mode == 0)
+  	{
+    		return 0;
+  	}
 
 #ifdef CONFIG_KGDB_KDB
 	if (unlikely(kdb_trap_printk)) {
@@ -900,6 +933,12 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 	char *p;
 	size_t plen;
 	char special;
+
+// if printk mode is disabled, terminate instantly
+        if (printk_mode == 0)
+        {
+                return 0;
+        }
 
 	boot_delay_msec();
 	printk_delay();
@@ -1011,7 +1050,7 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 				char tbuf[10], *tp;
 				unsigned tlen;
 
-				tlen = sprintf(tbuf, "C%u ", printk_cpu);
+				tlen = sprintf(tbuf, "c%u ", printk_cpu);
 
 				for (tp = tbuf; tp < tbuf + tlen; tp++)
 					emit_log_char(*tp);
@@ -1020,10 +1059,10 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 
 			if (printk_pid) {
 				/* Add the current process id */
-				char tbuf[20], *tp;
+				char tbuf[10], *tp;
 				unsigned tlen;
 
-				tlen = sprintf(tbuf, "[%15s] ", current->comm);
+				tlen = sprintf(tbuf, "%6u ", current->pid);
 
 				for (tp = tbuf; tp < tbuf + tlen; tp++)
 					emit_log_char(*tp);
@@ -1836,4 +1875,12 @@ void kmsg_dump(enum kmsg_dump_reason reason)
 		dumper->dump(dumper, reason, s1, l1, s2, l2);
 	rcu_read_unlock();
 }
+#endif
+
+#ifdef CONFIG_MACH_PX
+void logbuf_force_unlock(void)
+{
+	logbuf_lock = __SPIN_LOCK_UNLOCKED(logbuf_lock);
+}
+EXPORT_SYMBOL(logbuf_force_unlock);
 #endif
