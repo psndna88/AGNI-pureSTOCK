@@ -63,6 +63,13 @@ static const unsigned max_zpage_size = PAGE_SIZE / 4 * 3;
 #define SECTORS_PER_PAGE	(1 << SECTORS_PER_PAGE_SHIFT)
 #define ZRAM_LOGICAL_BLOCK_SIZE	4096
 
+#if defined(CONFIG_ZRAM_LZO) + defined(CONFIG_ZRAM_SNAPPY) == 0
+#error At least one of CONFIG_ZRAM_LZO, CONFIG_ZRAM_SNAPPY must be defined!
+#endif
+#if defined(CONFIG_ZRAM_LZO) + defined(CONFIG_ZRAM_SNAPPY) > 1
+#define MULTIPLE_COMPRESSORS
+#endif
+
 /* Flags for zram pages (table[page_no].flags) */
 enum zram_pageflags {
 	/* Page is stored uncompressed */
@@ -100,6 +107,9 @@ struct zram_stats {
 
 struct zram {
 	struct xv_pool *mem_pool;
+#ifdef MULTIPLE_COMPRESSORS
+	const struct zram_compressor *compressor;
+#endif
 	void *compress_workmem;
 	void *compress_buffer;
 	struct table *table;
@@ -120,7 +130,7 @@ struct zram {
 	struct zram_stats stats;
 };
 
-extern struct zram *devices;
+extern struct zram *zram_devices;
 extern unsigned int num_devices;
 #ifdef CONFIG_SYSFS
 extern struct attribute_group zram_disk_attr_group;
@@ -128,5 +138,25 @@ extern struct attribute_group zram_disk_attr_group;
 
 extern int zram_init_device(struct zram *zram);
 extern void zram_reset_device(struct zram *zram);
+
+#ifdef MULTIPLE_COMPRESSORS
+struct zram_compressor {
+	const char *name;
+	int (*compress)(
+		const unsigned char *src,
+		size_t src_len,
+		unsigned char *dst,
+		size_t *dst_len,
+		void *workmem);
+	int (*decompress)(
+		const unsigned char *src,
+		size_t src_len,
+		unsigned char *dst,
+		size_t *dst_len);
+	unsigned workmem_bytes;
+};
+
+extern const struct zram_compressor * const zram_compressors[];
+#endif
 
 #endif
