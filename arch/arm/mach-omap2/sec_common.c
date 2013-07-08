@@ -420,6 +420,9 @@ static int sec_common_update_reboot_reason(char mode, const char *cmd)
 		reason = REBOOTMODE_SHUTDOWN;
 		rebootflag = "POFF";
 		break;
+	case 'b':		/* reboot mode = bootloader = download */
+		reason = REBOOTMODE_DOWNLOAD;
+		break;
 	case 'd':		/* reboot mode = download */
 		reason = REBOOTMODE_DOWNLOAD;
 		break;
