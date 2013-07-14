@@ -29,7 +29,7 @@
 #include <asm/atomic.h>
 #include "tmem.h"
 
-#include "../ramzswap/sub-projects/allocators/xvmalloc-kmod/xvmalloc.h" /* if built in drivers/staging */
+#include "../zram/xvmalloc.h" /* if built in drivers/staging */
 
 #if (!defined(CONFIG_CLEANCACHE) && !defined(CONFIG_FRONTSWAP))
 #error "zcache is useless without CONFIG_CLEANCACHE or CONFIG_FRONTSWAP"
