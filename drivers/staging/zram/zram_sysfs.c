@@ -73,6 +73,13 @@ static ssize_t disksize_store(struct device *dev,
 		return -EBUSY;
 	}
 
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+        if (!disksize) {
+                disksize = default_disksize_perc_ram *
+                                        ((totalram_pages << PAGE_SHIFT) / 100);
+        }
+#endif
+
 	zram->disksize = disksize;
 	set_capacity(zram->disk, zram->disksize >> SECTOR_SHIFT);
 	zram_init_device(zram, meta);

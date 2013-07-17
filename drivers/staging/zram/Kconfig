@@ -16,6 +16,13 @@ config ZRAM
 	  See zram.txt for more information.
 	  Project home: <https://compcache.googlecode.com/>
 
+config ZRAM_FOR_ANDROID
+        bool "Optimize zram behavior for android"
+        depends on ZRAM && ANDROID
+        default n
+        help
+          This option enables modified zram behavior optimized for android
+
 config ZRAM_DEBUG
 	bool "Compressed RAM block device debug support"
 	depends on ZRAM
