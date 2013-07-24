@@ -111,6 +111,17 @@ config CPU_FREQ_DEFAULT_GOV_INTERACTIVE
 
 config CPU_FREQ_DEFAULT_GOV_PEGASUSQ
 	bool "pegasusq"
+
+config CPU_FREQ_DEFAULT_GOV_ZZMOOVE
+      	bool "zzmoove"
+    	select CPU_FREQ_GOV_ZZMOOVE
+    	help
+          ZZMoove governor is based on the modified conservative'smoove' governor
+          from Michael Weingaertner. Modified by Zane Zaminsky November 2012 to be
+          hotplug-able and optimzed for use with Samsung I9300.
+          CPU Hotplug modifications partially taken from ktoonservative governor from
+          ktoonsez KT747-JB kernel. DUAL CORE MODE
+
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -184,6 +195,16 @@ config CPU_FREQ_GOV_INTERACTIVE
 	  For details, take a look at linux/Documentation/cpu-freq.
 
 	  If in doubt, say N.
+
+config CPU_FREQ_GOV_ZZMOOVE
+       tristate "'zzmoove' cpufreq governor"
+       depends on CPU_FREQ
+       help
+        'zzmoove' - ZZMoove governor is based on the modified
+        conservative 'smoove' governor from Michael Weingaertner.
+        Modified by Zane Zaminsky November 2012 to be
+        hotplug-able and optimzed for use with Samsung I9300.
+        DUAL CORE MODE
 
 config CPU_FREQ_GOV_CONSERVATIVE
 	tristate "'conservative' cpufreq governor"
