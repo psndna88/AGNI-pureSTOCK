@@ -30,3 +30,9 @@ config ZRAM_DEBUG
 	help
 	  This option adds additional debugging code to the compressed
 	  RAM block device driver.
+
+config XVMALLOC
+	bool "xvmalloc memory allocator"
+	depends on ZCACHE
+	default n
+

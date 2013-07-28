@@ -12,7 +12,7 @@
 #include <linux/types.h>
 #include <linux/highmem.h>
 #include <linux/hash.h>
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 
 /*
  * These are pre-defined by the Xen<->Linux ABI
@@ -47,7 +47,7 @@
 #define ASSERT_INVERTED_SENTINEL(_x, _y) do { } while (0)
 #endif
 
-#define ASSERT_SPINLOCK(_l)	lockdep_assert_held(_l)
+#define ASSERT_SPINLOCK(_l)	WARN_ON(!spin_is_locked(_l))
 
 /*
  * A pool is the highest-level data structure managed by tmem and
