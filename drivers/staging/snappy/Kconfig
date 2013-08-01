@@ -1,0 +1,19 @@
+config SNAPPY_COMPRESS
+	tristate "Snappy Compression"
+	default Y
+	help
+		Snappy is a compressionlibrary.
+		It does not aim for maximum compression, or compatibility  with any other
+		compression library; instead, it aims for very high speeds and reasonable
+		compression.  Compared to the fastest mode of zlib, Snappy is an order of 
+		magnitude  faster  for most inputs,  but the resulting files are anywhere 
+		from 20% to 100% bigger.
+
+config SNAPPY_DECOMPRESS
+	tristate "Snappy Decompression"
+	default Y
+	help
+		Snappy is a decompression library.
+		It does not aim for compatibility with any other compression library; instead
+		it aims for very high speeds.  Compared to the fastest mode ofzlib, Snappy is
+		two order of magnitude faster for most compressed inputs. 

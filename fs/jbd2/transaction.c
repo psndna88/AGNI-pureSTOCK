@@ -178,6 +178,15 @@ repeat:
 		if (!new_transaction)
 			goto alloc_transaction;
 		write_lock(&journal->j_state_lock);
+
+		/* add to bug fix code, j.gap.lee@samsung.com, 2012.04.23 */
+		/* barrier check */
+		if (journal->j_barrier_count) {
+			write_unlock(&journal->j_state_lock);
+			goto repeat;
+		}
+		/* end */
+
 		if (!journal->j_running_transaction) {
 			jbd2_get_transaction(journal, new_transaction);
 			new_transaction = NULL;
@@ -1674,8 +1683,20 @@ int jbd2_journal_try_to_free_buffers(journal_t *journal,
 		__journal_try_to_free_buffer(journal, bh);
 		jbd2_journal_put_journal_head(jh);
 		jbd_unlock_bh_state(bh);
+#ifndef CONFIG_DMA_CMA
 		if (buffer_jbd(bh))
 			goto busy;
+#else
+		if (buffer_jbd(bh)) {
+			/*
+			 * Workaround: In case of CMA page, just commit journal.
+			 */
+			if (is_cma_pageblock(page))
+				jbd2_journal_force_commit(journal);
+			else
+				goto busy;
+		}
+#endif
 	} while ((bh = bh->b_this_page) != head);
 
 	ret = try_to_free_buffers(page);
