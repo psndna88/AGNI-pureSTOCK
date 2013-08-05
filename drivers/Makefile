@@ -22,6 +22,7 @@ obj-$(CONFIG_ARM_AMBA)		+= amba/
 obj-$(CONFIG_DMA_ENGINE)	+= dma/
 
 obj-$(CONFIG_VIRTIO)		+= virtio/
+obj-$(CONFIG_RPMSG)		+= rpmsg/
 obj-$(CONFIG_XEN)		+= xen/
 
 # regulators early, since some subsystems rely on them to initialize
@@ -98,6 +99,7 @@ obj-$(CONFIG_CPU_IDLE)		+= cpuidle/
 obj-$(CONFIG_MMC)		+= mmc/
 obj-$(CONFIG_MEMSTICK)		+= memstick/
 obj-y				+= leds/
+obj-$(CONFIG_SWITCH)		+= switch/
 obj-$(CONFIG_INFINIBAND)	+= infiniband/
 obj-$(CONFIG_SGI_SN)		+= sn/
 obj-y				+= firmware/
@@ -122,3 +124,17 @@ obj-y				+= ieee802154/
 obj-y				+= clk/
 
 obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
+obj-$(CONFIG_REMOTE_PROC)	+= remoteproc/
+
+obj-$(CONFIG_DMM_OMAP)		+= media/
+obj-$(CONFIG_TILER_OMAP)	+= media/
+obj-$(CONFIG_SAMSUNG_MODULES) += samsung/
+obj-$(CONFIG_OMAP_HSI)		+= omap_hsi/
+obj-$(CONFIG_INPUT_YAS_SENSORS)		+= sensors/
+obj-$(CONFIG_SAMSUNG_PHONE_SVNET) += modemctl/
+obj-$(CONFIG_PHONE_IPC_SPI) += phone_svn/
+obj-$(CONFIG_BATTERY_SAMSUNG)   += battery/
+
+ifeq (1, $(shell if [ -d ./drivers/exfat ]; then echo 1; fi))
+obj-$(CONFIG_SAMSUNG_EXFAT)	+= exfat/
+endif

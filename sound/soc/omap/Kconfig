@@ -2,11 +2,31 @@ config SND_OMAP_SOC
 	tristate "SoC Audio for the Texas Instruments OMAP chips"
 	depends on ARCH_OMAP
 
+config SND_OMAP_SOC_ABE_DSP
+	tristate
+	select SND_DYNAMIC_MINORS
+
+config SND_OMAP_SOC_MCASP
+	tristate
+	select SND_SOC_SPDIF
+
 config SND_OMAP_SOC_MCBSP
 	tristate
 	select OMAP_MCBSP
 
 config SND_OMAP_SOC_MCPDM
+	tristate
+
+config SND_OMAP_SOC_ABE
+	tristate
+
+config SND_OMAP_SOC_DMIC
+	tristate
+
+config SND_OMAP_SOC_HDMI
+	tristate
+
+config SND_OMAP_SOC_VXREC
 	tristate
 
 config SND_OMAP_SOC_N810
@@ -92,13 +112,59 @@ config SND_OMAP_SOC_SDP3430
 	  SDP3430.
 
 config SND_OMAP_SOC_SDP4430
-	tristate "SoC Audio support for Texas Instruments SDP4430"
-	depends on TWL4030_CORE && SND_OMAP_SOC && MACH_OMAP_4430SDP
+	tristate "SoC Audio support for Texas Instruments SDP4430 or PandaBoard"
+	depends on TWL4030_CORE && (MACH_OMAP_4430SDP || MACH_OMAP4_PANDA || MACH_OMAP4_SAMSUNG)
 	select SND_OMAP_SOC_MCPDM
 	select SND_SOC_TWL6040
+	select SND_OMAP_SOC_ABE
+	select SND_OMAP_SOC_MCBSP
+	select SND_SOC_DMIC
+	select SND_OMAP_SOC_ABE_DSP
+	select SND_OMAP_SOC_VXREC
+	select SND_OMAP_SOC_MCASP
+	select SND_OMAP_SOC_SPDIF
+	select SND_OMAP_SOC_VXREC
+	select CDC_TCXO if (MACH_OMAP_4430SDP || MACH_OMAP4_TABLET)
 	help
 	  Say Y if you want to add support for SoC audio on Texas Instruments
-	  SDP4430.
+	  SDP4430 or PandaBoard.
+
+config SND_OMAP_SOC_PDM_GAIN_COMPENSATION
+	tristate "SoC Audio PDM gain compensation for SDP4430"
+	depends on SND_OMAP_SOC_SDP4430
+	help
+	  Say Y if you want to add support for SoC Audio PDM gain compensation
+	  on Texas Instruments SDP4430.
+
+	  Note that the ABE is not taking care of the PDM level gains in order
+	  to fit with Phoenix Audio spec.
+
+config SND_OMAP_SOC_WM8994
+	tristate "SoC Audio support for WolfSon WM1811 Codec"
+	depends on MACH_OMAP4_SAMSUNG
+	depends on SND_OMAP_SOC
+	select SND_OMAP_SOC_MCBSP
+	select SND_SOC_WM8994
+	select SND_SOC_WM_HUBS
+	help
+	  Say Y if you want to add support for SoC audio on omap4 + wm1811 board
+
+config SND_OMAP_SOC_MID
+	bool "Samsung MID snd Project"
+	default n
+	select SND_OMAP_SOC
+	select SND_OMAP_SOC_MCBSP
+	select SND_SOC_WM8994
+	select SND_SOC_WM_HUBS
+
+config SND_OMAP_SOC_OMAP4_HDMI
+	tristate "SoC Audio support for Texas Instruments OMAP4 HDMI"
+	depends on SND_OMAP_SOC && OMAP4_DSS_HDMI && OMAP2_DSS && ARCH_OMAP4
+	select SND_OMAP_SOC_HDMI
+	select SND_SOC_OMAP_HDMI_CODEC
+	help
+	  Say Y if you want to add support for SoC HDMI audio on Texas Instruments
+	  OMAP4 chips
 
 config SND_OMAP_SOC_OMAP3_PANDORA
 	tristate "SoC Audio support for OMAP3 Pandora"
@@ -133,3 +199,12 @@ config SND_OMAP_SOC_IGEP0020
 	select SND_SOC_TWL4030
 	help
 	  Say Y if you want to add support for Soc audio on IGEP v2 board.
+
+config SND_USE_SUB_MIC
+	bool "Use SUB_MIC"
+
+config SND_EAR_GND_SEL
+	bool "Use EAR_GND_SEL"
+
+config SND_USE_LINEOUT_SWITCH
+	bool "Use LINEOUT_SWITCH"

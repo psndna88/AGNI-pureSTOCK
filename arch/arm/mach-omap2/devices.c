@@ -16,6 +16,7 @@
 #include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/slab.h>
+#include <linux/mm.h>
 
 #include <mach/hardware.h>
 #include <mach/irqs.h>
@@ -29,13 +30,18 @@
 #include <mach/gpio.h>
 #include <plat/mmc.h>
 #include <plat/dma.h>
+#include <plat/gpu.h>
 #include <plat/omap_hwmod.h>
 #include <plat/omap_device.h>
 #include <plat/omap4-keypad.h>
+#include <plat/mcpdm.h>
+
+#include <sound/omap-abe-dsp.h>
 
 #include "mux.h"
 #include "control.h"
 #include "devices.h"
+#include "dvfs.h"
 
 #define L3_MODULES_MAX_LEN 12
 #define L3_MODULES 3
@@ -292,10 +298,173 @@ static inline void omap_init_mbox(void) { }
 
 static inline void omap_init_sti(void) {}
 
+#if defined(CONFIG_SND_OMAP_SOC_MCPDM) || \
+		defined(CONFIG_SND_OMAP_SOC_MCPDM_MODULE)
+
+static struct omap_device_pm_latency omap_mcpdm_latency[] = {
+	{
+		.deactivate_func = omap_device_idle_hwmods,
+		.activate_func = omap_device_enable_hwmods,
+		.flags = OMAP_DEVICE_LATENCY_AUTO_ADJUST,
+	},
+};
+
+static void omap_init_mcpdm(void)
+{
+	struct omap_hwmod *oh;
+	struct omap_device *od;
+	struct omap_mcpdm_platform_data *pdata;
+	char *oh_name = "mcpdm";
+	char *dev_name = "omap-mcpdm";
+
+	/*
+	 * Init McPDM pins for OMAP4 to prevent the occurrence of
+	 * noise at the output of the Audio IC
+	 */
+	if (cpu_is_omap44xx()) {
+		omap_mux_init_signal("abe_pdm_ul_data.abe_pdm_ul_data",
+			OMAP_PIN_INPUT_PULLDOWN);
+
+		omap_mux_init_signal("abe_pdm_dl_data.abe_pdm_dl_data",
+			OMAP_PIN_INPUT_PULLDOWN);
+
+		omap_mux_init_signal("abe_pdm_frame.abe_pdm_frame",
+			OMAP_PIN_INPUT_PULLUP);
+
+		omap_mux_init_signal("abe_pdm_lb_clk.abe_pdm_lb_clk",
+			OMAP_PIN_INPUT_PULLDOWN);
+
+		omap_mux_init_signal("abe_clks.abe_clks",
+			OMAP_PIN_INPUT_PULLDOWN);
+	}
+
+	oh = omap_hwmod_lookup(oh_name);
+	if (!oh) {
+		pr_err("%s: could not look up %s\n", __func__, oh_name);
+		return;
+	}
+
+	pdata = kzalloc(sizeof(struct omap_mcpdm_platform_data), GFP_KERNEL);
+	if (!pdata) {
+		pr_err("%s: could not allocate platform data\n", __func__);
+		return;
+	}
+
+	pdata->was_context_lost = omap_pm_was_context_lost;
+
+	od = omap_device_build(dev_name, -1, oh, pdata,
+				sizeof(struct omap_mcpdm_platform_data),
+				omap_mcpdm_latency,
+				ARRAY_SIZE(omap_mcpdm_latency), 0);
+	WARN(IS_ERR(od), "could not build omap_device for %s:%s\n",
+				oh_name, dev_name);
+}
+#else
+static inline void omap_init_mcpdm(void) {}
+#endif
+
+#if defined(CONFIG_SND_OMAP_SOC_ABE_DSP) || \
+	defined(CONFIG_SND_OMAP_SOC_ABE_DSP_MODULE)
+
+static struct omap_device_pm_latency omap_aess_latency[] = {
+	{
+		.deactivate_func = omap_device_idle_hwmods,
+		.activate_func = omap_device_enable_hwmods,
+		.flags = OMAP_DEVICE_LATENCY_AUTO_ADJUST,
+	},
+};
+
+static void omap_init_aess(void)
+{
+	struct omap_hwmod *oh;
+	struct omap_device *od;
+	struct omap4_abe_dsp_pdata *pdata;
+	char *oh_name = "aess";
+	char *dev_name = "aess";
+
+	oh = omap_hwmod_lookup(oh_name);
+	if (!oh) {
+		pr_err("%s: could not look up %s\n", __func__, oh_name);
+		return;
+	}
+
+	pdata = kzalloc(sizeof(struct omap4_abe_dsp_pdata), GFP_KERNEL);
+	if (!pdata) {
+		pr_err("%s: could not allocate platform data\n", __func__);
+		return;
+	}
+
+	pdata->device_scale = omap_device_scale;
+	pdata->was_context_lost = omap_pm_was_context_lost;
+
+	od = omap_device_build(dev_name, -1, oh, pdata,
+				sizeof(struct omap4_abe_dsp_pdata),
+				omap_aess_latency,
+				ARRAY_SIZE(omap_aess_latency), 0);
+	WARN(IS_ERR(od), "could not build omap_device for %s:%s\n",
+				oh_name, dev_name);
+
+	kfree(pdata);
+}
+#else
+static inline void omap_init_aess(void) {}
+#endif
+
+#if defined(CONFIG_ARCH_OMAP4) && defined(CONFIG_SND_TI_SOC_SOURCE)
+
+static struct platform_device codec_dmic0 = {
+	.name	= "dmic-codec",
+	.id	= 0,
+};
+
+static struct platform_device codec_dmic1 = {
+	.name	= "dmic-codec",
+	.id	= 1,
+};
+
+static struct platform_device codec_dmic2 = {
+	.name	= "dmic-codec",
+	.id	= 2,
+};
+
+static struct platform_device omap_abe_dai = {
+	.name	= "omap-abe-dai",
+	.id	= -1,
+};
+
+#ifdef CONFIG_SND_OMAP_SOC_VXREC
+static struct platform_device omap_abe_vxrec = {
+	.name	= "omap-abe-vxrec-dai",
+	.id	= -1,
+};
+#endif
+
+static inline void omap_init_abe(void)
+{
+	platform_device_register(&codec_dmic0);
+	platform_device_register(&codec_dmic1);
+	platform_device_register(&codec_dmic2);
+	platform_device_register(&omap_abe_dai);
+#ifdef CONFIG_SND_OMAP_SOC_VXREC
+	platform_device_register(&omap_abe_vxrec);
+#endif
+}
+#else
+static inline void omap_init_abe(void) {}
+#endif
+
 #if defined(CONFIG_SND_SOC) || defined(CONFIG_SND_SOC_MODULE)
 
 static struct platform_device omap_pcm = {
 	.name	= "omap-pcm-audio",
+	.id	= -1,
+};
+
+/*
+ * Device for the ASoC OMAP4 HDMI machine driver
+ */
+static struct platform_device omap4_hdmi_audio = {
+	.name	= "omap4-hdmi-audio",
 	.id	= -1,
 };
 
@@ -313,6 +482,31 @@ OMAP_MCBSP_PLATFORM_DEVICE(5);
 
 static void omap_init_audio(void)
 {
+	struct omap_hwmod *oh_hdmi;
+	struct omap_device *od_hdmi, *od_hdmi_codec;
+	char *oh_hdmi_name = "dss_hdmi";
+	char *dev_hdmi_name = "hdmi-audio-dai";
+	char *dev_hdmi_codec_name = "omap-hdmi-codec";
+
+	if (cpu_is_omap44xx()) {
+		oh_hdmi = omap_hwmod_lookup(oh_hdmi_name);
+		WARN(!oh_hdmi, "%s: could not find omap_hwmod for %s\n",
+			__func__, oh_hdmi_name);
+
+		od_hdmi = omap_device_build(dev_hdmi_name, -1, oh_hdmi, NULL, 0,
+			NULL, 0, false);
+		WARN(IS_ERR(od_hdmi), "%s: could not build omap_device for %s\n",
+			__func__, dev_hdmi_name);
+
+		od_hdmi_codec = omap_device_build(dev_hdmi_codec_name,
+					-1, oh_hdmi, NULL, 0, NULL, 0, false);
+
+		WARN(IS_ERR(od_hdmi_codec), "%s: could not build omap_device for %s\n",
+			__func__, dev_hdmi_codec_name);
+
+		platform_device_register(&omap4_hdmi_audio);
+	}
+
 	platform_device_register(&omap_mcbsp1);
 	platform_device_register(&omap_mcbsp2);
 	if (cpu_is_omap243x() || cpu_is_omap34xx() || cpu_is_omap44xx()) {
@@ -327,6 +521,39 @@ static void omap_init_audio(void)
 
 #else
 static inline void omap_init_audio(void) {}
+#endif
+
+#if defined(CONFIG_SND_OMAP_SOC_MCASP) || \
+	defined(CONFIG_SND_OMAP_SOC_MCASP_MODULE)
+static struct omap_device_pm_latency omap_mcasp_latency[] = {
+	{
+		.deactivate_func = omap_device_idle_hwmods,
+		.activate_func = omap_device_enable_hwmods,
+		.flags = OMAP_DEVICE_LATENCY_AUTO_ADJUST,
+	},
+};
+
+static void omap_init_mcasp(void)
+{
+	struct omap_hwmod *oh;
+	struct omap_device *od;
+	char *oh_name = "omap-mcasp-dai";
+	char *dev_name = "omap-mcasp-dai";
+
+	oh = omap_hwmod_lookup(oh_name);
+	if (!oh) {
+		pr_err("%s: could not look up %s\n", __func__, oh_name);
+		return;
+	}
+
+	od = omap_device_build(dev_name, -1, oh, NULL, 0,
+				omap_mcasp_latency,
+				ARRAY_SIZE(omap_mcasp_latency), 0);
+	WARN(IS_ERR(od), "could not build omap_device for %s:%s\n",
+				oh_name, dev_name);
+}
+#else
+static inline void omap_init_mcasp(void) {}
 #endif
 
 #if defined(CONFIG_SPI_OMAP24XX) || defined(CONFIG_SPI_OMAP24XX_MODULE)
@@ -673,6 +900,64 @@ static void omap_init_vout(void)
 static inline void omap_init_vout(void) {}
 #endif
 
+static struct omap_device_pm_latency omap_gpu_latency[] = {
+	[0] = {
+		.deactivate_func	= omap_device_idle_hwmods,
+		.activate_func		= omap_device_enable_hwmods,
+		.flags			= OMAP_DEVICE_LATENCY_AUTO_ADJUST,
+	},
+};
+
+static void omap_init_gpu(void)
+{
+	struct omap_hwmod *oh;
+	struct omap_device *od;
+	int max_omap_gpu_hwmod_name_len = 16;
+	char oh_name[max_omap_gpu_hwmod_name_len];
+	int l;
+	struct gpu_platform_data *pdata;
+	char *name = "pvrsrvkm";
+
+	l = snprintf(oh_name, max_omap_gpu_hwmod_name_len,
+		     "gpu");
+	WARN(l >= max_omap_gpu_hwmod_name_len,
+		"String buffer overflow in GPU device setup\n");
+
+	oh = omap_hwmod_lookup(oh_name);
+	if (!oh) {
+
+		pr_err("omap_init_gpu: Could not look up %s\n", oh_name);
+		return;
+	}
+
+	pdata = kzalloc(sizeof(struct gpu_platform_data),
+					GFP_KERNEL);
+	if (!pdata) {
+		pr_err("omap_init_gpu: Platform data memory allocation failed\n");
+		return;
+	}
+
+	pdata->device_scale = omap_device_scale;
+	pdata->device_enable = omap_device_enable;
+	pdata->device_idle = omap_device_idle;
+	pdata->device_shutdown = omap_device_shutdown;
+	pdata->opp_get_opp_count = opp_get_opp_count;
+	pdata->opp_find_freq_ceil = opp_find_freq_ceil;
+	pdata->access_process_vm = access_process_vm;
+
+	pdata->ovfreqs = 0;
+	if (cpu_is_omap446x())
+		pdata->ovfreqs = 1;
+
+	od = omap_device_build(name, 0, oh, pdata,
+			     sizeof(struct gpu_platform_data),
+			     omap_gpu_latency, ARRAY_SIZE(omap_gpu_latency), 0);
+	WARN(IS_ERR(od), "Could not build omap_device for %s %s\n",
+	     name, oh_name);
+
+	kfree(pdata);
+}
+
 /*-------------------------------------------------------------------------*/
 
 static int __init omap2_init_devices(void)
@@ -681,9 +966,13 @@ static int __init omap2_init_devices(void)
 	 * please keep these calls, and their implementations above,
 	 * in alphabetical order so they're easier to sort through.
 	 */
+	omap_init_mcpdm();
+	omap_init_aess();
+	omap_init_abe();
 	omap_init_audio();
 	omap_init_camera();
 	omap_init_mbox();
+	omap_init_mcasp();
 	omap_init_mcspi();
 	omap_init_pmu();
 	omap_hdq_init();
@@ -691,6 +980,7 @@ static int __init omap2_init_devices(void)
 	omap_init_sham();
 	omap_init_aes();
 	omap_init_vout();
+	omap_init_gpu();
 
 	return 0;
 }

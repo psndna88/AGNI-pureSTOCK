@@ -146,12 +146,12 @@ static int _omap_device_activate(struct omap_device *od, u8 ignore_lat)
 			odpl->activate_lat_worst = act_lat;
 			if (odpl->flags & OMAP_DEVICE_LATENCY_AUTO_ADJUST) {
 				odpl->activate_lat = act_lat;
-				pr_warning("omap_device: %s.%d: new worst case "
+				pr_debug("omap_device: %s.%d: new worst case "
 					   "activate latency %d: %llu\n",
 					   od->pdev.name, od->pdev.id,
 					   od->pm_lat_level, act_lat);
 			} else
-				pr_warning("omap_device: %s.%d: activate "
+				pr_debug("omap_device: %s.%d: activate "
 					   "latency %d higher than exptected. "
 					   "(%llu > %d)\n",
 					   od->pdev.name, od->pdev.id,
@@ -214,12 +214,12 @@ static int _omap_device_deactivate(struct omap_device *od, u8 ignore_lat)
 			odpl->deactivate_lat_worst = deact_lat;
 			if (odpl->flags & OMAP_DEVICE_LATENCY_AUTO_ADJUST) {
 				odpl->deactivate_lat = deact_lat;
-				pr_warning("omap_device: %s.%d: new worst case "
+				pr_debug("omap_device: %s.%d: new worst case "
 					   "deactivate latency %d: %llu\n",
 					   od->pdev.name, od->pdev.id,
 					   od->pm_lat_level, deact_lat);
 			} else
-				pr_warning("omap_device: %s.%d: deactivate "
+				pr_debug("omap_device: %s.%d: deactivate "
 					   "latency %d higher than exptected. "
 					   "(%llu > %d)\n",
 					   od->pdev.name, od->pdev.id,
@@ -311,7 +311,7 @@ static void _add_optional_clock_clkdev(struct omap_device *od,
  * return the context loss counter for that hwmod, otherwise return
  * zero.
  */
-u32 omap_device_get_context_loss_count(struct platform_device *pdev)
+int omap_device_get_context_loss_count(struct platform_device *pdev)
 {
 	struct omap_device *od;
 	u32 ret = 0;

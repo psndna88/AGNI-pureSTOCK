@@ -48,9 +48,14 @@
 #define OMAP3_SRAM_VA           0xfe400000
 #define OMAP3_SRAM_PUB_PA       (OMAP3_SRAM_PA + 0x8000)
 #define OMAP3_SRAM_PUB_VA       (OMAP3_SRAM_VA + 0x8000)
-#define OMAP4_SRAM_VA		0xfe400000
-#define OMAP4_SRAM_PUB_PA	(OMAP4_SRAM_PA + 0x4000)
-#define OMAP4_SRAM_PUB_VA	(OMAP4_SRAM_VA + 0x4000)
+
+#define OMAP4_SRAM_MAX          0xe000 /* 56K */
+#define OMAP4_SRAM_VA           0xfe400000
+
+#define OMAP4_HS_SRAM_SIZE      0x1000 /*  4K */
+#define OMAP4_HS_SRAM_OFFSET    (OMAP4_SRAM_MAX - OMAP4_HS_SRAM_SIZE)
+#define OMAP4_SRAM_PUB_PA       (OMAP4_SRAM_PA + OMAP4_HS_SRAM_OFFSET)
+#define OMAP4_SRAM_PUB_VA       (OMAP4_SRAM_VA + OMAP4_HS_SRAM_OFFSET)
 
 #if defined(CONFIG_ARCH_OMAP2PLUS)
 #define SRAM_BOOTLOADER_SZ	0x00
@@ -76,6 +81,12 @@ static unsigned long omap_sram_start;
 static unsigned long omap_sram_base;
 static unsigned long omap_sram_size;
 static unsigned long omap_sram_ceil;
+static unsigned long omap_barrier_base;
+
+unsigned long omap_get_sram_barrier_base(void)
+{
+	return omap_barrier_base;
+}
 
 /*
  * Depending on the target RAMFS firewall setup, the public usable amount of
@@ -128,7 +139,7 @@ static void __init omap_detect_sram(void)
 			} else if (cpu_is_omap44xx()) {
 				omap_sram_base = OMAP4_SRAM_PUB_VA;
 				omap_sram_start = OMAP4_SRAM_PUB_PA;
-				omap_sram_size = 0xa000; /* 40K */
+				omap_sram_size = OMAP4_HS_SRAM_SIZE;
 			} else {
 				omap_sram_base = OMAP2_SRAM_PUB_VA;
 				omap_sram_start = OMAP2_SRAM_PUB_PA;
@@ -185,23 +196,24 @@ static void __init omap_detect_sram(void)
 	omap_sram_ceil = omap_sram_base + omap_sram_size;
 }
 
-static struct map_desc omap_sram_io_desc[] __initdata = {
-	{	/* .length gets filled in at runtime */
-		.virtual	= OMAP1_SRAM_VA,
-		.pfn		= __phys_to_pfn(OMAP1_SRAM_PA),
-		.type		= MT_MEMORY
-	}
-};
-
 /*
  * Note that we cannot use ioremap for SRAM, as clock init needs SRAM early.
  */
 static void __init omap_map_sram(void)
 {
 	unsigned long base;
+	struct map_desc omap_sram_io_desc[2];
+	int	nr_desc = 1;
 
 	if (omap_sram_size == 0)
 		return;
+
+	omap_sram_io_desc[0].virtual = omap_sram_base;
+	base = omap_sram_start;
+	base = ROUND_DOWN(base, PAGE_SIZE);
+	omap_sram_io_desc[0].pfn = __phys_to_pfn(base);
+	omap_sram_io_desc[0].length = ROUND_DOWN(omap_sram_size, PAGE_SIZE);
+	omap_sram_io_desc[0].type = MT_MEMORY;
 
 	if (cpu_is_omap34xx()) {
 		/*
@@ -212,14 +224,33 @@ static void __init omap_map_sram(void)
 		 * which will cause the system to hang.
 		 */
 		omap_sram_io_desc[0].type = MT_MEMORY_NONCACHED;
+	} else if (cpu_is_omap44xx()) {
+		/*
+		 * Map a page of SRAM with strongly ordered attributes
+		 * for interconnect barrier usage.
+		 * if we have space, then use a new page, else remap
+		 * first map
+		 */
+		if (omap_sram_size <= PAGE_SIZE) {
+			omap_sram_io_desc[0].type = MT_MEMORY_SO;
+			omap_barrier_base = omap_sram_io_desc[0].virtual;
+		} else {
+			omap_sram_io_desc[0].length = ROUND_DOWN(omap_sram_size
+						- PAGE_SIZE, PAGE_SIZE);
+			omap_sram_io_desc[1].virtual =
+				omap_sram_base + omap_sram_io_desc[0].length;
+			omap_barrier_base = omap_sram_io_desc[1].virtual;
+			base = omap_sram_start + omap_sram_io_desc[0].length;
+			base = ROUND_DOWN(base, PAGE_SIZE);
+			omap_sram_io_desc[1].pfn = __phys_to_pfn(base);
+			omap_sram_io_desc[1].length = PAGE_SIZE;
+			omap_sram_io_desc[1].type = MT_MEMORY_SO;
+			nr_desc = 2;
+		}
 	}
 
-	omap_sram_io_desc[0].virtual = omap_sram_base;
-	base = omap_sram_start;
-	base = ROUND_DOWN(base, PAGE_SIZE);
-	omap_sram_io_desc[0].pfn = __phys_to_pfn(base);
-	omap_sram_io_desc[0].length = ROUND_DOWN(omap_sram_size, PAGE_SIZE);
-	iotable_init(omap_sram_io_desc, ARRAY_SIZE(omap_sram_io_desc));
+
+	iotable_init(omap_sram_io_desc, nr_desc);
 
 	pr_info("SRAM: Mapped pa 0x%08llx to va 0x%08lx size: 0x%lx\n",
 		(long long) __pfn_to_phys(omap_sram_io_desc[0].pfn),

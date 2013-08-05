@@ -1,7 +1,7 @@
 /*
  * OMAP44xx Power Management register bits
  *
- * Copyright (C) 2009-2010 Texas Instruments, Inc.
+ * Copyright (C) 2009-2011 Texas Instruments, Inc.
  * Copyright (C) 2009-2010 Nokia Corporation
  *
  * Paul Walmsley (paul@pwsan.com)
@@ -91,6 +91,10 @@
 /* Used by PRM_VOLTCTRL */
 #define OMAP4430_AUTO_CTRL_VDD_MPU_L_SHIFT				2
 #define OMAP4430_AUTO_CTRL_VDD_MPU_L_MASK				(0x3 << 2)
+
+/* Used by PRM_VOLTCTRL */
+#define OMAP4430_AUTO_CTRL_VDD_RET_MASK				(1 << 1)
+#define OMAP4430_AUTO_CTRL_VDD_SLEEP_MASK			(1 << 0)
 
 /* Used by PRM_VC_ERRST */
 #define OMAP4430_BYPS_RA_ERR_SHIFT					25
@@ -283,6 +287,14 @@
 #define OMAP4430_DUCATI_UNICACHE_STATEST_SHIFT				10
 #define OMAP4430_DUCATI_UNICACHE_STATEST_MASK				(0x3 << 10)
 
+/* Used by PRM_DEVICE_OFF_CTRL */
+#define OMAP4460_EMIF1_OFFWKUP_DISABLE_SHIFT				8
+#define OMAP4460_EMIF1_OFFWKUP_DISABLE_MASK				(1 << 8)
+
+/* Used by PRM_DEVICE_OFF_CTRL */
+#define OMAP4460_EMIF2_OFFWKUP_DISABLE_SHIFT				9
+#define OMAP4460_EMIF2_OFFWKUP_DISABLE_MASK				(1 << 9)
+
 /* Used by RM_MPU_RSTST */
 #define OMAP4430_EMULATION_RST_SHIFT					0
 #define OMAP4430_EMULATION_RST_MASK					(1 << 0)
@@ -390,6 +402,8 @@
 /* Used by PRM_IO_PMCTRL */
 #define OMAP4430_GLOBAL_WUEN_SHIFT					16
 #define OMAP4430_GLOBAL_WUEN_MASK					(1 << 16)
+#define OMAP4430_ISOOVR_EXTEND_SHIFT					4
+#define OMAP4430_ISOOVR_EXTEND_MASK					(1 << 4)
 
 /* Used by PRM_VC_CFG_I2C_MODE */
 #define OMAP4430_HSMCODE_SHIFT						0
@@ -1062,6 +1076,14 @@
 /* Used by PRM_VC_CFG_I2C_CLK */
 #define OMAP4430_SCLL_SHIFT						8
 #define OMAP4430_SCLL_MASK						(0xff << 8)
+
+/* Used by PRM_VC_CFG_I2C_CLK */
+#define OMAP4430_HSCLH_SHIFT						16
+#define OMAP4430_HSCLH_MASK						(0xff << 16)
+
+/* Used by PRM_VC_CFG_I2C_CLK */
+#define OMAP4430_HSCLL_SHIFT						24
+#define OMAP4430_HSCLL_MASK						(0xff << 24)
 
 /* Used by PRM_RSTST */
 #define OMAP4430_SECURE_WDT_RST_SHIFT					4

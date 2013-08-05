@@ -30,6 +30,7 @@
 #include "powerdomain.h"
 #include "clockdomain.h"
 #include <plat/serial.h>
+#include <plat/omap-pm.h>
 
 #include "pm.h"
 #include "control.h"
@@ -119,7 +120,7 @@ static int omap3_enter_idle(struct cpuidle_device *dev,
 	}
 
 	/* Execute ARM wfi */
-	omap_sram_idle();
+	omap_sram_idle(false);
 
 	/* Re-allow idle for C1 */
 	if (state == &dev->states[0]) {
@@ -157,7 +158,7 @@ static struct cpuidle_state *next_valid_state(struct cpuidle_device *dev,
 	u32 mpu_deepest_state = PWRDM_POWER_RET;
 	u32 core_deepest_state = PWRDM_POWER_RET;
 
-	if (enable_off_mode) {
+	if (off_mode_enabled) {
 		mpu_deepest_state = PWRDM_POWER_OFF;
 		/*
 		 * Erratum i583: valable for ES rev < Es1.2 on 3630.

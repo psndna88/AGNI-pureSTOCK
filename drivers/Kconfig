@@ -96,6 +96,8 @@ source "drivers/leds/Kconfig"
 
 source "drivers/nfc/Kconfig"
 
+source "drivers/switch/Kconfig"
+
 source "drivers/accessibility/Kconfig"
 
 source "drivers/infiniband/Kconfig"
@@ -126,4 +128,21 @@ source "drivers/hwspinlock/Kconfig"
 
 source "drivers/clocksource/Kconfig"
 
+source "drivers/remoteproc/Kconfig"
+
+source "drivers/samsung/Kconfig"
+
+source "drivers/virtio/Kconfig"
+
+source "drivers/rpmsg/Kconfig"
+
+source "drivers/omap_hsi/Kconfig"
+
+source "drivers/sensors/Kconfig"
+
+source "drivers/phone_svn/Kconfig"
+
+source "drivers/modemctl/Kconfig"
+
+source "drivers/battery/Kconfig"
 endmenu

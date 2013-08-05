@@ -1450,7 +1450,7 @@ static int __blkdev_put(struct block_device *bdev, fmode_t mode, int for_part)
 		bdev->bd_contains = NULL;
 
 		put_disk(disk);
-		module_put(owner);
+                module_put(owner);
 	}
 	mutex_unlock(&bdev->bd_mutex);
 	bdput(bdev);

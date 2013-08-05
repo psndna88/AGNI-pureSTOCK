@@ -17,7 +17,9 @@
 #include <linux/device.h>
 #include <linux/cpufreq.h>
 #include <linux/clk.h>
+#include <linux/pm_qos_params.h>
 #include <linux/opp.h>
+#include <linux/pm_qos_params.h>
 
 /*
  * agent_id values for use with omap_pm_set_min_bus_tput():
@@ -73,7 +75,8 @@ void omap_pm_if_exit(void);
 
 /**
  * omap_pm_set_max_mpu_wakeup_lat - set the maximum MPU wakeup latency
- * @dev: struct device * requesting the constraint
+ * @qos_request: handle for the constraint. The pointer should be
+ * initialized to NULL
  * @t: maximum MPU wakeup latency in microseconds
  *
  * Request that the maximum interrupt latency for the MPU to be no
@@ -105,7 +108,8 @@ void omap_pm_if_exit(void);
  * Returns -EINVAL for an invalid argument, -ERANGE if the constraint
  * is not satisfiable, or 0 upon success.
  */
-int omap_pm_set_max_mpu_wakeup_lat(struct device *dev, long t);
+int omap_pm_set_max_mpu_wakeup_lat(struct pm_qos_request_list **qos_request,
+				long t);
 
 
 /**
@@ -132,12 +136,12 @@ int omap_pm_set_max_mpu_wakeup_lat(struct device *dev, long t);
  *
  * Multiple calls to omap_pm_set_min_bus_tput() will replace the
  * previous rate value for this device.  To remove the interconnect
- * throughput restriction for this device, call with r = 0.
+ * throughput restriction for this device, call with r = -1.
  *
  * Returns -EINVAL for an invalid argument, -ERANGE if the constraint
  * is not satisfiable, or 0 upon success.
  */
-int omap_pm_set_min_bus_tput(struct device *dev, u8 agent_id, unsigned long r);
+int omap_pm_set_min_bus_tput(struct device *dev, u8 agent_id, long r);
 
 
 /**
@@ -172,7 +176,8 @@ int omap_pm_set_max_dev_wakeup_lat(struct device *req_dev, struct device *dev,
 
 /**
  * omap_pm_set_max_sdma_lat - set the maximum system DMA transfer start latency
- * @dev: struct device *
+ * @qos_request: handle for the constraint. The pointer should be
+ * initialized to NULL
  * @t: maximum DMA transfer start latency in microseconds
  *
  * Request that the maximum system DMA transfer start latency for this
@@ -197,7 +202,8 @@ int omap_pm_set_max_dev_wakeup_lat(struct device *req_dev, struct device *dev,
  * Returns -EINVAL for an invalid argument, -ERANGE if the constraint
  * is not satisfiable, or 0 upon success.
  */
-int omap_pm_set_max_sdma_lat(struct device *dev, long t);
+int omap_pm_set_max_sdma_lat(struct pm_qos_request_list **qos_request,
+					long t);
 
 
 /**
@@ -337,24 +343,26 @@ unsigned long omap_pm_cpu_get_freq(void);
  */
 
 /**
- * omap_pm_get_dev_context_loss_count - return count of times dev has lost ctx
- * @dev: struct device *
+ * omap_pm_was_context_lost - return true if a device lost hw context
  *
- * This function returns the number of times that the device @dev has
- * lost its internal context.  This generally occurs on a powerdomain
- * transition to OFF.  Drivers use this as an optimization to avoid restoring
- * context if the device hasn't lost it.  To use, drivers should initially
- * call this in their context save functions and store the result.  Early in
- * the driver's context restore function, the driver should call this function
- * again, and compare the result to the stored counter.  If they differ, the
- * driver must restore device context.   If the number of context losses
- * exceeds the maximum positive integer, the function will wrap to 0 and
- * continue counting.  Returns the number of context losses for this device,
- * or zero upon error.
+ * This function returns a bool value indication if a device has lost
+ * its context. Depending on the HW implementation of the device, Context
+ * can be lost in OFF or OSWR. This function reads and *CLEARS* the context
+ * lost registers for the device.
  */
-u32 omap_pm_get_dev_context_loss_count(struct device *dev);
+bool omap_pm_was_context_lost(struct device *dev);
+
+/**
+ * omap_pm_set_min_mpu_freq - sets the min frequency the mpu should be allowed
+ * to run. The function works with a granularity of 1000000. Any frequency requested,
+ * will set the mpu frequency to the closet higher frequency that can match the request.
+ * to release the constraint, the f parameter should be passed as -1.
+ */
+int omap_pm_set_min_mpu_freq(struct device *dev, unsigned long f);
 
 void omap_pm_enable_off_mode(void);
 void omap_pm_disable_off_mode(void);
+
+extern bool off_mode_enabled;
 
 #endif

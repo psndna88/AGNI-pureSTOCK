@@ -15,6 +15,7 @@
 #include <linux/device.h>
 #include <linux/mmc/host.h>
 
+#include <asm/mach/mmc.h>
 #include <plat/board.h>
 
 #define OMAP15XX_NR_MMC		1
@@ -60,9 +61,6 @@ struct omap_mmc_platform_data {
 	int (*suspend)(struct device *dev, int slot);
 	int (*resume)(struct device *dev, int slot);
 
-	/* Return context loss count due to PM states changing */
-	int (*get_context_loss_count)(struct device *dev);
-
 	u64 dma_mask;
 
 	/* Integrating attributes from the omap_hwmod layer */
@@ -79,6 +77,7 @@ struct omap_mmc_platform_data {
 		 */
 		u8  wires;	/* Used for the MMC driver on omap1 and 2420 */
 		u32 caps;	/* Used for the MMC driver on 2430 and later */
+		u32 caps2;	/* Used for emmc v4.5 features  */
 
 		/*
 		 * nomux means "standard" muxing is wrong on this board, and
@@ -108,8 +107,9 @@ struct omap_mmc_platform_data {
 		unsigned vcc_aux_disable_is_sleep:1;
 
 		/* we can put the features above into this variable */
-#define HSMMC_HAS_PBIAS		(1 << 0)
-#define HSMMC_HAS_UPDATED_RESET	(1 << 1)
+#define HSMMC_HAS_PBIAS			(1 << 0)
+#define HSMMC_HAS_UPDATED_RESET		(1 << 1)
+#define HSMMC_HAS_48MHZ_MASTER_CLK	(1 << 2)
 		unsigned features;
 
 		int switch_pin;			/* gpio (card detect) */
@@ -145,6 +145,13 @@ struct omap_mmc_platform_data {
 		/* Card detection IRQs */
 		int card_detect_irq;
 		int (*card_detect)(struct device *dev, int slot);
+
+		/* External LDO using GPIO */
+		bool external_ldo;
+		int gpio_for_ldo;
+
+		/* Additional mmc configuration */
+		struct mmc_platform_data mmc_data;
 
 		unsigned int ban_openended:1;
 

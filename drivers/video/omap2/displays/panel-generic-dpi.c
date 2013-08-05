@@ -82,6 +82,30 @@ static struct panel_config generic_dpi_panels[] = {
 		.name			= "generic",
 	},
 
+	/* generic 720p */
+	{
+		{
+			.x_res		= 1280,
+			.y_res		= 720,
+
+			.pixel_clock	= 74250,
+
+			.hfp		= 110,
+			.hsw		= 40,
+			.hbp		= 20,
+
+			.vfp		= 5,
+			.vsw		= 5,
+			.vbp		= 20,
+		},
+		.acbi			= 0x0,
+		.acb			= 0x0,
+		.config			= OMAP_DSS_LCD_TFT,
+		.power_on_delay		= 0,
+		.power_off_delay	= 0,
+		.name			= "generic_720p",
+	},
+
 	/* Sharp LQ043T1DG01 */
 	{
 		{
@@ -231,6 +255,31 @@ static struct panel_config generic_dpi_panels[] = {
 		.power_on_delay		= 0,
 		.power_off_delay	= 0,
 		.name			= "powertip_ph480272t",
+	},
+	/* Samsung AMS452GN05 */
+	{
+		{
+			.x_res		= 480,
+			.y_res		= 800,
+
+			.pixel_clock	= 25600,
+
+			.hfp		= 16,
+			.hsw		= 2,
+			.hbp		= 16,
+
+			.vfp		= 9,
+			.vsw		= 2,
+			.vbp		= 3,
+		},
+		.acbi			= 0x0,
+		.acb			= 0x0,
+		.config			= OMAP_DSS_LCD_TFT | OMAP_DSS_LCD_IVS |
+					OMAP_DSS_LCD_IHS | OMAP_DSS_LCD_IPC |
+					OMAP_DSS_LCD_IEO | OMAP_DSS_LCD_ONOFF,
+		.power_on_delay		= 0,
+		.power_off_delay	= 0,
+		.name			= "samsung_ams452gn05",
 	},
 };
 

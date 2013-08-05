@@ -44,7 +44,7 @@
 #include <plat/omap_hwmod.h>
 
 #include "timer-gp.h"
-
+#include "dmtimer.h"
 
 /* MAX_GPTIMER_ID: number of GPTIMERs on the chip */
 #define MAX_GPTIMER_ID		12
@@ -106,6 +106,7 @@ static struct clock_event_device clockevent_gpt = {
 	.name		= "gp timer",
 	.features       = CLOCK_EVT_FEAT_PERIODIC | CLOCK_EVT_FEAT_ONESHOT,
 	.shift		= 32,
+	.rating		= 300,
 	.set_next_event	= omap2_gp_timer_set_next_event,
 	.set_mode	= omap2_gp_timer_set_mode,
 };
@@ -134,12 +135,8 @@ static void __init omap2_gp_clockevent_init(void)
 {
 	u32 tick_rate;
 	int src;
-	char clockevent_hwmod_name[8]; /* 8 = sizeof("timerXX0") */
 
 	inited = 1;
-
-	sprintf(clockevent_hwmod_name, "timer%d", gptimer_id);
-	omap_hwmod_setup_one(clockevent_hwmod_name);
 
 	gptimer = omap_dm_timer_request_specific(gptimer_id);
 	BUG_ON(gptimer == NULL);
@@ -154,8 +151,8 @@ static void __init omap2_gp_clockevent_init(void)
 #endif
 
 	if (gptimer_id != 12)
-		WARN(IS_ERR_VALUE(omap_dm_timer_set_source(gptimer, src)),
-		     "timer-gp: omap_dm_timer_set_source() failed\n");
+		WARN(IS_ERR_VALUE(omap2_system_timer_set_src(gptimer, src)),
+		     "timer-gp: omap2_system_timer_set_src() failed\n");
 
 	tick_rate = clk_get_rate(omap_dm_timer_get_fclk(gptimer));
 
@@ -174,7 +171,8 @@ static void __init omap2_gp_clockevent_init(void)
 		clockevent_delta2ns(3, &clockevent_gpt);
 		/* Timer internal resynch latency. */
 
-	clockevent_gpt.cpumask = cpumask_of(0);
+	clockevent_gpt.cpumask = cpu_all_mask;
+	clockevent_gpt.irq = omap_dm_timer_get_irq(gptimer);
 	clockevents_register_device(&clockevent_gpt);
 }
 
@@ -255,7 +253,7 @@ static void __init omap2_gp_timer_init(void)
 		BUG_ON(!twd_base);
 	}
 #endif
-	omap_dm_timer_init();
+	omap2_system_timer_init(gptimer_id);
 
 	omap2_gp_clockevent_init();
 	omap2_gp_clocksource_init();

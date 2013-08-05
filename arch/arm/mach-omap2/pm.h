@@ -17,10 +17,34 @@
 
 extern void *omap3_secure_ram_storage;
 extern void omap3_pm_off_mode_enable(int);
-extern void omap_sram_idle(void);
+extern void omap_sram_idle(bool suspend);
 extern int omap3_can_sleep(void);
 extern int omap_set_pwrdm_state(struct powerdomain *pwrdm, u32 state);
 extern int omap3_idle_init(void);
+extern int omap4_idle_init(void);
+extern void omap4_enter_sleep(unsigned int cpu, unsigned int power_state,
+				bool suspend);
+extern void omap4_trigger_ioctrl(void);
+extern u32 omap4_device_off_counter;
+
+#ifdef CONFIG_PM
+extern void omap4_device_set_state_off(u8 enable);
+extern bool omap4_device_prev_state_off(void);
+extern bool omap4_device_next_state_off(void);
+extern void omap4_device_clear_prev_off_state(void);
+#else
+static inline void omap4_device_set_state_off(u8 enable)
+{
+}
+static inline bool omap4_device_prev_state_off(void)
+{
+	return false;
+}
+static inline bool omap4_device_next_state_off(void)
+{
+	return false;
+}
+#endif
 
 #if defined(CONFIG_PM_OPP)
 extern int omap3_opp_init(void);
@@ -31,6 +55,15 @@ static inline int omap3_opp_init(void)
 	return -EINVAL;
 }
 static inline int omap4_opp_init(void)
+{
+	return -EINVAL;
+}
+#endif
+
+#ifdef CONFIG_PM
+int omap4_pm_cold_reset(char *reason);
+#else
+int omap4_pm_cold_reset(char *reason)
 {
 	return -EINVAL;
 }
@@ -68,14 +101,17 @@ extern struct omap_dm_timer *gptimer_wakeup;
 extern void omap2_pm_dump(int mode, int resume, unsigned int us);
 extern void omap2_pm_wakeup_on_timer(u32 seconds, u32 milliseconds);
 extern int omap2_pm_debug;
-extern u32 enable_off_mode;
 extern u32 sleep_while_idle;
 #else
 #define omap2_pm_dump(mode, resume, us)		do {} while (0);
 #define omap2_pm_wakeup_on_timer(seconds, milliseconds)	do {} while (0);
 #define omap2_pm_debug				0
-#define enable_off_mode 0
 #define sleep_while_idle 0
+#endif
+#ifdef CONFIG_PM_ADVANCED_DEBUG
+extern void omap4_pm_suspend_save_regs(void);
+#else
+static inline void omap4_pm_suspend_save_regs(void) { }
 #endif
 
 #if defined(CONFIG_PM_DEBUG) && defined(CONFIG_DEBUG_FS)
@@ -125,19 +161,132 @@ static inline int omap_devinit_smartreflex(void)
 static inline void omap_enable_smartreflex_on_init(void) {}
 #endif
 
-#ifdef CONFIG_TWL4030_CORE
-extern int omap3_twl_init(void);
-extern int omap4_twl_init(void);
-extern int omap3_twl_set_sr_bit(bool enable);
+/**
+ * struct omap_pmic_map - Describe the OMAP PMIC data for OMAP
+ * @name:	name of the voltage domain
+ * @pmic_data:	pmic data associated with it
+ * @omap_chip:	initialize with OMAP_CHIP_INIT the OMAP chips this data maps to
+ * @special_action: callback for any specific action to take for that map
+ *
+ * Since we support multiple PMICs each potentially functioning on multiple
+ * OMAP devices, we describe the parameters in a map allowing us to reuse the
+ * data as necessary.
+ */
+struct omap_pmic_map {
+	char			*name;
+	struct omap_voltdm_pmic	*pmic_data;
+	struct omap_chip_id	omap_chip;
+	int			(*special_action)(struct voltagedomain *);
+};
+
+/**
+ * struct omap_pmic_description - Describe low power behavior of the PMIC
+ * @pmic_lp_tshut:		Time rounded up to uSec for the PMIC to
+ *				go to low power after the LDOs are pulled to
+ *				appropriate state. Note: this is not the same as
+ *				voltage rampdown time, instead, consider the
+ *				PMIC to have switched it's LDOs down, this is
+ *				time taken to reach it's lowest power state(say
+ *				sleep/OFF).
+ * @pmic_lp_tstart:		Time rounded up to uSec for the PMIC to
+ *				provide be ready for operation from low power
+ *				state. Note: this is not the same as voltage
+ *				rampup time, instead, consider the PMIC to be
+ *				in lowest power state(say OFF), this is the time
+ *				required for it to become ready for it's DCDCs
+ *				or LDOs to start operation.
+ */
+struct omap_pmic_description {
+	u32 pmic_lp_tshut;
+	u32 pmic_lp_tstart;
+};
+
+#ifdef CONFIG_PM
+extern int omap_pmic_register_data(struct omap_pmic_map *map,
+				   struct omap_pmic_description *desc);
 #else
-static inline int omap3_twl_init(void)
+static inline int omap_pmic_register_data(struct omap_pmic_map *map,
+				   struct omap_pmic_description *desc)
 {
 	return -EINVAL;
 }
-static inline int omap4_twl_init(void)
+#endif
+extern void omap_pmic_data_init(void);
+
+extern int omap_pmic_update(struct omap_pmic_map *tmp_map, char *name,
+		u32 old_chip_id, u32 new_chip_id);
+
+#ifdef CONFIG_TWL4030_CORE
+extern int omap_twl_init(void);
+extern int omap3_twl_set_sr_bit(bool enable);
+extern int omap_twl_pmic_update(char *name, u32 old_chip_id, u32 new_chip_id);
+#else
+static inline int omap_twl_init(void)
+{
+	return -EINVAL;
+}
+static inline int omap_twl_pmic_update(char *name, u32 old_chip_id,
+	u32 new_chip_id)
 {
 	return -EINVAL;
 }
 #endif
 
+#ifdef CONFIG_OMAP_TPS6236X
+extern int omap_tps6236x_board_setup(bool use_62361, int gpio_vsel0,
+	                int gpio_vsel1, int pull0, int pull1);
+extern int omap_tps6236x_init(void);
+
+extern int omap_tps6236x_update(char *name, u32 old_chip_id, u32 new_chip_id);
+#else
+static inline int omap_tps6236x_board_setup(bool use_62361, int gpio_vsel0,
+	                int gpio_vsel1, int pull0, int pull1)
+{
+	return -EINVAL;
+}
+static inline int omap_tps6236x_init(void)
+{
+	return -EINVAL;
+}
+static inline int omap_tps6236x_update(char *name, u32 old_chip_id,
+	u32 new_chip_id)
+{
+	return -EINVAL;
+}
+#endif
+
+extern int omap4_ldo_trim_configure(void);
+
+#ifdef CONFIG_PM
+extern bool omap_pm_is_ready_status;
+/**
+ * omap_pm_is_ready() - tells if OMAP pm framework is done it's initialization
+ *
+ * In few cases, to sequence operations properly, we'd like to know if OMAP's PM
+ * framework has completed all it's expected initializations.
+ */
+static inline bool omap_pm_is_ready(void)
+{
+	return omap_pm_is_ready_status;
+}
+extern int omap_pm_get_osc_lp_time(u32 *tstart, u32 *tshut);
+extern int omap_pm_get_pmic_lp_time(u32 *tstart, u32 *tshut);
+extern void omap_pm_set_osc_lp_time(u32 tstart, u32 tshut);
+extern void omap_pm_set_pmic_lp_time(u32 tstart, u32 tshut);
+#else
+static inline bool omap_pm_is_ready(void)
+{
+	return false;
+}
+static inline int omap_pm_get_osc_lp_time(u32 *tstart, u32 *tshut)
+{
+	return -EINVAL;
+}
+static inline int omap_pm_get_pmic_lp_time(u32 *tstart, u32 *tshut)
+{
+	return -EINVAL;
+}
+static inline void omap_pm_set_osc_lp_time(u32 tstart, u32 tshut) { }
+static inline void omap_pm_set_pmic_lp_time(u32 tstart, u32 tshut) { }
+#endif
 #endif

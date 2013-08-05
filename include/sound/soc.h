@@ -203,6 +203,24 @@
 	SOC_VALUE_ENUM_DOUBLE_DECL(name, xreg, xshift, xshift, xmask, xtexts, xvalues)
 
 /*
+ * Component probe and remove ordering levels for components with runtime
+ * dependencies.
+ */
+#define SND_SOC_COMP_ORDER_FIRST		-2
+#define SND_SOC_COMP_ORDER_EARLY		-1
+#define SND_SOC_COMP_ORDER_NORMAL		0
+#define SND_SOC_COMP_ORDER_LATE		1
+#define SND_SOC_COMP_ORDER_LAST		2
+
+/* DAI Link Host Mode Support */
+#define SND_SOC_DAI_LINK_NO_HOST		0x1
+#define SND_SOC_DAI_LINK_OPT_HOST		0x2
+
+#define snd_soc_get_enum_text(soc_enum, idx) \
+	(soc_enum->texts ? soc_enum->texts[idx] : soc_enum->dtexts[idx])
+
+
+/*
  * Bias levels
  *
  * @ON:      Bias is fully on for audio playback and capture operations.
@@ -214,10 +232,21 @@
  * @OFF:     Power Off. No restrictions on transition times.
  */
 enum snd_soc_bias_level {
-	SND_SOC_BIAS_OFF,
-	SND_SOC_BIAS_STANDBY,
-	SND_SOC_BIAS_PREPARE,
-	SND_SOC_BIAS_ON,
+	SND_SOC_BIAS_OFF = 0,
+	SND_SOC_BIAS_STANDBY = 1,
+	SND_SOC_BIAS_PREPARE = 2,
+	SND_SOC_BIAS_ON = 3,
+};
+
+enum snd_soc_dsp_state {
+	SND_SOC_DSP_STATE_NEW	= 0,
+	SND_SOC_DSP_STATE_OPEN,
+	SND_SOC_DSP_STATE_HW_PARAMS,
+	SND_SOC_DSP_STATE_PREPARE,
+	SND_SOC_DSP_STATE_START,
+	SND_SOC_DSP_STATE_STOP,
+	SND_SOC_DSP_STATE_HW_FREE,
+	SND_SOC_DSP_STATE_CLOSE,
 };
 
 struct snd_jack;
@@ -237,6 +266,7 @@ struct snd_soc_jack;
 struct snd_soc_jack_zone;
 struct snd_soc_jack_pin;
 struct snd_soc_cache_ops;
+struct snd_soc_dsp_link;
 #include <sound/soc-dapm.h>
 
 #ifdef CONFIG_GPIOLIB
@@ -256,6 +286,11 @@ enum snd_soc_compress_type {
 	SND_SOC_FLAT_COMPRESSION = 1,
 	SND_SOC_LZO_COMPRESSION,
 	SND_SOC_RBTREE_COMPRESSION
+};
+
+enum snd_soc_pcm_subclass {
+	SND_SOC_MUTEX_FE	= 0,
+	SND_SOC_MUTEX_BE	= 1,
 };
 
 int snd_soc_codec_set_sysclk(struct snd_soc_codec *codec, int clk_id,
@@ -297,6 +332,18 @@ int snd_soc_default_readable_register(struct snd_soc_codec *codec,
 				      unsigned int reg);
 int snd_soc_default_writable_register(struct snd_soc_codec *codec,
 				      unsigned int reg);
+unsigned int snd_soc_platform_read(struct snd_soc_platform *platform,
+					unsigned int reg);
+unsigned int snd_soc_platform_write(struct snd_soc_platform *platform,
+					unsigned int reg, unsigned int val);
+
+struct snd_soc_codec *snd_soc_card_get_codec(struct snd_soc_card *card,
+		const char *codec_name);
+struct snd_pcm_substream *snd_soc_get_dai_substream(struct snd_soc_card *card,
+		const char *dai_link, int stream);
+struct snd_soc_pcm_runtime *snd_soc_get_pcm_runtime(struct snd_soc_card *card,
+		const char *dai_link);
+int snd_soc_card_active_links(struct snd_soc_card *card);
 
 /* Utility functions to get clock rates from various things */
 int snd_soc_calc_frame_size(int sample_size, int channels, int tdm_slots);
@@ -348,6 +395,8 @@ struct snd_kcontrol *snd_soc_cnew(const struct snd_kcontrol_new *_template,
 				  void *data, char *long_name,
 				  const char *prefix);
 int snd_soc_add_controls(struct snd_soc_codec *codec,
+	const struct snd_kcontrol_new *controls, int num_controls);
+int snd_soc_add_platform_controls(struct snd_soc_platform *platform,
 	const struct snd_kcontrol_new *controls, int num_controls);
 int snd_soc_info_enum_double(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_info *uinfo);
@@ -598,6 +647,7 @@ struct snd_soc_codec_driver {
 	int (*volatile_register)(struct snd_soc_codec *, unsigned int);
 	int (*readable_register)(struct snd_soc_codec *, unsigned int);
 	int (*writable_register)(struct snd_soc_codec *, unsigned int);
+	short max_register;
 	short reg_cache_size;
 	short reg_cache_step;
 	short reg_word_size;
@@ -612,6 +662,13 @@ struct snd_soc_codec_driver {
 
 	void (*seq_notifier)(struct snd_soc_dapm_context *,
 			     enum snd_soc_dapm_type, int);
+
+	/* probe ordering - for components with runtime dependencies */
+	int probe_order;
+	int remove_order;
+
+	/* codec stream completion event */
+	int (*stream_event)(struct snd_soc_dapm_context *dapm);
 };
 
 /* SoC platform interface */
@@ -623,8 +680,12 @@ struct snd_soc_platform_driver {
 	int (*resume)(struct snd_soc_dai *dai);
 
 	/* pcm creation and destruction */
+#ifdef CONFIG_ARCH_OMAP
+	int (*pcm_new)(struct snd_soc_pcm_runtime *);
+#else
 	int (*pcm_new)(struct snd_card *, struct snd_soc_dai *,
 		struct snd_pcm *);
+#endif
 	void (*pcm_free)(struct snd_pcm *);
 
 	/*
@@ -636,6 +697,17 @@ struct snd_soc_platform_driver {
 
 	/* platform stream ops */
 	struct snd_pcm_ops *ops;
+
+	/* probe ordering - for components with runtime dependencies */
+	int probe_order;
+	int remove_order;
+
+	int (*stream_event)(struct snd_soc_dapm_context *dapm);
+	int (*bespoke_trigger)(struct snd_pcm_substream *, int);
+
+	/* platform DAPM IO TODO: refactor this */
+	unsigned int (*read)(struct snd_soc_platform *, unsigned int);
+	int (*write)(struct snd_soc_platform *, unsigned int, unsigned int);
 };
 
 struct snd_soc_platform {
@@ -647,9 +719,19 @@ struct snd_soc_platform {
 	unsigned int suspended:1; /* platform is suspended */
 	unsigned int probed:1;
 
+	struct snd_card *snd_card;
 	struct snd_soc_card *card;
 	struct list_head list;
 	struct list_head card_list;
+	int num_dai;
+
+	/* dapm */
+	struct snd_soc_dapm_context dapm;
+
+#ifdef CONFIG_DEBUG_FS
+	struct dentry *debugfs_platform_root;
+	struct dentry *debugfs_dapm;
+#endif
 };
 
 struct snd_soc_dai_link {
@@ -661,14 +743,31 @@ struct snd_soc_dai_link {
 	const char *cpu_dai_name;
 	const char *codec_dai_name;
 
+	struct snd_soc_dsp_link *dsp_link;
 	/* Keep DAI active over suspend */
 	unsigned int ignore_suspend:1;
 
 	/* Symmetry requirements */
 	unsigned int symmetric_rates:1;
+	/* No PCM created for this DAI link */
+	unsigned int no_pcm:1;
+	/* This DAI link can change CODEC and platform at runtime*/
+	unsigned int dynamic:1;
+	/* This DAI link has no codec side driver*/
+	unsigned int no_codec:1;
+	/* This DAI has a Backend ID */
+	unsigned int be_id;
+	/* This DAI can support no host IO (no pcm data is copied to from host) */
+	unsigned int no_host_mode:2;
+	/* DAI link active */
+	unsigned int active;
 
 	/* codec/machine specific init - e.g. add machine controls */
 	int (*init)(struct snd_soc_pcm_runtime *rtd);
+
+	/* hw_params re-writing for BE and FE sync */
+	int (*be_hw_params_fixup)(struct snd_soc_pcm_runtime *rtd,
+			struct snd_pcm_hw_params *params);
 
 	/* machine stream operations */
 	struct snd_soc_ops *ops;
@@ -709,6 +808,9 @@ struct snd_soc_card {
 
 	struct list_head list;
 	struct mutex mutex;
+	struct mutex dapm_mutex;
+	struct mutex dsp_mutex;
+	struct mutex power_mutex;
 
 	bool instantiated;
 
@@ -725,8 +827,14 @@ struct snd_soc_card {
 
 	/* callbacks */
 	int (*set_bias_level)(struct snd_soc_card *,
+#ifdef CONFIG_SND_OPEN_SOC_SOURCE
+			      struct snd_soc_dapm_context *dapm,
+#endif
 			      enum snd_soc_bias_level level);
 	int (*set_bias_level_post)(struct snd_soc_card *,
+#ifdef CONFIG_SND_OPEN_SOC_SOURCE
+				   struct snd_soc_dapm_context *dapm,
+#endif
 				   enum snd_soc_bias_level level);
 
 	long pmdown_time;
@@ -774,6 +882,7 @@ struct snd_soc_card {
 
 	/* Generic DAPM context for the card */
 	struct snd_soc_dapm_context dapm;
+	int (*stream_event)(struct snd_soc_dapm_context *dapm);
 
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_card_root;
@@ -784,14 +893,31 @@ struct snd_soc_card {
 	void *drvdata;
 };
 
+/* DSP runtime data */
+struct snd_soc_dsp_runtime {
+	struct list_head be_clients;
+	struct list_head fe_clients;
+	int users;
+	struct snd_pcm_runtime *runtime;
+	struct snd_pcm_hw_params hw_params;
+	int runtime_update;
+	enum snd_soc_dsp_state state;
+};
+
 /* SoC machine DAI configuration, glues a codec and cpu DAI together */
 struct snd_soc_pcm_runtime  {
 	struct device dev;
 	struct snd_soc_card *card;
 	struct snd_soc_dai_link *dai_link;
+	struct mutex pcm_mutex;
+	enum snd_soc_pcm_subclass pcm_subclass;
+	struct snd_pcm_ops ops;
 
 	unsigned int complete:1;
 	unsigned int dev_registered:1;
+
+	/* DSP runtime data */
+	struct snd_soc_dsp_runtime dsp[2];
 
 	/* Symmetry data - only valid if symmetry is being enforced */
 	unsigned int rate;
@@ -805,6 +931,11 @@ struct snd_soc_pcm_runtime  {
 	struct snd_soc_dai *cpu_dai;
 
 	struct delayed_work delayed_work;
+
+#ifdef CONFIG_DEBUG_FS
+	struct dentry *debugfs_dsp_root;
+	struct dentry *debugfs_dsp_state;
+#endif
 };
 
 /* mixer control */
@@ -822,6 +953,7 @@ struct soc_enum {
 	unsigned int max;
 	unsigned int mask;
 	const char * const *texts;
+	char **dtexts;
 	const unsigned int *values;
 	void *dapm;
 };

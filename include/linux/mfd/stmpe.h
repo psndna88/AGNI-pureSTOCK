@@ -20,8 +20,11 @@ enum stmpe_block {
 };
 
 enum stmpe_partnum {
+	STMPE610,
+	STMPE801,
 	STMPE811,
 	STMPE1601,
+	STMPE1801,
 	STMPE2401,
 	STMPE2403,
 };
@@ -48,18 +51,32 @@ enum {
 	STMPE_IDX_MAX,
 };
 
+/*
+ * Reading order of register.
+ */
+enum {
+	STMPE_REG_DEC = 0,
+	STMPE_REG_INC,
+};
 
 struct stmpe_variant_info;
+struct stmpe_client_info;
 
 /**
  * struct stmpe - STMPE MFD structure
  * @lock: lock protecting I/O operations
  * @irq_lock: IRQ bus lock
  * @dev: device, mostly for dev_dbg()
- * @i2c: i2c client
+ * @client: client - i2c or spi
+ * @ci: client specific information
+ * @partnum: part number
  * @variant: the detected STMPE model number
  * @regs: list of addresses of registers which are at different addresses on
  *	  different variants.  Indexed by one of STMPE_IDX_*.
+ * @reg_order_gpio: reading order of gpio registers. most of devices are
+ *                  'STMPE_REG_DEC'. some devices are use 'STMPE_REG_INC'
+ *                  (ex, STMP1801)
+ * @irq: irq number for stmpe
  * @irq_base: starting IRQ number for internal IRQs
  * @num_gpios: number of gpios, differs for variants
  * @ier: cache of IER registers for bus_lock
@@ -70,11 +87,14 @@ struct stmpe {
 	struct mutex lock;
 	struct mutex irq_lock;
 	struct device *dev;
-	struct i2c_client *i2c;
+	void *client;
+	struct stmpe_client_info *ci;
 	enum stmpe_partnum partnum;
 	struct stmpe_variant_info *variant;
 	const u8 *regs;
+	int reg_order_gpio;
 
+	int irq;
 	int irq_base;
 	int num_gpios;
 	u8 ier[2];
@@ -121,6 +141,8 @@ struct stmpe_keypad_platform_data {
  * @norequest_mask: bitmask specifying which GPIOs should _not_ be
  *		    requestable due to different usage (e.g. touch, keypad)
  *		    STMPE_GPIO_NOREQ_* macros can be used here.
+ * @setup: board specific setup callback.
+ * @remove: board specific remove callback
  */
 struct stmpe_gpio_platform_data {
 	int gpio_base;
@@ -180,6 +202,9 @@ struct stmpe_ts_platform_data {
  * @autosleep_timeout: inactivity timeout in milliseconds for autosleep
  * @irq_base: base IRQ number.  %STMPE_NR_IRQS irqs will be used, or
  *	      %STMPE_NR_INTERNAL_IRQS if the GPIO driver is not used.
+ * @irq_over_gpio: true if gpio is used to get irq
+ * @irq_gpio: gpio number over which irq will be requested (significant only if
+ *	      irq_over_gpio is true)
  * @gpio: GPIO-specific platform data
  * @keypad: keypad-specific platform data
  * @ts: touchscreen-specific platform data
@@ -191,6 +216,8 @@ struct stmpe_platform_data {
 	unsigned int irq_trigger;
 	bool irq_invert_polarity;
 	bool autosleep;
+	bool irq_over_gpio;
+	int irq_gpio;
 	int autosleep_timeout;
 
 	struct stmpe_gpio_platform_data *gpio;

@@ -91,6 +91,9 @@ static void __uart_start(struct tty_struct *tty)
 	struct uart_state *state = tty->driver_data;
 	struct uart_port *port = state->uart_port;
 
+	if (port->ops->wake_peer)
+		port->ops->wake_peer(port);
+
 	if (!uart_circ_empty(&state->xmit) && state->xmit.buf &&
 	    !tty->stopped && !tty->hw_stopped)
 		port->ops->start_tx(port);
@@ -1997,15 +2000,18 @@ int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
 		memset(&termios, 0, sizeof(struct ktermios));
 		termios.c_cflag = uport->cons->cflag;
 
+		if (console_suspend_enabled)
+			uart_change_pm(state, 0);
 		/*
 		 * If that's unset, use the tty termios setting.
 		 */
-		if (port->tty && port->tty->termios && termios.c_cflag == 0)
+		if (termios.c_cflag)
+			uport->ops->set_termios(uport, &termios, NULL);
+		else if (port->tty && port->tty->termios) {
 			termios = *(port->tty->termios);
+			uport->ops->set_termios(uport, &termios, NULL);
+		}
 
-		if (console_suspend_enabled)
-			uart_change_pm(state, 0);
-		uport->ops->set_termios(uport, &termios, NULL);
 		if (console_suspend_enabled)
 			console_start(uport->cons);
 	}
@@ -2389,10 +2395,9 @@ int uart_add_one_port(struct uart_driver *drv, struct uart_port *uport)
 	 * setserial to be used to alter this ports parameters.
 	 */
 	tty_dev = tty_register_device(drv->tty_driver, uport->line, uport->dev);
-	if (likely(!IS_ERR(tty_dev))) {
-		device_init_wakeup(tty_dev, 1);
-		device_set_wakeup_enable(tty_dev, 0);
-	} else
+	if (likely(!IS_ERR(tty_dev)))
+		device_set_wakeup_capable(tty_dev, 1);
+	else
 		printk(KERN_ERR "Cannot register tty device on line %d\n",
 		       uport->line);
 

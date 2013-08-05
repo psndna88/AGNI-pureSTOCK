@@ -207,7 +207,10 @@ __acquires(ep->musb->lock)
 				ep->end_point.name, request,
 				req->request.actual, req->request.length,
 				request->status);
-	req->request.complete(&req->ep->end_point, &req->request);
+        
+	/* check the validation of function */
+	if (req->request.complete)
+		req->request.complete(&req->ep->end_point, &req->request);
 	spin_lock(&musb->lock);
 	ep->busy = busy;
 }
@@ -643,6 +646,7 @@ static void rxstate(struct musb *musb, struct musb_request *req)
 	u16			len;
 	u16			csr = musb_readw(epio, MUSB_RXCSR);
 	struct musb_hw_ep	*hw_ep = &musb->endpoints[epnum];
+	u8			use_mode_1;
 
 	if (hw_ep->is_shared_fifo)
 		musb_ep = &hw_ep->ep_in;
@@ -692,6 +696,10 @@ static void rxstate(struct musb *musb, struct musb_request *req)
 
 	if (csr & MUSB_RXCSR_RXPKTRDY) {
 		len = musb_readw(epio, MUSB_RXCOUNT);
+
+		 /* Disable mode1 rx dma */
+		use_mode_1 = 0;
+
 		if (request->actual < request->length) {
 #ifdef CONFIG_USB_INVENTRA_DMA
 			if (is_buffer_mapped(req)) {
@@ -723,37 +731,40 @@ static void rxstate(struct musb *musb, struct musb_request *req)
 	 * then becomes usable as a runtime "use mode 1" hint...
 	 */
 
-				csr |= MUSB_RXCSR_DMAENAB;
-#ifdef USE_MODE1
+	/* Experimental: Mode1 works with mass storage use cases
+	 */
+		if (use_mode_1) {
 				csr |= MUSB_RXCSR_AUTOCLEAR;
-				/* csr |= MUSB_RXCSR_DMAMODE; */
+				musb_writew(epio, MUSB_RXCSR, csr);
+				csr |= MUSB_RXCSR_DMAENAB;
+				musb_writew(epio, MUSB_RXCSR, csr);
 
-				/* this special sequence (enabling and then
-				 * disabling MUSB_RXCSR_DMAMODE) is required
+				/* this special sequence is required
 				 * to get DMAReq to activate
 				 */
-				musb_writew(epio, MUSB_RXCSR,
-					csr | MUSB_RXCSR_DMAMODE);
-#else
+				csr |= MUSB_RXCSR_DMAMODE;
+				musb_writew(epio, MUSB_RXCSR, csr);
+				csr |= MUSB_RXCSR_DMAENAB;
+				musb_writew(epio, MUSB_RXCSR, csr);
+		} else {
 				if (!musb_ep->hb_mult &&
 					musb_ep->hw_ep->rx_double_buffered)
 					csr |= MUSB_RXCSR_AUTOCLEAR;
-#endif
+				csr |= MUSB_RXCSR_DMAENAB;
 				musb_writew(epio, MUSB_RXCSR, csr);
+		}
 
 				if (request->actual < request->length) {
 					int transfer_size = 0;
-#ifdef USE_MODE1
+		if (use_mode_1) {
 					transfer_size = min(request->length - request->actual,
 							channel->max_len);
-#else
+					musb_ep->dma->desired_mode = 1;
+		} else {
 					transfer_size = min(request->length - request->actual,
 							(unsigned)len);
-#endif
-					if (transfer_size <= musb_ep->packet_sz)
-						musb_ep->dma->desired_mode = 0;
-					else
-						musb_ep->dma->desired_mode = 1;
+					musb_ep->dma->desired_mode = 0;
+		}
 
 					use_dma = c->channel_program(
 							channel,
@@ -1714,6 +1725,7 @@ static int musb_gadget_pullup(struct usb_gadget *gadget, int is_on)
 	struct musb	*musb = gadget_to_musb(gadget);
 	unsigned long	flags;
 
+	mutex_lock(&musb->musb_lock);
 	is_on = !!is_on;
 
 	pm_runtime_get_sync(musb->controller);
@@ -1724,14 +1736,30 @@ static int musb_gadget_pullup(struct usb_gadget *gadget, int is_on)
 	spin_lock_irqsave(&musb->lock, flags);
 	if (is_on != musb->softconnect) {
 		musb->softconnect = is_on;
-		musb_pullup(musb, is_on);
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+		if (musb->xceiv->last_event == USB_EVENT_VBUS)
+#endif
+			musb_pullup(musb, is_on);
 	}
 	spin_unlock_irqrestore(&musb->lock, flags);
 
+	mutex_unlock(&musb->musb_lock);
 	pm_runtime_put(musb->controller);
 
 	return 0;
 }
+
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+void musb_platform_pullup(struct musb *musb, int is_on)
+{
+	unsigned long	flags;
+	spin_lock_irqsave(&musb->lock, flags);
+	if (musb->softconnect)
+	musb_pullup(musb, is_on);
+	spin_unlock_irqrestore(&musb->lock, flags);
+	dev_info(musb->controller, "%s is_on=%d\n", __func__, is_on);
+}
+#endif
 
 static const struct usb_gadget_ops musb_gadget_operations = {
 	.get_frame		= musb_gadget_get_frame,
@@ -1907,7 +1935,9 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
 		retval = -ENODEV;
 		goto err0;
 	}
-
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+	musb_platform_async_resume(musb);
+#endif
 	pm_runtime_get_sync(musb->controller);
 
 	dev_dbg(musb->controller, "registering driver %s\n", driver->function);
@@ -1924,7 +1954,6 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
 	musb->gadget_driver = driver;
 	musb->g.dev.driver = &driver->driver;
 	driver->driver.bus = NULL;
-	musb->softconnect = 1;
 	spin_unlock_irqrestore(&musb->lock, flags);
 
 	retval = bind(&musb->g);
@@ -1937,20 +1966,9 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
 	spin_lock_irqsave(&musb->lock, flags);
 
 	otg_set_peripheral(musb->xceiv, &musb->g);
-	musb->xceiv->state = OTG_STATE_B_IDLE;
-	musb->is_active = 1;
-
-	/*
-	 * FIXME this ignores the softconnect flag.  Drivers are
-	 * allowed hold the peripheral inactive until for example
-	 * userspace hooks up printer hardware or DSP codecs, so
-	 * hosts only see fully functional devices.
-	 */
 
 	if (!is_otg_enabled(musb))
 		musb_start(musb);
-
-	otg_set_peripheral(musb->xceiv, &musb->g);
 
 	spin_unlock_irqrestore(&musb->lock, flags);
 
@@ -1963,20 +1981,27 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
 		 * handles power budgeting ... this way also
 		 * ensures HdrcStart is indirectly called.
 		 */
+#ifndef CONFIG_USB_SAMSUNG_OMAP_NORPM
 		retval = usb_add_hcd(musb_to_hcd(musb), -1, 0);
 		if (retval < 0) {
 			dev_dbg(musb->controller, "add_hcd failed, %d\n", retval);
 			goto err2;
 		}
 
-		if ((musb->xceiv->last_event == USB_EVENT_ID)
-					&& musb->xceiv->set_vbus)
-			otg_set_vbus(musb->xceiv, 1);
-
 		hcd->self.uses_pio_for_control = 1;
+		hcd->self.dma_align = 1;
+#endif
 	}
-	if (musb->xceiv->last_event == USB_EVENT_NONE)
+
+	if ((musb->xceiv->last_event == USB_EVENT_NONE) ||
+			(musb->xceiv->last_event == USB_EVENT_CHARGER)) {
+		musb->xceiv->state = OTG_STATE_B_IDLE;
 		pm_runtime_put(musb->controller);
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+		musb_platform_async_suspend(musb);
+#endif
+	} else
+		musb_platform_otg_notifications(musb, musb->xceiv->last_event);
 
 	return 0;
 
@@ -2035,6 +2060,26 @@ static void stop_activity(struct musb *musb, struct usb_gadget_driver *driver)
 	}
 }
 
+void musb_all_ep_flush(struct musb *musb)
+{
+	int			i;
+	struct musb_hw_ep	*hw_ep;
+
+	for (i = 0, hw_ep = musb->endpoints;
+			i < musb->nr_endpoints;
+			i++, hw_ep++) {
+		musb_ep_select(musb->mregs, i);
+		if (hw_ep->is_shared_fifo /* || !epnum */) {
+			nuke(&hw_ep->ep_in, -ESHUTDOWN);
+		} else {
+			if (hw_ep->max_packet_sz_tx)
+				nuke(&hw_ep->ep_in, -ESHUTDOWN);
+			if (hw_ep->max_packet_sz_rx)
+				nuke(&hw_ep->ep_out, -ESHUTDOWN);
+		}
+	}
+}
+
 /*
  * Unregister the gadget driver. Used by gadget drivers when
  * unregistering themselves from the controller.
@@ -2052,6 +2097,9 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	if (!musb->gadget_driver)
 		return -EINVAL;
 
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+	musb_platform_async_resume(musb);
+#endif
 	if (musb->xceiv->last_event == USB_EVENT_NONE)
 		pm_runtime_get_sync(musb->controller);
 
@@ -2097,7 +2145,9 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 		musb_stop(musb);
 
 	pm_runtime_put(musb->controller);
-
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+	musb_platform_async_suspend(musb);
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(usb_gadget_unregister_driver);

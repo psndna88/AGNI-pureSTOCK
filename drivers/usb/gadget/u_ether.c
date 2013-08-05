@@ -631,7 +631,7 @@ drop:
 
 static void eth_start(struct eth_dev *dev, gfp_t gfp_flags)
 {
-	DBG(dev, "%s\n", __func__);
+	printk(KERN_DEBUG "usb: %s ++\n", __func__);
 
 	/* fill the rx queue */
 	rx_fill(dev, gfp_flags);
@@ -646,7 +646,7 @@ static int eth_open(struct net_device *net)
 	struct eth_dev	*dev = netdev_priv(net);
 	struct gether	*link;
 
-	DBG(dev, "%s\n", __func__);
+	printk(KERN_DEBUG "usb: %s ++\n", __func__);
 	if (netif_carrier_ok(dev->net))
 		eth_start(dev, GFP_KERNEL);
 
@@ -726,7 +726,7 @@ static int get_ether_addr(const char *str, u8 *dev_addr)
 				str++;
 			num = hex_to_bin(*str++) << 4;
 			num |= hex_to_bin(*str++);
-			dev_addr [i] = num;
+			dev_addr[i] = num;
 		}
 		if (is_valid_ether_addr(dev_addr))
 			return 0;
@@ -742,7 +742,7 @@ static const struct net_device_ops eth_netdev_ops = {
 	.ndo_stop		= eth_stop,
 	.ndo_start_xmit		= eth_start_xmit,
 	.ndo_change_mtu		= ueth_change_mtu,
-	.ndo_set_mac_address 	= eth_mac_addr,
+	.ndo_set_mac_address	= eth_mac_addr,
 	.ndo_validate_addr	= eth_validate_addr,
 };
 
@@ -764,6 +764,26 @@ static struct device_type gadget_type = {
  * Returns negative errno, or zero on success
  */
 int gether_setup(struct usb_gadget *g, u8 ethaddr[ETH_ALEN])
+{
+	return gether_setup_name(g, ethaddr, "usb");
+}
+
+/**
+ * gether_setup_name - initialize one ethernet-over-usb link
+ * @g: gadget to associated with these links
+ * @ethaddr: NULL, or a buffer in which the ethernet address of the
+ *	host side of the link is recorded
+ * @netname: name for network device (for example, "usb")
+ * Context: may sleep
+ *
+ * This sets up the single network link that may be exported by a
+ * gadget driver using this framework.  The link layer addresses are
+ * set up using module parameters.
+ *
+ * Returns negative errno, or zero on success
+ */
+int gether_setup_name(struct usb_gadget *g, u8 ethaddr[ETH_ALEN],
+		const char *netname)
 {
 	struct eth_dev		*dev;
 	struct net_device	*net;
@@ -787,7 +807,7 @@ int gether_setup(struct usb_gadget *g, u8 ethaddr[ETH_ALEN])
 
 	/* network device setup */
 	dev->net = net;
-	strcpy(net->name, "usb%d");
+	snprintf(net->name, sizeof(net->name), "%s%%d", netname);
 
 	if (get_ether_addr(dev_addr, net->dev_addr))
 		dev_warn(&g->dev,
@@ -886,12 +906,15 @@ struct net_device *gether_connect(struct gether *link)
 		goto fail1;
 	}
 
+	printk(KERN_DEBUG "usb: %s enable ep in/out\n", __func__);
 	if (result == 0)
 		result = alloc_requests(dev, link, qlen(dev->gadget));
 
 	if (result == 0) {
 		dev->zlp = link->is_zlp_ok;
 		DBG(dev, "qlen %d\n", qlen(dev->gadget));
+		printk(KERN_DEBUG "usb: %s qlen=%d\n",
+				__func__, qlen(dev->gadget));
 
 		dev->header_len = link->header_len;
 		dev->unwrap = link->unwrap;
@@ -910,8 +933,10 @@ struct net_device *gether_connect(struct gether *link)
 		spin_unlock(&dev->lock);
 
 		netif_carrier_on(dev->net);
-		if (netif_running(dev->net))
+		if (netif_running(dev->net)) {
+			printk(KERN_DEBUG "usb: %s eth_start\n", __func__);
 			eth_start(dev, GFP_ATOMIC);
+		}
 
 	/* on error, disable any endpoints  */
 	} else {
@@ -943,7 +968,6 @@ void gether_disconnect(struct gether *link)
 	struct eth_dev		*dev = link->ioport;
 	struct usb_request	*req;
 
-	WARN_ON(!dev);
 	if (!dev)
 		return;
 

@@ -785,21 +785,21 @@ static int __devinit pch_phub_probe(struct pci_dev *pdev,
 						 PCH_PHUB_ROM_START_ADDR_ML7223;
 		chip->pch_mac_start_address = PCH_PHUB_MAC_START_ADDR_ML7223;
 	} else if (id->driver_data == 5) { /* ML7831 */
-		retval = sysfs_create_file(&pdev->dev.kobj,
-					   &dev_attr_pch_mac.attr);
-		if (retval)
-			goto err_sysfs_create;
-
-		retval = sysfs_create_bin_file(&pdev->dev.kobj, &pch_bin_attr);
-		if (retval)
-			goto exit_bin_attr;
-
-		/* set the prefech value */
-		iowrite32(0x000affaa, chip->pch_phub_base_address + 0x14);
-		/* set the interrupt delay value */
-		iowrite32(0x25, chip->pch_phub_base_address + 0x44);
-		chip->pch_opt_rom_start_address = PCH_PHUB_ROM_START_ADDR_EG20T;
-		chip->pch_mac_start_address = PCH_PHUB_MAC_START_ADDR_EG20T;
+                retval = sysfs_create_file(&pdev->dev.kobj,
+                                           &dev_attr_pch_mac.attr);
+                if (retval)
+                        goto err_sysfs_create;
+ 
+                retval = sysfs_create_bin_file(&pdev->dev.kobj, &pch_bin_attr);
+                if (retval)
+                        goto exit_bin_attr;
+ 
+                /* set the prefech value */
+                iowrite32(0x000affaa, chip->pch_phub_base_address + 0x14);
+                /* set the interrupt delay value */
+                iowrite32(0x25, chip->pch_phub_base_address + 0x44);
+                chip->pch_opt_rom_start_address = PCH_PHUB_ROM_START_ADDR_EG20T;
+                chip->pch_mac_start_address = PCH_PHUB_MAC_START_ADDR_EG20T;
 	}
 
 	chip->ioh_type = id->driver_data;

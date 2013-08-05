@@ -103,15 +103,27 @@
 #ifndef __ASSEMBLER__
 
 struct omap_board_data;
+struct omap_uart_port_info;
+struct omap_device_pad;
 
 extern void omap_serial_init(void);
-extern void omap_serial_init_port(struct omap_board_data *bdata);
-extern int omap_uart_can_sleep(void);
-extern void omap_uart_check_wakeup(void);
-extern void omap_uart_prepare_suspend(void);
-extern void omap_uart_prepare_idle(int num);
-extern void omap_uart_resume_idle(int num);
-extern void omap_uart_enable_irqs(int enable);
+extern void omap_serial_board_init(struct omap_uart_port_info *platform_data);
+extern void omap_serial_init_port(struct omap_board_data *bdata,
+		struct omap_uart_port_info *platform_data);
+void __init omap_serial_init_port_pads(int id, struct omap_device_pad *pads,
+	int size, struct omap_uart_port_info *info);
+extern u32 omap_uart_resume_idle(void);
+extern int omap_uart_wake(u8 id);
+extern int omap_uart_enable(u8 uart_num);
+extern int omap_uart_disable(u8 uart_num);
+
+#ifdef CONFIG_OMAP_PM
+void uart_set_l3_cstr(int state);
+#endif
+
+#define MUX_PULL_UP	((1<<8) | (1<<4) | (1<<3) | (7))
+void omap_rts_mux_write(u16 val, int num);
+
 #endif
 
 #endif

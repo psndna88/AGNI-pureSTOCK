@@ -189,12 +189,15 @@
 #define OMAP44XX_CONTROL_FUSE_IVA_OPP100	0x22F
 #define OMAP44XX_CONTROL_FUSE_IVA_OPPTURBO	0x232
 #define OMAP44XX_CONTROL_FUSE_IVA_OPPNITRO	0x235
+#define OMAP44XX_CONTROL_FUSE_IVA_OPPNITROSB	0x238
 #define OMAP44XX_CONTROL_FUSE_MPU_OPP50		0x240
 #define OMAP44XX_CONTROL_FUSE_MPU_OPP100	0x243
 #define OMAP44XX_CONTROL_FUSE_MPU_OPPTURBO	0x246
 #define OMAP44XX_CONTROL_FUSE_MPU_OPPNITRO	0x249
+#define OMAP44XX_CONTROL_FUSE_MPU_OPPNITROSB	0x24C
 #define OMAP44XX_CONTROL_FUSE_CORE_OPP50	0x254
 #define OMAP44XX_CONTROL_FUSE_CORE_OPP100	0x257
+#define OMAP44XX_CONTROL_FUSE_CORE_OPP100OV	0x25A
 
 /* AM35XX only CONTROL_GENERAL register offsets */
 #define AM35XX_CONTROL_MSUSPENDMUX_6    (OMAP2_CONTROL_GENERAL + 0x0038)
@@ -378,11 +381,21 @@ extern void __iomem *omap_ctrl_base_get(void);
 extern u8 omap_ctrl_readb(u16 offset);
 extern u16 omap_ctrl_readw(u16 offset);
 extern u32 omap_ctrl_readl(u16 offset);
+extern u8 omap4_ctrl_pad_readb(u16 offset);
+extern u16 omap4_ctrl_pad_readw(u16 offset);
 extern u32 omap4_ctrl_pad_readl(u16 offset);
+extern u8 omap4_ctrl_wk_pad_readb(u16 offset);
+extern u16 omap4_ctrl_wk_pad_readw(u16 offset);
+extern u32 omap4_ctrl_wk_pad_readl(u16 offset);
 extern void omap_ctrl_writeb(u8 val, u16 offset);
 extern void omap_ctrl_writew(u16 val, u16 offset);
 extern void omap_ctrl_writel(u32 val, u16 offset);
+extern void omap4_ctrl_pad_writeb(u8 val, u16 offset);
+extern void omap4_ctrl_pad_writew(u16 val, u16 offset);
 extern void omap4_ctrl_pad_writel(u32 val, u16 offset);
+extern void omap4_ctrl_wk_pad_writeb(u8 val, u16 offset);
+extern void omap4_ctrl_wk_pad_writew(u16 val, u16 offset);
+extern void omap4_ctrl_wk_pad_writel(u32 val, u16 offset);
 
 extern void omap3_save_scratchpad_contents(void);
 extern void omap3_clear_scratchpad_contents(void);
@@ -400,11 +413,21 @@ extern int omap3_ctrl_save_padconf(void);
 #define omap_ctrl_readb(x)		0
 #define omap_ctrl_readw(x)		0
 #define omap_ctrl_readl(x)		0
-#define omap4_ctrl_pad_readl(x)		0
+#define omap4_ctrl_pad_readb(x)         0
+#define omap4_ctrl_pad_readw(x)         0
+#define omap4_ctrl_pad_readl(x)         0
+#define omap4_ctrl_wk_pad_readb(x)	0
+#define omap4_ctrl_wk_pad_readw(x)	0
+#define omap4_ctrl_wk_pad_readl(x)	0
 #define omap_ctrl_writeb(x, y)		WARN_ON(1)
 #define omap_ctrl_writew(x, y)		WARN_ON(1)
 #define omap_ctrl_writel(x, y)		WARN_ON(1)
+#define omap4_ctrl_pad_writeb(x, y)     WARN_ON(1)
+#define omap4_ctrl_pad_writew(x, y)     WARN_ON(1)
 #define omap4_ctrl_pad_writel(x, y)	WARN_ON(1)
+#define omap4_ctrl_wk_pad_writeb(x, y)     WARN_ON(1)
+#define omap4_ctrl_wk_pad_writew(x, y)     WARN_ON(1)
+#define omap4_ctrl_wk_pad_writel(x, y)     WARN_ON(1)
 #endif
 #endif	/* __ASSEMBLY__ */
 

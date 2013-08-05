@@ -223,11 +223,11 @@ struct taal_data {
 	struct delayed_work te_timeout_work;
 
 	bool use_dsi_bl;
-
 	bool cabc_broken;
-	unsigned cabc_mode;
-
 	bool intro_printed;
+	bool framedone_timeout;
+
+	unsigned cabc_mode;
 
 	struct workqueue_struct *workqueue;
 
@@ -504,14 +504,18 @@ static int taal_exit_ulps(struct omap_dss_device *dssdev)
 		return 0;
 
 	r = omapdss_dsi_display_enable(dssdev);
-	if (r)
-		goto err;
+	if (r) {
+		dev_err(&dssdev->dev, "failed to enable DSI\n");
+		goto err1;
+	}
 
 	omapdss_dsi_vc_enable_hs(dssdev, td->channel, true);
 
 	r = _taal_enable_te(dssdev, true);
-	if (r)
-		goto err;
+	if (r) {
+		dev_err(&dssdev->dev, "failed to re-enable TE");
+		goto err2;
+	}
 
 	enable_irq(gpio_to_irq(panel_data->ext_te_gpio));
 
@@ -521,13 +525,15 @@ static int taal_exit_ulps(struct omap_dss_device *dssdev)
 
 	return 0;
 
-err:
-	dev_err(&dssdev->dev, "exit ULPS failed");
+err2:
+	dev_err(&dssdev->dev, "failed to exit ULPS");
+
 	r = taal_panel_reset(dssdev);
-
-	enable_irq(gpio_to_irq(panel_data->ext_te_gpio));
-	td->ulps_enabled = false;
-
+	if (!r) {
+		enable_irq(gpio_to_irq(panel_data->ext_te_gpio));
+		td->ulps_enabled = false;
+	}
+err1:
 	taal_queue_ulps_work(dssdev);
 
 	return r;
@@ -1157,6 +1163,9 @@ static int taal_power_on(struct omap_dss_device *dssdev)
 	u8 id1, id2, id3;
 	int r;
 
+	/* At power on the first vsync has not been received yet */
+        dssdev->first_vsync = false;
+
 	r = omapdss_dsi_display_enable(dssdev);
 	if (r) {
 		dev_err(&dssdev->dev, "failed to enable DSI\n");
@@ -1317,8 +1326,11 @@ static void taal_disable(struct omap_dss_device *dssdev)
 	dsi_bus_lock(dssdev);
 
 	if (dssdev->state == OMAP_DSS_DISPLAY_ACTIVE) {
-		taal_wake_up(dssdev);
-		taal_power_off(dssdev);
+		int r;
+
+		r = taal_wake_up(dssdev);
+		if (!r)
+			taal_power_off(dssdev);
 	}
 
 	dsi_bus_unlock(dssdev);
@@ -1401,8 +1413,27 @@ err:
 static void taal_framedone_cb(int err, void *data)
 {
 	struct omap_dss_device *dssdev = data;
+	struct taal_data *td = dev_get_drvdata(&dssdev->dev);
 	dev_dbg(&dssdev->dev, "framedone, err %d\n", err);
+	/*
+	 * assert framadone timeout flag before
+	 * unlocking the bus
+	 */
+	if (err && !dsi_bus_was_unlocked(dssdev))
+		td->framedone_timeout = true;
+
+	/*
+	 * reset framadone timeout flag upon next
+	 * framedone. Ensure no double un-lock from
+	 * the erroneous framedone callback.
+	 */
+	if (td->framedone_timeout && !err) {
+		td->framedone_timeout = false;
+		if (dsi_bus_was_unlocked(dssdev))
+			return;
+	}
 	dsi_bus_unlock(dssdev);
+	return;
 }
 
 static irqreturn_t taal_te_isr(int irq, void *data)

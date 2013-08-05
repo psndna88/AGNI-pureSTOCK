@@ -76,6 +76,9 @@ GRTAGS
 GSYMS
 GTAGS
 
+*.zip
+todo
+*.bak
 *.orig
 *~
 \#*#

@@ -304,7 +304,8 @@ static void hidinput_configure_usage(struct hid_input *hidinput, struct hid_fiel
 		goto ignore;
 
 	case HID_UP_KEYBOARD:
-		set_bit(EV_REP, input->evbit);
+		/*set_bit(EV_REP, input->evbit); */
+			/* SS_BLUETOOTH(js80.hong) 2012.03.17 */
 
 		if ((usage->hid & HID_USAGE) < 256) {
 			if (!hid_keyboard[usage->hid & HID_USAGE]) goto ignore;
@@ -971,12 +972,19 @@ int hidinput_connect(struct hid_device *hid, unsigned int force)
 				 * UGCI) cram a lot of unrelated inputs into the
 				 * same interface. */
 				hidinput->report = report;
+				if (hid->driver->input_register &&
+						hid->driver->input_register(hid, hidinput))
+					goto out_cleanup;
 				if (input_register_device(hidinput->input))
 					goto out_cleanup;
 				hidinput = NULL;
 			}
 		}
 	}
+
+	if (hidinput && hid->driver->input_register &&
+			hid->driver->input_register(hid, hidinput))
+		goto out_cleanup;
 
 	if (hidinput && input_register_device(hidinput->input))
 		goto out_cleanup;
