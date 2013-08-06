@@ -1,9 +1,11 @@
 config ZCACHE
 	bool "Dynamic compression of swap pages and clean pagecache pages"
-  depends on (CLEANCACHE || FRONTSWAP) && CRYPTO=y && ZSMALLOC=y
-  select CRYPTO_LZO
-	  default n
-	  help
+  depends on (CLEANCACHE || FRONTSWAP)
+  select XVMALLOC
+  select LZO_COMPRESS
+  select LZO_DECOMPRESS
+  default n
+  help
 	  Zcache doubles RAM efficiency while providing a significant
 	  performance boosts on many workloads. Zcache uses
 	  compression and an in-kernel implementation of transcendent
