@@ -57,6 +57,11 @@ config BATTERY_MAX77693_CHARGER
 	help
 	  Say Y here to enable support for the MAX77693 charger
 
+config BATTERY_MAX77693_CHARGER_CONTROL
+	tristate "MIDAS MAX77693 charger control"
+	depends on BATTERY_MAX77693_CHARGER
+	default y
+
 config BATTERY_WPC_CHARGER
 	tristate "wireless charger support"
 	depends on BATTERY_MAX77693_CHARGER

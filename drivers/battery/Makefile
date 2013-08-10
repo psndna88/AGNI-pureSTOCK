@@ -10,6 +10,7 @@ obj-$(CONFIG_BATTERY_MAX17047_FUELGAUGE)	+= max17047_fuelgauge.o
 
 obj-$(CONFIG_BATTERY_SMB136_CHARGER)	+= smb136_charger.o
 obj-$(CONFIG_BATTERY_MAX77693_CHARGER)	+= max77693_charger.o
+obj-$(CONFIG_BATTERY_MAX77693_CHARGER_CONTROL)	+= charge_control.o
 
 obj-$(CONFIG_BATTERY_SAMSUNG_P1X)	+= sec_battery.o	\
 								sec_charger.o		\
