@@ -4265,11 +4265,11 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 	register_early_suspend(&info->early_suspend);
 #endif
 
-#ifdef CONFIG_TOUCH_WAKE
+/* #ifdef CONFIG_TOUCH_WAKE
   touchwake_data = info;
     if (touchwake_data == NULL)
     pr_err("[TOUCHWAKE] Failed to set touchwake_data\n");
-#endif  
+#endif  */
 
 #ifdef CONFIG_INPUT_FBSUSPEND
 	ret = tsp_register_fb(info);
