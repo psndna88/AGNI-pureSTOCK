@@ -197,7 +197,7 @@ mali-y := \
 	$(KBUILDROOT)common/mali_kernel_rendercore.o \
 	$(KBUILDROOT)common/mali_kernel_descriptor_mapping.o \
 	$(KBUILDROOT)common/mali_kernel_vsync.o \
-    $(KBUILDROOT)linux/mali_kernel_sysfs.o \
+    	$(KBUILDROOT)linux/mali_kernel_sysfs.o \
 	$(KBUILDROOT)$(MALI_PLATFORM_FILE) \
 	$(KBUILDROOT)$(OSKFILES) \
 	$(KBUILDROOT)$(UKKFILES) 
@@ -275,7 +275,7 @@ ifeq ($(PANIC_ON_WATCHDOG_TIMEOUT),1)
 endif
 
 # Get subversion revision number, fall back to 0000 if no svn info is available
-SVN_REV:=$(shell ((svnversion | grep -qv exported && echo -n 'Revision: ' && svnversion) || git svn info | sed -e 's/$$$$/M/' | grep '^Revision: ' || echo ${MALI_RELEASE_NAME}) 2>/dev/null | sed -e 's/^Revision: //')
+SVN_REV:=$(shell ((svnversion | grep -Eqv "exported|Unversioned directory" && echo -n 'Revision: ' && svnversion) || git svn info | sed -e 's/$$$$/M/' | grep '^Revision: ' || echo ${MALI_RELEASE_NAME}) 2>/dev/null | sed -e 's/^Revision: //')
 
 EXTRA_CFLAGS += -DSVN_REV=$(SVN_REV)
 EXTRA_CFLAGS += -DSVN_REV_STRING=\"$(SVN_REV)\"
