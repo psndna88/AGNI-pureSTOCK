@@ -197,7 +197,7 @@ mali-y := \
 	$(KBUILDROOT)common/mali_kernel_rendercore.o \
 	$(KBUILDROOT)common/mali_kernel_descriptor_mapping.o \
 	$(KBUILDROOT)common/mali_kernel_vsync.o \
-    $(KBUILDROOT)linux/mali_kernel_sysfs.o \
+    	$(KBUILDROOT)linux/mali_kernel_sysfs.o \
 	$(KBUILDROOT)$(MALI_PLATFORM_FILE) \
 	$(KBUILDROOT)$(OSKFILES) \
 	$(KBUILDROOT)$(UKKFILES) 
