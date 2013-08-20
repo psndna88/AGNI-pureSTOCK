@@ -551,7 +551,11 @@ static struct regulator_init_data max77686_buck2_data = {
 static struct regulator_init_data max77686_buck3_data = {
 	.constraints = {
 		.name = "vdd_int range",
+#if defined(CONFIG_MACH_M3_JPN_DCM)
 		.min_uV = 600000,
+#else
+		.min_uV = 600000,
+#endif
 #ifdef CONFIG_SLP
 		.max_uV = 1150000,
 #else
@@ -574,9 +578,13 @@ static struct regulator_init_data max77686_buck4_data = {
 		.name = "vdd_g3d range",
 		.min_uV = 600000,
 #ifdef CONFIG_SLP
-		.max_uV = 1100000,
+		.max_uV = 1200000,
 #else
-		.max_uV = 1400000,
+#if defined(CONFIG_MACH_M3_JPN_DCM)
+		.max_uV = 1200000,
+#else
+		.max_uV = 1200000,
+#endif
 #endif
 		.boot_on = 1,
 		.valid_ops_mask = REGULATOR_CHANGE_VOLTAGE |
