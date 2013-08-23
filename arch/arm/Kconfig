@@ -29,6 +29,7 @@ config ARM
 	select HAVE_GENERIC_HARDIRQS
 	select HAVE_SPARSE_IRQ
 	select GENERIC_IRQ_SHOW
+	select CPU_PM if (SUSPEND || CPU_IDLE)
 	help
 	  The ARM series is a line of low-power-consumption RISC chip designs
 	  licensed by ARM Ltd and targeted at embedded applications and
@@ -212,6 +213,10 @@ config ARM_PATCH_PHYS_VIRT_16BIT
 	  This option extends the physical to virtual translation patching
 	  to allow physical memory down to a theoretical minimum of 64K
 	  boundaries.
+
+config GENERIC_BUG
+	def_bool y
+	depends on BUG
 
 source "init/Kconfig"
 
@@ -1033,6 +1038,10 @@ config ARM_TIMER_SP804
 
 source arch/arm/mm/Kconfig
 
+config ARM_PLD_SIZE_SHIFT
+	int "Data Pre-Load size shift (5 => 32, 6 => 64)"
+	default 5
+
 config IWMMXT
 	bool "Enable iWMMXt support"
 	depends on CPU_XSCALE || CPU_XSC3 || CPU_MOHAWK || CPU_PJ4
@@ -1534,6 +1543,16 @@ config ARCH_SELECT_MEMORY_MODEL
 config HAVE_ARCH_PFN_VALID
 	def_bool ARCH_HAS_HOLES_MEMORYMODEL || !SPARSEMEM
 
+config ARCH_SKIP_SECONDARY_CALIBRATE
+	bool "Skip secondary CPU calibration"
+	depends on SMP
+	help
+	  On some architectures, secondary cores shares clock with primiary
+	  core and hence scale together. Hence secondary core lpj calibration
+	  is not necessary and can be skipped to save considerable time.
+
+	  If unsure, say n.
+
 config HIGHMEM
 	bool "High Memory Support"
 	depends on MMU
@@ -1696,6 +1715,15 @@ config DEPRECATED_PARAM_STRUCT
 	help
 	  This was deprecated in 2001 and announced to live on for 5 years.
 	  Some old boot loaders still use this way.
+
+config ARM_FLUSH_CONSOLE_ON_RESTART
+	bool "Force flush the console on restart"
+	help
+	  If the console is locked while the system is rebooted, the messages
+	  in the temporary logbuffer would not have propogated to all the
+	  console drivers. This option forces the console lock to be
+	  released if it failed to be acquired, which will cause all the
+	  pending messages to be flushed.
 
 endmenu
 

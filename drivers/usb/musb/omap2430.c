@@ -35,6 +35,9 @@
 #include <linux/dma-mapping.h>
 #include <linux/pm_runtime.h>
 #include <linux/err.h>
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+#include <plat/omap_device.h>
+#endif
 
 #include "musb_core.h"
 #include "omap2430.h"
@@ -140,12 +143,17 @@ static void omap2430_musb_try_idle(struct musb *musb, unsigned long timeout)
 static void omap2430_musb_set_vbus(struct musb *musb, int is_on)
 {
 	u8		devctl;
-	unsigned long timeout = jiffies + msecs_to_jiffies(1000);
+	unsigned long timeout = 1000;
 	int ret = 1;
 	/* HDRC controls CPEN, but beware current surges during device
 	 * connect.  They can trigger transient overcurrent conditions
 	 * that must be ignored.
 	 */
+
+	if (!otg_is_active(musb->xceiv) && !is_on) {
+		dev_info(musb->controller, "otg is not active.\n");
+		return;
+	}
 
 	devctl = musb_readb(musb->mregs, MUSB_DEVCTL);
 
@@ -162,21 +170,20 @@ static void omap2430_musb_set_vbus(struct musb *musb, int is_on)
 
 				cpu_relax();
 
-				if (time_after(jiffies, timeout)) {
+				if (!timeout) {
 					dev_err(musb->controller,
 					"configured as A device timeout");
 					ret = -EINVAL;
 					break;
 				}
+				mdelay(1);
+				timeout--;
 			}
 
 			if (ret && musb->xceiv->set_vbus)
 				otg_set_vbus(musb->xceiv, 1);
-		} else {
-			musb->is_active = 1;
 			musb->xceiv->default_a = 1;
-			musb->xceiv->state = OTG_STATE_A_WAIT_VRISE;
-			devctl |= MUSB_DEVCTL_SESSION;
+			musb->vbus_reset_count = 0;
 			MUSB_HST_MODE(musb);
 		}
 	} else {
@@ -189,10 +196,9 @@ static void omap2430_musb_set_vbus(struct musb *musb, int is_on)
 		musb->xceiv->default_a = 0;
 		musb->xceiv->state = OTG_STATE_B_IDLE;
 		devctl &= ~MUSB_DEVCTL_SESSION;
-
+		musb_writeb(musb->mregs, MUSB_DEVCTL, devctl);
 		MUSB_DEV_MODE(musb);
 	}
-	musb_writeb(musb->mregs, MUSB_DEVCTL, devctl);
 
 	dev_dbg(musb->controller, "VBUS %s, devctl %02x "
 		/* otg %3x conf %08x prcm %08x */ "\n",
@@ -230,46 +236,311 @@ static inline void omap2430_low_level_init(struct musb *musb)
 }
 
 /* blocking notifier support */
+static void musb_otg_notifier_work(struct work_struct *data_notifier_work);
+
 static int musb_otg_notifications(struct notifier_block *nb,
-		unsigned long event, void *unused)
+		unsigned long event, void *gadget)
 {
 	struct musb	*musb = container_of(nb, struct musb, nb);
+	struct musb_otg_work *otg_work;
+
+	if (gadget == NULL) {
+		pr_err("%s gadget is NULL\n", __func__);
+		return 0;
+	}
+	otg_work = kmalloc(sizeof(struct musb_otg_work), GFP_ATOMIC);
+	if (!otg_work)
+		return notifier_from_errno(-ENOMEM);
+	INIT_WORK(&otg_work->work, musb_otg_notifier_work);
+	otg_work->xceiv_event = event;
+	otg_work->musb = musb;
+	queue_work(musb->otg_notifier_wq, &otg_work->work);
+	return 0;
+}
+
+static int omap2430_musb_otg_notifications
+			(struct musb *musb, unsigned long event)
+{
+	struct musb_otg_work *otg_work;
+
+	otg_work = kmalloc(sizeof(struct musb_otg_work), GFP_ATOMIC);
+	if (!otg_work)
+		return notifier_from_errno(-ENOMEM);
+	INIT_WORK(&otg_work->work, musb_otg_notifier_work);
+	otg_work->xceiv_event = event;
+	otg_work->musb = musb;
+	pr_info("%s recheck event=%lu\n", __func__, event);
+	queue_work(musb->otg_notifier_wq, &otg_work->work);
+	return 0;
+}
+
+static void musb_otg_core_reset(struct musb *musb)
+{
 	struct device *dev = musb->controller;
 	struct musb_hdrc_platform_data *pdata = dev->platform_data;
 	struct omap_musb_board_data *data = pdata->board_data;
+	struct platform_device *pdev
+		= to_platform_device(musb->controller->parent);
+	unsigned long flags = 0;
+	u32 val = 0;
+	unsigned long timeout = 1000;
 
-	switch (event) {
+	dev_info(&pdev->dev, "%s +\n", __func__);
+	mutex_lock(&musb->async_musb_lock);
+	spin_lock_irqsave(&musb->lock, flags);
+#ifndef CONFIG_USB_SAMSUNG_OMAP_NORPM
+	musb_async_resume(musb);
+#endif
+	musb_async_suspend(musb);
+	val = musb_readl(musb->mregs, OTG_SYSCONFIG);
+	val |= SOFTRST;
+	musb_writel(musb->mregs, OTG_SYSCONFIG, val);
+	spin_unlock_irqrestore(&musb->lock, flags);
+	msleep(20);
+	while (!(musb_readb(musb->mregs, OTG_SYSSTATUS) & RESETDONE)) {
+			cpu_relax();
+			if (!timeout) {
+				dev_err(musb->controller,
+				"otg core reset timeout");
+				break;
+			}
+			mdelay(1);
+			timeout--;
+	}
+	spin_lock_irqsave(&musb->lock, flags);
+	val = musb_readl(musb->mregs, OTG_INTERFSEL);
+	if (data->interface_type ==
+		MUSB_INTERFACE_UTMI) {
+		val &= ~ULPI_12PIN;
+		val |= UTMI_8BIT;
+	} else
+		val |= ULPI_12PIN;
+	musb_writel(musb->mregs, OTG_INTERFSEL, val);
+	musb_async_resume(musb);
+	spin_unlock_irqrestore(&musb->lock, flags);
+	mutex_unlock(&musb->async_musb_lock);
+	dev_info(&pdev->dev, "%s -\n", __func__);
+}
+
+static void musb_otg_init(struct musb *musb)
+{
+	pm_runtime_get_sync(musb->controller);
+
+	/* reset musb controller */
+#ifndef CONFIG_USB_SAMSUNG_OMAP_NORPM
+	musb_otg_core_reset(musb);
+#endif
+
+	if (otg_is_active(musb->xceiv))
+		otg_set_suspend(musb->xceiv, 1);
+
+	otg_set_suspend(musb->xceiv, 0);
+
+	otg_init(musb->xceiv);
+	msleep(1000);
+	omap2430_musb_set_vbus(musb, 1);
+}
+
+#ifdef CONFIG_PM
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+int omap2430_async_suspend(struct musb *musb)
+{
+	struct platform_device *pdev
+		= to_platform_device(musb->controller->parent);
+	unsigned long flags = 0;
+	int ret = 0;
+	if (!pdev) {
+		pr_err("%s pdev is null error\n", __func__);
+		return -ENODEV;
+	}
+
+	dev_info(&pdev->dev, "%s async_resume %d +\n",
+		__func__, musb->async_resume);
+
+	mutex_lock(&musb->async_musb_lock);
+
+	do {
+		musb->async_resume--;
+	} while (musb->reserve_async_suspend-- > 0);
+	musb->reserve_async_suspend = 0;
+
+	if (musb->async_resume > 0)
+		;
+	else if (musb->async_resume < 0) {
+		musb->async_resume++;
+		dev_err(&pdev->dev, "%s async_resume is fault\n", __func__);
+	} else {
+		spin_lock_irqsave(&musb->lock, flags);
+		musb_async_suspend(musb);
+		omap2430_low_level_exit(musb);
+		otg_set_suspend(musb->xceiv, 1);
+		spin_unlock_irqrestore(&musb->lock, flags);
+		ret = omap_device_idle(pdev);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "%s omap_device_idle error ret=%d\n",
+				__func__, ret);
+			mutex_unlock(&musb->async_musb_lock);
+			return ret;
+		}
+	}
+	mutex_unlock(&musb->async_musb_lock);
+	dev_info(&pdev->dev, "%s async_resume %d -\n",
+		__func__, musb->async_resume);
+	return 0;
+}
+
+int omap2430_async_resume(struct musb *musb)
+{
+	struct device *dev = musb->controller;
+	struct musb_hdrc_platform_data *pdata = dev->platform_data;
+	struct omap_musb_board_data *data = pdata->board_data;
+	struct platform_device *pdev
+		= to_platform_device(musb->controller->parent);
+	unsigned long flags = 0;
+	u32 val = 0;
+	int ret = 0;
+	if (!pdev) {
+		pr_err("%s pdev is null error\n", __func__);
+		return -ENODEV;
+	}
+
+	dev_info(&pdev->dev, "%s async_resume=%d +\n",
+		__func__, musb->async_resume);
+
+	mutex_lock(&musb->async_musb_lock);
+	if (musb->async_resume > 0)
+		musb->async_resume++;
+	else {
+		ret = omap_device_enable(pdev);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "%s omap_device_enable error ret=%d\n",
+				__func__, ret);
+			mutex_unlock(&musb->async_musb_lock);
+			return ret;
+		}
+		spin_lock_irqsave(&musb->lock, flags);
+		otg_set_suspend(musb->xceiv, 0);
+		omap2430_low_level_init(musb);
+		val = musb_readl(musb->mregs, OTG_INTERFSEL);
+		if (data->interface_type ==
+			MUSB_INTERFACE_UTMI) {
+			val &= ~ULPI_12PIN;
+			val |= UTMI_8BIT;
+		} else {
+			val |= ULPI_12PIN;
+		}
+		musb_writel(musb->mregs, OTG_INTERFSEL, val);
+		musb_async_resume(musb);
+		spin_unlock_irqrestore(&musb->lock, flags);
+		musb->async_resume++;
+	}
+	mutex_unlock(&musb->async_musb_lock);
+	dev_info(&pdev->dev, "%s async_resume %d -\n",
+		__func__, musb->async_resume);
+	return 0;
+}
+#endif
+#endif
+
+static void musb_otg_notifier_work(struct work_struct *data_notifier_work)
+{
+	struct musb_otg_work *otg_work =
+		container_of(data_notifier_work, struct musb_otg_work, work);
+	struct musb *musb = otg_work->musb;
+	struct device *dev = musb->controller;
+	struct musb_hdrc_platform_data *pdata = dev->platform_data;
+	struct omap_musb_board_data *data = pdata->board_data;
+	enum usb_xceiv_events xceiv_event = otg_work->xceiv_event;
+	unsigned long	flags;
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+	int ret = 0;
+#endif
+
+	kfree(otg_work);
+
+	switch (xceiv_event) {
 	case USB_EVENT_ID:
-		dev_dbg(musb->controller, "ID GND\n");
-
+		dev_info(musb->controller, "ID GND\n");
+		musb->xceiv->state = OTG_STATE_A_IDLE;
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+		ret = omap2430_async_resume(musb);
+		if (ret < 0)
+			return;
+#endif
 		if (is_otg_enabled(musb)) {
 #ifdef CONFIG_USB_GADGET_MUSB_HDRC
 			if (musb->gadget_driver) {
-				pm_runtime_get_sync(musb->controller);
-				otg_init(musb->xceiv);
-				omap2430_musb_set_vbus(musb, 1);
+				musb_otg_init(musb);
 			}
 #endif
 		} else {
-			pm_runtime_get_sync(musb->controller);
-			otg_init(musb->xceiv);
-			omap2430_musb_set_vbus(musb, 1);
+			musb_otg_init(musb);
 		}
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+		musb_add_hcd(musb);
+#endif
 		break;
-
+	case USB_EVENT_VBUS_CHARGER:
+		dev_info(musb->controller, "USB/TA Connect\n");
+		/*  This event received from ta_connect_irq
+		 * when a usb cable is connected. Logic has still
+		 * not identified whether this is a usb cable or TA.
+		 *  So just break here.
+		 */
+		break;
 	case USB_EVENT_VBUS:
-		dev_dbg(musb->controller, "VBUS Connect\n");
-
+		dev_info(musb->controller, "VBUS Connect\n");
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+		ret = omap2430_async_resume(musb);
+		if (ret < 0)
+			return;
+#endif
 #ifdef CONFIG_USB_GADGET_MUSB_HDRC
 		if (musb->gadget_driver)
 			pm_runtime_get_sync(musb->controller);
 #endif
 		otg_init(musb->xceiv);
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+		musb_start(musb);
+		musb_platform_pullup(musb, 1);
+#endif
 		break;
 
+	case USB_EVENT_CHARGER:
+		dev_info(musb->controller, "Dedicated charger connect\n");
+		musb->is_ac_charger = true;
+		break;
+	case USB_EVENT_HOST_NONE:
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+		dev_info(musb->controller, "USB host Disconnect. ID float\n");
+		musb_stop(musb);
+		musb_remove_hcd(musb);
+		if (data->interface_type == MUSB_INTERFACE_UTMI) {
+			omap2430_musb_set_vbus(musb, 0);
+			if (musb->xceiv->set_vbus)
+				otg_set_vbus(musb->xceiv, 0);
+		}
+		otg_shutdown(musb->xceiv);
+		musb_otg_core_reset(musb);
+		ret = omap2430_async_suspend(musb);
+		if (ret < 0)
+			return;
+		break;
+#endif
 	case USB_EVENT_NONE:
-		dev_dbg(musb->controller, "VBUS Disconnect\n");
+		if (musb->is_ac_charger) {
+			dev_info(musb->controller,
+				"Dedicated charger disconnect\n");
+			musb->is_ac_charger = false;
+			break;
+		}
 
+		dev_info(musb->controller, "VBUS Disconnect\n");
+#ifndef CONFIG_USB_SAMSUNG_OMAP_NORPM
+
+		spin_lock_irqsave(&musb->lock, flags);
+		musb_g_disconnect(musb);
+		spin_unlock_irqrestore(&musb->lock, flags);
 #ifdef CONFIG_USB_GADGET_MUSB_HDRC
 		if (is_otg_enabled(musb) || is_peripheral_enabled(musb))
 			if (musb->gadget_driver)
@@ -280,17 +551,30 @@ static int musb_otg_notifications(struct notifier_block *nb,
 			}
 
 		if (data->interface_type == MUSB_INTERFACE_UTMI) {
+			omap2430_musb_set_vbus(musb, 0);
 			if (musb->xceiv->set_vbus)
 				otg_set_vbus(musb->xceiv, 0);
 		}
 		otg_shutdown(musb->xceiv);
+#else
+		musb_platform_pullup(musb, 0);
+		spin_lock_irqsave(&musb->lock, flags);
+		musb_stop(musb);
+		musb_all_ep_flush(musb);
+		musb_g_disconnect(musb);
+		spin_unlock_irqrestore(&musb->lock, flags);
+		if (data->interface_type == MUSB_INTERFACE_UTMI)
+			omap2430_musb_set_vbus(musb, 0);
+		otg_shutdown(musb->xceiv);
+		musb_otg_core_reset(musb);
+		ret = omap2430_async_suspend(musb);
+		if (ret < 0)
+			return;
+#endif
 		break;
 	default:
-		dev_dbg(musb->controller, "ID float\n");
-		return NOTIFY_DONE;
+		dev_info(musb->controller, "ID float\n");
 	}
-
-	return NOTIFY_OK;
 }
 
 static int omap2430_musb_init(struct musb *musb)
@@ -311,11 +595,22 @@ static int omap2430_musb_init(struct musb *musb)
 		return -ENODEV;
 	}
 
-	status = pm_runtime_get_sync(dev);
-	if (status < 0) {
-		dev_err(dev, "pm_runtime_get_sync FAILED %d\n", status);
+	musb->otg_notifier_wq = create_singlethread_workqueue("musb-otg");
+	if (!musb->otg_notifier_wq) {
+		pr_err("HS USB OTG: cannot allocate otg event wq\n");
+		status = -ENOMEM;
 		goto err1;
 	}
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+	omap2430_async_resume(musb);
+#endif
+	status = pm_runtime_get_sync(dev);
+#ifndef CONFIG_USB_SAMSUNG_OMAP_NORPM
+	if (status < 0) {
+		dev_err(dev, "pm_runtime_get_sync FAILED");
+		goto err2;
+	}
+#endif
 
 	l = musb_readl(musb->mregs, OTG_INTERFSEL);
 
@@ -345,9 +640,16 @@ static int omap2430_musb_init(struct musb *musb)
 
 	setup_timer(&musb_idle_timer, musb_do_idle, (unsigned long) musb);
 
+	pm_runtime_put_noidle(musb->controller);
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+	musb->reserve_async_suspend++;
+#endif
 	return 0;
 
+err2:
+	destroy_workqueue(musb->otg_notifier_wq);
 err1:
+	otg_put_transceiver(musb->xceiv);
 	pm_runtime_disable(dev);
 	return status;
 }
@@ -359,31 +661,40 @@ static void omap2430_musb_enable(struct musb *musb)
 	struct device *dev = musb->controller;
 	struct musb_hdrc_platform_data *pdata = dev->platform_data;
 	struct omap_musb_board_data *data = pdata->board_data;
+	u32 val;
 
 	switch (musb->xceiv->last_event) {
 
 	case USB_EVENT_ID:
-		otg_init(musb->xceiv);
+		val = musb_readl(musb->mregs, OTG_INTERFSEL);
 		if (data->interface_type == MUSB_INTERFACE_UTMI) {
-			devctl = musb_readb(musb->mregs, MUSB_DEVCTL);
-			/* start the session */
-			devctl |= MUSB_DEVCTL_SESSION;
-			musb_writeb(musb->mregs, MUSB_DEVCTL, devctl);
-			while (musb_readb(musb->mregs, MUSB_DEVCTL) &
-						MUSB_DEVCTL_BDEVICE) {
-				cpu_relax();
-
-				if (time_after(jiffies, timeout)) {
-					dev_err(musb->controller,
-					"configured as A device timeout");
-					break;
-				}
-			}
+			val &= ~ULPI_12PIN;
+			val |= UTMI_8BIT;
+		} else {
+			val |= ULPI_12PIN;
 		}
+
+		musb_writel(musb->mregs, OTG_INTERFSEL, val);
+		otg_init(musb->xceiv);
+		omap2430_musb_set_vbus(musb, 1);
 		break;
 
 	case USB_EVENT_VBUS:
+		val = musb_readl(musb->mregs, OTG_INTERFSEL);
+		if (data->interface_type ==
+			MUSB_INTERFACE_UTMI) {
+			val &= ~ULPI_12PIN;
+			val |= UTMI_8BIT;
+		} else {
+			val |= ULPI_12PIN;
+		}
+		musb_writel(musb->mregs, OTG_INTERFSEL, val);
 		otg_init(musb->xceiv);
+		break;
+
+	case USB_EVENT_CHARGER:
+		dev_dbg(musb->controller, "Dedicated charger connect\n");
+		musb->is_ac_charger = true;
 		break;
 
 	default:
@@ -401,10 +712,26 @@ static int omap2430_musb_exit(struct musb *musb)
 {
 	del_timer_sync(&musb_idle_timer);
 
+	otg_unregister_notifier(musb->xceiv, &musb->nb);
+	destroy_workqueue(musb->otg_notifier_wq);
 	omap2430_low_level_exit(musb);
 	otg_put_transceiver(musb->xceiv);
 
 	return 0;
+}
+
+static int omap2430_musb_vbus_reset(struct musb *musb)
+{
+	int ret = -1;
+
+	dev_info(musb->controller, "%s count=%d\n", __func__,
+					musb->vbus_reset_count);
+	if (musb->vbus_reset_count < 5) {
+		if (musb->xceiv->start_hnp)
+			ret = otg_start_hnp(musb->xceiv);
+	}
+
+	return ret;
 }
 
 static const struct musb_platform_ops omap2430_ops = {
@@ -418,6 +745,12 @@ static const struct musb_platform_ops omap2430_ops = {
 
 	.enable		= omap2430_musb_enable,
 	.disable	= omap2430_musb_disable,
+	.vbus_reset = omap2430_musb_vbus_reset,
+	.otg_notifications = omap2430_musb_otg_notifications,
+#ifdef CONFIG_USB_SAMSUNG_OMAP_NORPM
+	.async_suspend = omap2430_async_suspend,
+	.async_resume = omap2430_async_resume,
+#endif
 };
 
 static u64 omap2430_dmamask = DMA_BIT_MASK(32);
@@ -465,7 +798,9 @@ static int __init omap2430_probe(struct platform_device *pdev)
 		goto err2;
 	}
 
+#ifndef CONFIG_USB_SAMSUNG_OMAP_NORPM
 	pm_runtime_enable(&pdev->dev);
+#endif
 
 	ret = platform_device_add(musb);
 	if (ret) {
@@ -491,7 +826,6 @@ static int __exit omap2430_remove(struct platform_device *pdev)
 
 	platform_device_del(glue->musb);
 	platform_device_put(glue->musb);
-	pm_runtime_put(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 	kfree(glue);
 
@@ -505,10 +839,18 @@ static int omap2430_runtime_suspend(struct device *dev)
 	struct omap2430_glue		*glue = dev_get_drvdata(dev);
 	struct musb			*musb = glue_to_musb(glue);
 
-	omap2430_low_level_exit(musb);
-	otg_set_suspend(musb->xceiv, 1);
+	if (mutex_trylock(&musb->musb_lock)) {
+		dev_info(dev, "runtime suspend\n");
+		musb->context.otg_interfsel =
+				musb_readl(musb->mregs,
+						OTG_INTERFSEL);
 
-	return 0;
+		omap2430_low_level_exit(musb);
+		otg_set_suspend(musb->xceiv, 1);
+		mutex_unlock(&musb->musb_lock);
+		return 0;
+	}
+	return -EBUSY;
 }
 
 static int omap2430_runtime_resume(struct device *dev)
@@ -516,7 +858,11 @@ static int omap2430_runtime_resume(struct device *dev)
 	struct omap2430_glue		*glue = dev_get_drvdata(dev);
 	struct musb			*musb = glue_to_musb(glue);
 
+	dev_info(dev, "runtime resume\n");
 	omap2430_low_level_init(musb);
+	musb_writel(musb->mregs, OTG_INTERFSEL,
+					musb->context.otg_interfsel);
+
 	otg_set_suspend(musb->xceiv, 0);
 
 	return 0;

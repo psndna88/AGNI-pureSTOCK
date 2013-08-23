@@ -20,6 +20,8 @@
 #include <plat/cpu.h>
 #include <plat/prcm.h>
 
+#include "vp.h"
+
 #include "prm2xxx_3xxx.h"
 #include "cm2xxx_3xxx.h"
 #include "prm-regbits-24xx.h"
@@ -155,4 +157,81 @@ int omap2_prm_deassert_hardreset(s16 prm_mod, u8 rst_shift, u8 st_shift)
 			  MAX_MODULE_HARDRESET_WAIT, c);
 
 	return (c == MAX_MODULE_HARDRESET_WAIT) ? -EBUSY : 0;
+}
+
+/* PRM VP */
+
+/*
+ * struct omap3_prm_irq - OMAP3 PRM IRQ register access description.
+ * @vp_tranxdone_status: VP_TRANXDONE_ST bitmask in PRM_IRQSTATUS_MPU reg
+ * @abb_tranxdone_status: ABB_TRANXDONE_ST bitmask in PRM_IRQSTATUS_MPU reg
+ *			  (ONLY for OMAP3630)
+ */
+struct omap3_prm_irq {
+	u32 vp_tranxdone_status;
+	u32 abb_tranxdone_status;
+};
+
+static struct omap3_prm_irq omap3_prm_irqs[] = {
+	[OMAP3_PRM_IRQ_VDD_MPU_ID] = {
+		.vp_tranxdone_status = OMAP3430_VP1_TRANXDONE_ST_MASK,
+		.abb_tranxdone_status = OMAP3630_ABB_LDO_TRANXDONE_ST_MASK,
+	},
+	[OMAP3_PRM_IRQ_VDD_CORE_ID] = {
+		.vp_tranxdone_status = OMAP3430_VP2_TRANXDONE_ST_MASK,
+		/* no abb for core */
+	},
+};
+
+#define MAX_VP_ID ARRAY_SIZE(omap3_vp);
+
+u32 omap3_prm_vp_check_txdone(u8 irq_id)
+{
+	struct omap3_prm_irq *irq = &omap3_prm_irqs[irq_id];
+	u32 irqstatus;
+
+	irqstatus = omap2_prm_read_mod_reg(OCP_MOD,
+					   OMAP3_PRM_IRQSTATUS_MPU_OFFSET);
+	return irqstatus & irq->vp_tranxdone_status;
+}
+
+void omap3_prm_vp_clear_txdone(u8 irq_id)
+{
+	struct omap3_prm_irq *irq = &omap3_prm_irqs[irq_id];
+
+	omap2_prm_write_mod_reg(irq->vp_tranxdone_status,
+				OCP_MOD, OMAP3_PRM_IRQSTATUS_MPU_OFFSET);
+}
+
+u32 omap36xx_prm_abb_check_txdone(u8 irq_id)
+{
+	struct omap3_prm_irq *irq = &omap3_prm_irqs[irq_id];
+	u32 irqstatus;
+
+	irqstatus = omap2_prm_read_mod_reg(OCP_MOD,
+					   OMAP3_PRM_IRQSTATUS_MPU_OFFSET);
+	return irqstatus & irq->abb_tranxdone_status;
+}
+
+void omap36xx_prm_abb_clear_txdone(u8 irq_id)
+{
+	struct omap3_prm_irq *irq = &omap3_prm_irqs[irq_id];
+
+	omap2_prm_write_mod_reg(irq->abb_tranxdone_status,
+				OCP_MOD, OMAP3_PRM_IRQSTATUS_MPU_OFFSET);
+}
+
+u32 omap3_prm_vcvp_read(u8 offset)
+{
+	return omap2_prm_read_mod_reg(OMAP3430_GR_MOD, offset);
+}
+
+void omap3_prm_vcvp_write(u32 val, u8 offset)
+{
+	omap2_prm_write_mod_reg(val, OMAP3430_GR_MOD, offset);
+}
+
+u32 omap3_prm_vcvp_rmw(u32 mask, u32 bits, u8 offset)
+{
+	return omap2_prm_rmw_mod_reg_bits(mask, bits, OMAP3430_GR_MOD, offset);
 }

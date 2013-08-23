@@ -2,9 +2,24 @@
 # Makefile for the linux kernel.
 #
 
+# FIXME: For OMAP4 target - the sequence of Obj-files inclusion in
+# 	Makefile is strictly related to sequence of the Kernel xxx_initcall
+# 	functions calls. Any changes in the sequence of Obj-files inclusion
+# 	in this file should be done carefully and can cause unpredictable
+# 	system behaviour - especially it can have impact on OMAP4 PM
+# 	initialization procedure.
+#
+# Known valid sequence:
+# 	- pm.o
+# 	- sr_device.o
+# 	- smartreflex.o
+# 	- smartreflex-class3.o
+# 	- smartreflex-class1p5.o
+# 	- pm44xx.o
+
 # Common support
 obj-y := id.o io.o control.o mux.o devices.o serial.o gpmc.o timer-gp.o pm.o \
-	 common.o gpio.o dma.o wd_timer.o
+	 common.o gpio.o dma.o wd_timer.o omap_pmic.o dmtimer.o
 
 omap-2-3-common				= irq.o sdrc.o
 hwmod-common				= omap_hwmod.o \
@@ -15,16 +30,21 @@ clock-common				= clock.o clock_common_data.o \
 obj-$(CONFIG_ARCH_OMAP2) += $(omap-2-3-common) $(hwmod-common)
 obj-$(CONFIG_ARCH_OMAP3) += $(omap-2-3-common) $(hwmod-common)
 obj-$(CONFIG_ARCH_OMAP4) += prm44xx.o $(hwmod-common)
+obj-$(CONFIG_ARCH_OMAP4) += emif.o lpddr2_jedec_data.o lpddr2_elpida_data.o
 
 obj-$(CONFIG_OMAP_MCBSP) += mcbsp.o
 
 obj-$(CONFIG_TWL4030_CORE) += omap_twl.o
+obj-$(CONFIG_OMAP_TPS6236X) += omap_tps6236x.o
+obj-$(CONFIG_OMAP_TEMP_SENSOR) +=temp_sensor_device.o
+obj-$(CONFIG_OMAP4_PCB_SENSOR) += pcb_temp_sensor_device.o
 
 # SMP support ONLY available for OMAP4
 obj-$(CONFIG_SMP)			+= omap-smp.o omap-headsmp.o
 obj-$(CONFIG_LOCAL_TIMERS)		+= timer-mpu.o
 obj-$(CONFIG_HOTPLUG_CPU)		+= omap-hotplug.o
-obj-$(CONFIG_ARCH_OMAP4)		+= omap44xx-smc.o omap4-common.o
+obj-$(CONFIG_ARCH_OMAP4)		+= omap44xx-smc.o omap4-common.o \
+					   omap-wakeupgen.o
 
 plus_sec := $(call as-instr,.arch_extension sec,+sec)
 AFLAGS_omap-headsmp.o			:=-Wa,-march=armv7-a$(plus_sec)
@@ -56,19 +76,31 @@ obj-$(CONFIG_ARCH_OMAP3)		+= opp3xxx_data.o
 obj-$(CONFIG_ARCH_OMAP4)		+= opp4xxx_data.o
 endif
 
+# Smartreflex AVS initialization
+obj-$(CONFIG_OMAP_SMARTREFLEX)          += sr_device.o smartreflex.o
+obj-$(CONFIG_OMAP_SMARTREFLEX_CLASS3)	+= smartreflex-class3.o
+obj-$(CONFIG_OMAP_SMARTREFLEX_CLASS1P5)	+= smartreflex-class1p5.o
+
 # Power Management
 ifeq ($(CONFIG_PM),y)
 obj-$(CONFIG_ARCH_OMAP2)		+= pm24xx.o
 obj-$(CONFIG_ARCH_OMAP2)		+= sleep24xx.o
 obj-$(CONFIG_ARCH_OMAP3)		+= pm34xx.o sleep34xx.o \
 					   cpuidle34xx.o
-obj-$(CONFIG_ARCH_OMAP4)		+= pm44xx.o
+obj-$(CONFIG_ARCH_OMAP4)		+= pm44xx.o		\
+					   omap4-mpuss-lowpower.o sleep44xx.o \
+					   cpuidle44xx.o resetreason.o
+# CPUFREQ driver
+obj-$(CONFIG_CPU_FREQ)			+= omap2plus-cpufreq.o
+
 obj-$(CONFIG_PM_DEBUG)			+= pm-debug.o
-obj-$(CONFIG_OMAP_SMARTREFLEX)          += sr_device.o smartreflex.o
-obj-$(CONFIG_OMAP_SMARTREFLEX_CLASS3)	+= smartreflex-class3.o
+ifeq ($(CONFIG_PM_DEBUG),y)
+obj-$(CONFIG_ARCH_OMAP4)		+= prcm-debug.o
+endif
 
 AFLAGS_sleep24xx.o			:=-Wa,-march=armv6
 AFLAGS_sleep34xx.o			:=-Wa,-march=armv7-a$(plus_sec)
+AFLAGS_sleep44xx.o			:=-Wa,-march=armv7-a$(plus_sec)
 
 ifeq ($(CONFIG_PM_VERBOSE),y)
 CFLAGS_pm_bus.o				+= -DDEBUG
@@ -86,16 +118,19 @@ obj-$(CONFIG_ARCH_OMAP3)		+= prcm.o cm2xxx_3xxx.o prm2xxx_3xxx.o \
 obj-$(CONFIG_ARCH_OMAP4)		+= prcm.o cm2xxx_3xxx.o cminst44xx.o \
 					   cm44xx.o prcm_mpu44xx.o \
 					   prminst44xx.o vc44xx_data.o \
-					   vp44xx_data.o
+					   vp44xx_data.o omap4-sar.o
 
 # OMAP voltage domains
 ifeq ($(CONFIG_PM),y)
-voltagedomain-common			:= voltage.o
-obj-$(CONFIG_ARCH_OMAP2)		+= $(voltagedomain-common)
+voltagedomain-common			:= voltage.o vc.o vp.o
+obj-$(CONFIG_ARCH_OMAP2)		+= $(voltagedomain-common) \
+					   voltagedomains2xxx_data.o
 obj-$(CONFIG_ARCH_OMAP3)		+= $(voltagedomain-common) \
-					   voltagedomains3xxx_data.o
+					   voltagedomains3xxx_data.o \
+					   ldo.o ldo3xxx_data.o dvfs.o
 obj-$(CONFIG_ARCH_OMAP4)		+= $(voltagedomain-common) \
-					   voltagedomains44xx_data.o
+					   voltagedomains44xx_data.o \
+					   ldo.o ldo4xxx_data.o dvfs.o
 endif
 
 # OMAP powerdomain framework
@@ -157,13 +192,13 @@ obj-$(CONFIG_OMAP3_EMU)			+= emu.o
 obj-$(CONFIG_ARCH_OMAP3)		+= omap_l3_smx.o
 obj-$(CONFIG_ARCH_OMAP4)		+= omap_l3_noc.o
 
+# LDO stuff
+obj-$(CONFIG_ARCH_OMAP4)		+= omap4_trim_quirks.o
+
 obj-$(CONFIG_OMAP_MBOX_FWK)		+= mailbox_mach.o
 mailbox_mach-objs			:= mailbox.o
 
-obj-$(CONFIG_OMAP_IOMMU)		+= iommu2.o
-
-iommu-$(CONFIG_OMAP_IOMMU)		:= omap-iommu.o
-obj-y					+= $(iommu-m) $(iommu-y)
+obj-$(CONFIG_OMAP_IOMMU)		+= iommu2.o omap-iommu.o
 
 i2c-omap-$(CONFIG_I2C_OMAP)		:= i2c.o
 obj-y					+= $(i2c-omap-m) $(i2c-omap-y)
@@ -233,13 +268,32 @@ obj-$(CONFIG_MACH_OMAP3_TOUCHBOOK)	+= board-omap3touchbook.o \
 					   hsmmc.o
 obj-$(CONFIG_MACH_OMAP_4430SDP)		+= board-4430sdp.o \
 					   hsmmc.o \
-					   omap_phy_internal.o
+					   omap_phy_internal.o \
+					   omap4_apps_brd_id.o
 obj-$(CONFIG_MACH_OMAP4_PANDA)		+= board-omap4panda.o \
 					   hsmmc.o \
 					   omap_phy_internal.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna.o \
+					   hsmmc.o \
+					   omap_phy_internal.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-display.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-input.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-jack.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-nfc.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-power.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-sensors.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-vibrator.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-wifi.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-bluetooth.o \
+					   board-tuna-emif.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-connector.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-pogo.o
+obj-$(CONFIG_MACH_TUNA)			+= board-tuna-usbhost.o
 
 obj-$(CONFIG_MACH_OMAP3517EVM)		+= board-am3517evm.o \
 					   omap_phy_internal.o \
+
+obj-$(CONFIG_MACH_OMAP3517EVM)		+= board-am3517evm.o
 
 obj-$(CONFIG_MACH_CRANEBOARD)		+= board-am3517crane.o
 
@@ -270,3 +324,18 @@ disp-$(CONFIG_OMAP2_DSS)		:= display.o
 obj-y					+= $(disp-m) $(disp-y)
 
 obj-y					+= common-board-devices.o
+
+obj-$(CONFIG_OMAP_REMOTE_PROC)		+= remoteproc.o
+obj-$(CONFIG_OMAP_HSI_DEVICE)		+= omap_hsi.o
+ifeq ($(CONFIG_MACH_TUNA),y)
+obj-$(CONFIG_SEC_MODEM)                 += board-tuna-modems.o
+endif
+obj-$(CONFIG_ION_OMAP)			+= omap4_ion.o
+obj-$(CONFIG_ARCH_OMAP4)		+= omap_dmm.o
+obj-$(CONFIG_OMAP_FIQ_DEBUGGER)		+= omap_fiq_debugger.o
+obj-$(CONFIG_OMAP_RAM_CONSOLE)         += omap_ram_console.o
+obj-$(CONFIG_ARCH_OMAP4)		+= omap_gcxxx.o
+
+include arch/arm/mach-omap2/Makefile.sec
+include arch/arm/mach-omap2/Makefile.chn
+include arch/arm/mach-omap2/Makefile.mid

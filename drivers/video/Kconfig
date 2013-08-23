@@ -23,6 +23,10 @@ source "drivers/gpu/drm/Kconfig"
 
 source "drivers/gpu/stub/Kconfig"
 
+source "drivers/gpu/pvr/Kconfig"
+
+source "drivers/gpu/ion/Kconfig"
+
 config VGASTATE
        tristate
        default n
@@ -2382,6 +2386,32 @@ config FB_PUV3_UNIGFX
 	help
 	  Choose this option if you want to use the Unigfx device as a
 	  framebuffer device. Without the support of PCI & AGP.
+
+config HDMI_TI_4XXX_IP
+	tristate
+	default n
+	help
+	  HDMI Library Interface , for TI OMAP4/Netra IP.
+	  See http://www.hdmi.org/ for HDMI specification.
+
+config SII9234
+	bool "Support Silicon Image 9234 MHL Bridge"
+	depends on I2C
+	default n
+	help
+	  Enabled support for the Silicon Image 9234 MHL Bridge
+
+config SII9234_RCP
+	bool "Support MHL RCP"
+	depends on SII9234
+	default n
+
+config SII9290_SUPPORT
+	bool "Support Silicon Image 9290 dongle"
+	depends on SEC_30PIN_CON
+	default n
+	help
+	  Enabled support for the Silicon Image 9290 dongle
 
 source "drivers/video/omap/Kconfig"
 source "drivers/video/omap2/Kconfig"

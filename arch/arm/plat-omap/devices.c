@@ -16,17 +16,21 @@
 #include <linux/io.h>
 #include <linux/slab.h>
 #include <linux/memblock.h>
+#include <linux/err.h>
 
 #include <mach/hardware.h>
 #include <asm/mach-types.h>
 #include <asm/mach/map.h>
 
+#include <plat/omap_hwmod.h>
+#include <plat/omap_device.h>
 #include <plat/tc.h>
 #include <plat/board.h>
 #include <plat/mmc.h>
 #include <mach/gpio.h>
 #include <plat/menelaus.h>
 #include <plat/mcbsp.h>
+#include <plat/remoteproc.h>
 #include <plat/omap44xx.h>
 
 /*-------------------------------------------------------------------------*/
@@ -73,39 +77,39 @@ void omap_mcbsp_register_board_cfg(struct resource *res, int res_count,
 #endif
 
 /*-------------------------------------------------------------------------*/
+#if defined(CONFIG_SND_OMAP_SOC_DMIC) || \
+    defined(CONFIG_SND_OMAP_SOC_DMIC_MODULE)
 
-#if defined(CONFIG_SND_OMAP_SOC_MCPDM) || \
-		defined(CONFIG_SND_OMAP_SOC_MCPDM_MODULE)
-
-static struct resource mcpdm_resources[] = {
-	{
-		.name		= "mcpdm_mem",
-		.start		= OMAP44XX_MCPDM_BASE,
-		.end		= OMAP44XX_MCPDM_BASE + SZ_4K,
-		.flags		= IORESOURCE_MEM,
-	},
-	{
-		.name		= "mcpdm_irq",
-		.start		= OMAP44XX_IRQ_MCPDM,
-		.end		= OMAP44XX_IRQ_MCPDM,
-		.flags		= IORESOURCE_IRQ,
-	},
+static struct omap_device_pm_latency omap_dmic_latency[] = {
+       {
+               .deactivate_func = omap_device_idle_hwmods,
+               .activate_func = omap_device_enable_hwmods,
+               .flags = OMAP_DEVICE_LATENCY_AUTO_ADJUST,
+       },
 };
 
-static struct platform_device omap_mcpdm_device = {
-	.name		= "omap-mcpdm",
-	.id		= -1,
-	.num_resources	= ARRAY_SIZE(mcpdm_resources),
-	.resource	= mcpdm_resources,
-};
-
-static void omap_init_mcpdm(void)
+static void omap_init_dmic(void)
 {
-	(void) platform_device_register(&omap_mcpdm_device);
+       struct omap_hwmod *oh;
+       struct omap_device *od;
+
+       oh = omap_hwmod_lookup("dmic");
+       if (!oh) {
+               printk(KERN_ERR "Could not look up dmic hw_mod\n");
+               return;
+       }
+
+       od = omap_device_build("omap-dmic-dai", -1, oh, NULL, 0,
+                               omap_dmic_latency,
+                               ARRAY_SIZE(omap_dmic_latency), 0);
+       if (IS_ERR(od))
+               printk(KERN_ERR "Could not build omap_device for omap-dmic-dai\n");
 }
 #else
-static inline void omap_init_mcpdm(void) {}
+static inline void omap_init_dmic(void) {}
 #endif
+
+/*-------------------------------------------------------------------------*/
 
 /*-------------------------------------------------------------------------*/
 
@@ -190,8 +194,6 @@ static void omap_init_rng(void)
 static inline void omap_init_rng(void) {}
 #endif
 
-/*-------------------------------------------------------------------------*/
-
 /* Numbering for the SPI-capable controllers when used for SPI:
  * spi		= 1
  * uwire	= 2
@@ -234,13 +236,19 @@ static void omap_init_uwire(void)
 static inline void omap_init_uwire(void) {}
 #endif
 
-#if defined(CONFIG_TIDSPBRIDGE) || defined(CONFIG_TIDSPBRIDGE_MODULE)
+#if defined(CONFIG_TIDSPBRIDGE) || defined(CONFIG_TIDSPBRIDGE_MODULE) \
+				|| defined(CONFIG_OMAP_REMOTE_PROC_DSP)
 
 static phys_addr_t omap_dsp_phys_mempool_base;
+static phys_addr_t omap_dsp_phys_mempool_size;
 
 void __init omap_dsp_reserve_sdram_memblock(void)
 {
+#if defined(CONFIG_OMAP_REMOTE_PROC_DSP)
+	phys_addr_t size = CONFIG_OMAP_REMOTEPROC_MEMPOOL_SIZE_DSP;
+#else
 	phys_addr_t size = CONFIG_TIDSPBRIDGE_MEMPOOL_SIZE;
+#endif
 	phys_addr_t paddr;
 
 	if (!size)
@@ -256,13 +264,120 @@ void __init omap_dsp_reserve_sdram_memblock(void)
 	memblock_remove(paddr, size);
 
 	omap_dsp_phys_mempool_base = paddr;
+	omap_dsp_phys_mempool_size = size;
 }
+#endif
 
+#if defined(CONFIG_TIDSPBRIDGE) || defined(CONFIG_TIDSPBRIDGE_MODULE)
 phys_addr_t omap_dsp_get_mempool_base(void)
 {
 	return omap_dsp_phys_mempool_base;
 }
 EXPORT_SYMBOL(omap_dsp_get_mempool_base);
+
+phys_addr_t omap_dsp_get_mempool_size(void)
+{
+	return omap_dsp_phys_mempool_size;
+}
+EXPORT_SYMBOL(omap_dsp_get_mempool_size);
+#endif
+
+#if defined(CONFIG_OMAP_REMOTE_PROC_DSP)
+static phys_addr_t omap_dsp_phys_st_mempool_base;
+static phys_addr_t omap_dsp_phys_st_mempool_size;
+
+void __init omap_dsp_set_static_mempool(u32 start, u32 size)
+{
+	omap_dsp_phys_st_mempool_base = start;
+	omap_dsp_phys_st_mempool_size = size;
+}
+
+phys_addr_t omap_dsp_get_mempool_tbase(enum omap_rproc_mempool_type type)
+{
+	switch (type) {
+	case OMAP_RPROC_MEMPOOL_STATIC:
+		return omap_dsp_phys_st_mempool_base;
+	case OMAP_RPROC_MEMPOOL_DYNAMIC:
+		return omap_dsp_phys_mempool_base;
+	default:
+		return 0;
+	}
+}
+EXPORT_SYMBOL(omap_dsp_get_mempool_tbase);
+
+phys_addr_t omap_dsp_get_mempool_tsize(enum omap_rproc_mempool_type type)
+{
+	switch (type) {
+	case OMAP_RPROC_MEMPOOL_STATIC:
+		return omap_dsp_phys_st_mempool_size;
+	case OMAP_RPROC_MEMPOOL_DYNAMIC:
+		return omap_dsp_phys_mempool_size;
+	default:
+		return 0;
+	}
+}
+EXPORT_SYMBOL(omap_dsp_get_mempool_tsize);
+#endif
+
+#if defined(CONFIG_OMAP_REMOTE_PROC_IPU)
+static phys_addr_t omap_ipu_phys_mempool_base;
+static u32 omap_ipu_phys_mempool_size;
+static phys_addr_t omap_ipu_phys_st_mempool_base;
+static u32 omap_ipu_phys_st_mempool_size;
+
+void __init omap_ipu_reserve_sdram_memblock(void)
+{
+	/* currently handles only ipu. dsp will be handled later...*/
+	u32 size = CONFIG_OMAP_REMOTEPROC_MEMPOOL_SIZE;
+	phys_addr_t paddr;
+
+	if (!size)
+		return;
+
+	paddr = memblock_alloc(size, SZ_1M);
+	if (!paddr) {
+		pr_err("%s: failed to reserve %x bytes\n",
+				__func__, size);
+		return;
+	}
+	memblock_free(paddr, size);
+	memblock_remove(paddr, size);
+
+	omap_ipu_phys_mempool_base = paddr;
+	omap_ipu_phys_mempool_size = size;
+}
+
+void __init omap_ipu_set_static_mempool(u32 start, u32 size)
+{
+	omap_ipu_phys_st_mempool_base = start;
+	omap_ipu_phys_st_mempool_size = size;
+}
+
+phys_addr_t omap_ipu_get_mempool_base(enum omap_rproc_mempool_type type)
+{
+	switch (type) {
+	case OMAP_RPROC_MEMPOOL_STATIC:
+		return omap_ipu_phys_st_mempool_base;
+	case OMAP_RPROC_MEMPOOL_DYNAMIC:
+		return omap_ipu_phys_mempool_base;
+	default:
+		return 0;
+	}
+}
+EXPORT_SYMBOL(omap_ipu_get_mempool_base);
+
+u32 omap_ipu_get_mempool_size(enum omap_rproc_mempool_type type)
+{
+	switch (type) {
+	case OMAP_RPROC_MEMPOOL_STATIC:
+		return omap_ipu_phys_st_mempool_size;
+	case OMAP_RPROC_MEMPOOL_DYNAMIC:
+		return omap_ipu_phys_mempool_size;
+	default:
+		return 0;
+	}
+}
+EXPORT_SYMBOL(omap_ipu_get_mempool_size);
 #endif
 
 /*
@@ -291,7 +406,7 @@ static int __init omap_init_devices(void)
 	 * in alphabetical order so they're easier to sort through.
 	 */
 	omap_init_rng();
-	omap_init_mcpdm();
+	omap_init_dmic();
 	omap_init_uwire();
 	return 0;
 }

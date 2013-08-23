@@ -20,6 +20,7 @@
 #include <linux/interrupt.h>
 
 #include <linux/mfd/wm8994/core.h>
+#include <linux/mfd/wm8994/pdata.h>
 #include <linux/mfd/wm8994/registers.h>
 
 #include <linux/delay.h>
@@ -231,17 +232,17 @@ static irqreturn_t wm8994_irq_thread(int irq, void *data)
 		status[i] &= ~wm8994->irq_masks_cur[i];
 	}
 
-	/* Report */
-	for (i = 0; i < ARRAY_SIZE(wm8994_irqs); i++) {
-		if (status[wm8994_irqs[i].reg - 1] & wm8994_irqs[i].mask)
-			handle_nested_irq(wm8994->irq_base + i);
-	}
-
 	/* Ack any unmasked IRQs */
 	for (i = 0; i < ARRAY_SIZE(status); i++) {
 		if (status[i])
 			wm8994_reg_write(wm8994, WM8994_INTERRUPT_STATUS_1 + i,
 					 status[i]);
+	}
+
+	/* Report */
+	for (i = 0; i < ARRAY_SIZE(wm8994_irqs); i++) {
+		if (status[wm8994_irqs[i].reg - 1] & wm8994_irqs[i].mask)
+			handle_nested_irq(wm8994->irq_base + i);
 	}
 
 	return IRQ_HANDLED;
@@ -250,6 +251,8 @@ static irqreturn_t wm8994_irq_thread(int irq, void *data)
 int wm8994_irq_init(struct wm8994 *wm8994)
 {
 	int i, cur_irq, ret;
+	unsigned long irqflags;
+	struct wm8994_pdata *pdata = wm8994->dev->platform_data;
 
 	mutex_init(&wm8994->irq_lock);
 
@@ -292,9 +295,15 @@ int wm8994_irq_init(struct wm8994 *wm8994)
 #endif
 	}
 
+	/* select user or default irq flags */
+	irqflags = IRQF_TRIGGER_HIGH | IRQF_ONESHOT;
+	if (pdata->irq_flags)
+		irqflags = pdata->irq_flags;
+
 	ret = request_threaded_irq(wm8994->irq, NULL, wm8994_irq_thread,
-				   IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
+				   irqflags,
 				   "wm8994", wm8994);
+
 	if (ret != 0) {
 		dev_err(wm8994->dev, "Failed to request IRQ %d: %d\n",
 			wm8994->irq, ret);

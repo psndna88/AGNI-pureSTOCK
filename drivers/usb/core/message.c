@@ -1142,6 +1142,11 @@ void usb_disable_device(struct usb_device *dev, int skip_ep0)
 	int i;
 	struct usb_hcd *hcd = bus_to_hcd(dev->bus);
 
+	for (i = skip_ep0; i < 16; ++i) {
+		usb_disable_endpoint(dev, i, false);
+		usb_disable_endpoint(dev, i + USB_DIR_IN, false);
+	}
+
 	/* getting rid of interfaces will disconnect
 	 * any drivers bound to them (a key side effect)
 	 */

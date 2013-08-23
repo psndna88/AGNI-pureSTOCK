@@ -32,6 +32,11 @@
 #include <linux/io.h>
 #include <linux/device.h>
 #include <linux/regulator/consumer.h>
+#ifdef CONFIG_HAS_EARLYSUSPEND
+#include <linux/earlysuspend.h>
+#endif
+#include <plat/omap_hwmod.h>
+#include <plat/omap-pm.h>
 
 #include <video/omapdss.h>
 
@@ -43,6 +48,10 @@ static struct {
 
 	struct regulator *vdds_dsi_reg;
 	struct regulator *vdds_sdi_reg;
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	struct early_suspend dss_early_suspend_info;
+#endif
 } core;
 
 static char *def_disp_name;
@@ -145,6 +154,10 @@ static int dss_initialize_debugfs(void)
 	debugfs_create_file("venc", S_IRUGO, dss_debugfs_dir,
 			&venc_dump_regs, &dss_debug_fops);
 #endif
+#ifdef CONFIG_OMAP4_DSS_HDMI
+	debugfs_create_file("hdmi", S_IRUGO, dss_debugfs_dir,
+			&hdmi_dump_regs, &dss_debug_fops);
+#endif
 	return 0;
 }
 
@@ -163,6 +176,40 @@ static inline void dss_uninitialize_debugfs(void)
 }
 #endif /* CONFIG_DEBUG_FS && CONFIG_OMAP2_DSS_DEBUG_SUPPORT */
 
+/*
+ * The value of HIGH_RES_TPUT corresponds to one dispc pipe layer of
+ * 1920x1080x4(bpp)x60(Hz) = ~500000(MiB/s). We add another 100000
+ * for the other partial screen pipes. This is above the threshold for
+ * selecting the higher OPP and L3 frequency, so it's "as fast" as we
+ * can go so covers the higest supported resolution.
+ */
+#define HIGH_RES_TPUT 600000 /* MiB/s */
+static void omap_dss_request_bandwidth(struct omap_dss_device *display)
+{
+	struct device *dss_dev;
+
+	if (display->panel.timings.x_res * display->panel.timings.y_res >=
+							(1080 * 1920)) {
+		dss_dev = omap_hwmod_name_get_dev("dss_core");
+		if (dss_dev)
+			omap_pm_set_min_bus_tput(dss_dev,
+						 OCP_INITIATOR_AGENT,
+						 HIGH_RES_TPUT);
+		else
+			DSSDBG("Failed to set L3 bus speed\n");
+	}
+}
+
+static void omap_dss_reset_bandwidth(void)
+{
+	struct device *dss_dev;
+	dss_dev = omap_hwmod_name_get_dev("dss_core");
+	if (IS_ERR_OR_NULL(dss_dev))
+		return;
+	omap_pm_set_min_bus_tput(dss_dev,
+				 OCP_INITIATOR_AGENT, -1);
+}
+
 /* PLATFORM DEVICE */
 static int omap_dss_probe(struct platform_device *pdev)
 {
@@ -177,25 +224,25 @@ static int omap_dss_probe(struct platform_device *pdev)
 	dss_init_overlay_managers(pdev);
 	dss_init_overlays(pdev);
 
+	if (dss_has_feature(FEAT_OVL_WB))
+		dss_init_writeback(pdev);
+
 	r = dss_init_platform_driver();
 	if (r) {
 		DSSERR("Failed to initialize DSS platform driver\n");
 		goto err_dss;
 	}
 
-	/* keep clocks enabled to prevent context saves/restores during init */
-	dss_clk_enable(DSS_CLK_ICK | DSS_CLK_FCK);
+	r = dispc_init_platform_driver();
+	if (r) {
+		DSSERR("Failed to initialize dispc platform driver\n");
+		goto err_dispc;
+	}
 
 	r = rfbi_init_platform_driver();
 	if (r) {
 		DSSERR("Failed to initialize rfbi platform driver\n");
 		goto err_rfbi;
-	}
-
-	r = dispc_init_platform_driver();
-	if (r) {
-		DSSERR("Failed to initialize dispc platform driver\n");
-		goto err_dispc;
 	}
 
 	r = venc_init_platform_driver();
@@ -223,6 +270,9 @@ static int omap_dss_probe(struct platform_device *pdev)
 	for (i = 0; i < pdata->num_devices; ++i) {
 		struct omap_dss_device *dssdev = pdata->devices[i];
 
+		if (def_disp_name && strcmp(def_disp_name, dssdev->name) == 0)
+			pdata->default_device = dssdev;
+
 		r = omap_dss_register_device(dssdev);
 		if (r) {
 			DSSERR("device %d %s register failed %d\n", i,
@@ -233,12 +283,7 @@ static int omap_dss_probe(struct platform_device *pdev)
 
 			goto err_register;
 		}
-
-		if (def_disp_name && strcmp(def_disp_name, dssdev->name) == 0)
-			pdata->default_device = dssdev;
 	}
-
-	dss_clk_disable(DSS_CLK_ICK | DSS_CLK_FCK);
 
 	return 0;
 
@@ -275,6 +320,8 @@ static int omap_dss_remove(struct platform_device *pdev)
 	hdmi_uninit_platform_driver();
 	dss_uninit_platform_driver();
 
+	if (dss_has_feature(FEAT_OVL_WB))
+		dss_uninit_writeback(pdev);
 	dss_uninit_overlays(pdev);
 	dss_uninit_overlay_managers(pdev);
 
@@ -304,12 +351,31 @@ static int omap_dss_resume(struct platform_device *pdev)
 	return dss_resume_all_devices();
 }
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+static void dss_early_suspend(struct early_suspend *h)
+{
+	DSSDBG("%s\n", __func__);
+	omap_dss_suspend(core.pdev, PMSG_SUSPEND);
+}
+
+static void dss_late_resume(struct early_suspend *h)
+{
+	DSSDBG("%s\n", __func__);
+	omap_dss_resume(core.pdev);
+}
+#endif
+
 static struct platform_driver omap_dss_driver = {
 	.probe          = omap_dss_probe,
 	.remove         = omap_dss_remove,
 	.shutdown	= omap_dss_shutdown,
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	.suspend	= NULL,
+	.resume		= NULL,
+#else
 	.suspend	= omap_dss_suspend,
 	.resume		= omap_dss_resume,
+#endif
 	.driver         = {
 		.name   = "omapdss",
 		.owner  = THIS_MODULE,
@@ -424,6 +490,33 @@ static int dss_driver_remove(struct device *dev)
 	return 0;
 }
 
+static void omap_dss_driver_disable(struct omap_dss_device *dssdev)
+{
+	if (dssdev->state != OMAP_DSS_DISPLAY_DISABLED)
+		blocking_notifier_call_chain(&dssdev->state_notifiers,
+					OMAP_DSS_DISPLAY_DISABLED, dssdev);
+	dssdev->driver->disable_orig(dssdev);
+	dssdev->first_vsync = false;
+}
+
+static int omap_dss_driver_enable(struct omap_dss_device *dssdev)
+{
+	int r;
+	omap_dss_request_bandwidth(dssdev);
+	r = dssdev->driver->enable_orig(dssdev);
+	if (!r && dssdev->state == OMAP_DSS_DISPLAY_ACTIVE)
+		blocking_notifier_call_chain(&dssdev->state_notifiers,
+					OMAP_DSS_DISPLAY_ACTIVE, dssdev);
+	return r;
+}
+
+static int omap_dss_driver_suspend(struct omap_dss_device *dssdev)
+{
+	int r = dssdev->driver->suspend_orig(dssdev);
+	omap_dss_reset_bandwidth();
+	return r;
+}
+
 int omap_dss_register_driver(struct omap_dss_driver *dssdriver)
 {
 	dssdriver->driver.bus = &dss_bus_type;
@@ -435,6 +528,14 @@ int omap_dss_register_driver(struct omap_dss_driver *dssdriver)
 	if (dssdriver->get_recommended_bpp == NULL)
 		dssdriver->get_recommended_bpp =
 			omapdss_default_get_recommended_bpp;
+
+	dssdriver->disable_orig = dssdriver->disable;
+	dssdriver->disable = omap_dss_driver_disable;
+	dssdriver->enable_orig = dssdriver->enable;
+	dssdriver->enable = omap_dss_driver_enable;
+
+	dssdriver->suspend_orig = dssdriver->suspend;
+	dssdriver->suspend = omap_dss_driver_suspend;
 
 	return driver_register(&dssdriver->driver);
 }
@@ -519,6 +620,13 @@ static int omap_dss_bus_register(void)
 		return r;
 	}
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	core.dss_early_suspend_info.suspend = dss_early_suspend;
+	core.dss_early_suspend_info.resume = dss_late_resume;
+	core.dss_early_suspend_info.level = EARLY_SUSPEND_LEVEL_DISABLE_FB + 2;
+	register_early_suspend(&core.dss_early_suspend_info);
+#endif
+
 	return 0;
 }
 
@@ -527,6 +635,9 @@ static int omap_dss_bus_register(void)
 #ifdef CONFIG_OMAP2_DSS_MODULE
 static void omap_dss_bus_unregister(void)
 {
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	unregister_early_suspend(&core.dss_early_suspend_info);
+#endif
 	device_unregister(&dss_bus);
 
 	bus_unregister(&dss_bus_type);

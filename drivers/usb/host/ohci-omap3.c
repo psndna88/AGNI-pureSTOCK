@@ -31,6 +31,8 @@
 
 #include <linux/platform_device.h>
 #include <plat/usb.h>
+#include <plat/omap_hwmod.h>
+#include <linux/pm_runtime.h>
 
 /*-------------------------------------------------------------------------*/
 
@@ -40,6 +42,54 @@ static int ohci_omap3_init(struct usb_hcd *hcd)
 
 	return ohci_init(hcd_to_ohci(hcd));
 }
+
+static int ohci_omap3_bus_suspend(struct usb_hcd *hcd)
+{
+	struct device *dev = hcd->self.controller;
+	struct omap_hwmod	*oh;
+	int ret = 0;
+
+	dev_dbg(dev, "ohci_omap3_bus_suspend\n");
+
+	ret = ohci_bus_suspend(hcd);
+
+	/* Delay required so that after ohci suspend
+	 * smart stand by can be set in the driver.
+	 * required for power mangament
+	 */
+	msleep(5);
+
+	if (ret != 0) {
+		dev_dbg(dev, "ohci_omap3_bus_suspend failed %d\n", ret);
+		return ret;
+	}
+
+	oh = omap_hwmod_lookup(USBHS_OHCI_HWMODNAME);
+
+	omap_hwmod_enable_ioring_wakeup(oh);
+
+	if (dev->parent)
+		pm_runtime_put_sync(dev->parent);
+
+	return ret;
+}
+
+
+static int ohci_omap3_bus_resume(struct usb_hcd *hcd)
+{
+	struct device *dev = hcd->self.controller;
+	struct ohci_hcd_omap_platform_data *pdata = dev->platform_data;
+
+	dev_dbg(dev, "ohci_omap3_bus_resume\n");
+
+	if (dev->parent)
+		pm_runtime_get_sync(dev->parent);
+
+	*pdata->usbhs_update_sar = 1;
+
+	return ohci_bus_resume(hcd);
+}
+
 
 /*-------------------------------------------------------------------------*/
 
@@ -104,8 +154,8 @@ static const struct hc_driver ohci_omap3_hc_driver = {
 	.hub_status_data =	ohci_hub_status_data,
 	.hub_control =		ohci_hub_control,
 #ifdef	CONFIG_PM
-	.bus_suspend =		ohci_bus_suspend,
-	.bus_resume =		ohci_bus_resume,
+	.bus_suspend =		ohci_omap3_bus_suspend,
+	.bus_resume =		ohci_omap3_bus_resume,
 #endif
 	.start_port_reset =	ohci_start_port_reset,
 };
@@ -126,12 +176,13 @@ static const struct hc_driver ohci_omap3_hc_driver = {
  */
 static int __devinit ohci_hcd_omap3_probe(struct platform_device *pdev)
 {
-	struct device		*dev = &pdev->dev;
-	struct usb_hcd		*hcd = NULL;
-	void __iomem		*regs = NULL;
-	struct resource		*res;
-	int			ret = -ENODEV;
-	int			irq;
+	struct device				*dev = &pdev->dev;
+	struct ohci_hcd_omap_platform_data	*pdata = dev->platform_data;
+	struct usb_hcd				*hcd = NULL;
+	void __iomem				*regs = NULL;
+	struct resource				*res;
+	int					ret = -ENODEV;
+	int					irq;
 
 	if (usb_disabled())
 		goto err_end;
@@ -172,11 +223,8 @@ static int __devinit ohci_hcd_omap3_probe(struct platform_device *pdev)
 	hcd->rsrc_len = resource_size(res);
 	hcd->regs =  regs;
 
-	ret = omap_usbhs_enable(dev);
-	if (ret) {
-		dev_dbg(dev, "failed to start ohci\n");
-		goto err_end;
-	}
+	pm_runtime_get_sync(dev->parent);
+	*pdata->usbhs_update_sar = 1;
 
 	ohci_hcd_init(hcd_to_ohci(hcd));
 
@@ -189,7 +237,7 @@ static int __devinit ohci_hcd_omap3_probe(struct platform_device *pdev)
 	return 0;
 
 err_add_hcd:
-	omap_usbhs_disable(dev);
+	pm_runtime_get_sync(dev->parent);
 
 err_end:
 	usb_put_hcd(hcd);
@@ -220,9 +268,8 @@ static int __devexit ohci_hcd_omap3_remove(struct platform_device *pdev)
 
 	iounmap(hcd->regs);
 	usb_remove_hcd(hcd);
-	omap_usbhs_disable(dev);
+	pm_runtime_put_sync(dev->parent);
 	usb_put_hcd(hcd);
-
 	return 0;
 }
 

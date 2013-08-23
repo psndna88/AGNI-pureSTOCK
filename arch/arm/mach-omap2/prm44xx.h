@@ -74,8 +74,8 @@
 
 /* OMAP4 specific register offsets */
 #define OMAP4_RM_RSTCTRL				0x0000
-#define OMAP4_RM_RSTTIME				0x0004
-#define OMAP4_RM_RSTST					0x0008
+#define OMAP4_RM_RSTST					0x0004
+#define OMAP4_RM_RSTTIME				0x0008
 #define OMAP4_PM_PWSTCTRL				0x0000
 #define OMAP4_PM_PWSTST					0x0004
 
@@ -713,8 +713,8 @@
 #define OMAP4430_PRM_VC_VAL_BYPASS			OMAP44XX_PRM_REGADDR(OMAP4430_PRM_DEVICE_INST, 0x00a0)
 #define OMAP4_PRM_VC_CFG_CHANNEL_OFFSET			0x00a4
 #define OMAP4430_PRM_VC_CFG_CHANNEL			OMAP44XX_PRM_REGADDR(OMAP4430_PRM_DEVICE_INST, 0x00a4)
-#define OMAP4_PRM_VC_CFG_I2C_INSTE_OFFSET		0x00a8
-#define OMAP4430_PRM_VC_CFG_I2C_INSTE			OMAP44XX_PRM_REGADDR(OMAP4430_PRM_DEVICE_INST, 0x00a8)
+#define OMAP4_PRM_VC_CFG_I2C_MODE_OFFSET		0x00a8
+#define OMAP4430_PRM_VC_CFG_I2C_MODE			OMAP44XX_PRM_REGADDR(OMAP4430_PRM_DEVICE_INST, 0x00a8)
 #define OMAP4_PRM_VC_CFG_I2C_CLK_OFFSET			0x00ac
 #define OMAP4430_PRM_VC_CFG_I2C_CLK			OMAP44XX_PRM_REGADDR(OMAP4430_PRM_DEVICE_INST, 0x00ac)
 #define OMAP4_PRM_SRAM_COUNT_OFFSET			0x00b0
@@ -772,6 +772,25 @@ extern int omap4_prm_assert_hardreset(void __iomem *rstctrl_reg, u8 shift);
 extern int omap4_prm_deassert_hardreset(void __iomem *rstctrl_reg, u8 shift);
 
 extern void omap4_prm_global_warm_sw_reset(void);
+extern void omap4_prm_global_cold_sw_reset(void);
+
+#define OMAP4_PRM_IRQ_VDD_CORE_ID	0
+#define OMAP4_PRM_IRQ_VDD_IVA_ID	1
+#define OMAP4_PRM_IRQ_VDD_MPU_ID	2
+/* OMAP4-specific VP functions */
+u32 omap4_prm_vp_check_txdone(u8 irq_id);
+void omap4_prm_vp_clear_txdone(u8 irq_id);
+/* OMAP4-specific ABB functions */
+u32 omap4_prm_abb_check_txdone(u8 irq_id);
+void omap4_prm_abb_clear_txdone(u8 irq_id);
+
+/*
+ * OMAP4 access functions for voltage controller (VC) and
+ * voltage proccessor (VP) in the PRM.
+ */
+extern u32 omap4_prm_vcvp_read(u8 offset);
+extern void omap4_prm_vcvp_write(u32 val, u8 offset);
+extern u32 omap4_prm_vcvp_rmw(u32 mask, u32 bits, u8 offset);
 
 # endif
 

@@ -13,6 +13,8 @@
 #ifndef __MACH_IOMMU_H
 #define __MACH_IOMMU_H
 
+#include <linux/pm_qos_params.h>
+
 struct iotlb_entry {
 	u32 da;
 	u32 pa;
@@ -28,7 +30,6 @@ struct iotlb_entry {
 struct iommu {
 	const char	*name;
 	struct module	*owner;
-	struct clk	*clk;
 	void __iomem	*regbase;
 	struct device	*dev;
 	void		*isr_priv;
@@ -53,6 +54,11 @@ struct iommu {
 	void *ctx; /* iommu context: registres saved area */
 	u32 da_start;
 	u32 da_end;
+	struct platform_device *pdev;
+	struct pm_qos_request_list *qos_request;
+	unsigned int pm_constraint;
+	void *secure_ttb;
+	bool secure_mode;
 };
 
 struct cr_regs {
@@ -104,10 +110,13 @@ struct iommu_functions {
 
 struct iommu_platform_data {
 	const char *name;
-	const char *clk_name;
+	const char *oh_name;
 	const int nr_tlb_entries;
 	u32 da_start;
 	u32 da_end;
+	int irq;
+	unsigned int pm_constraint;
+	void __iomem *io_base;
 };
 
 /* IOMMU errors */
@@ -173,6 +182,8 @@ extern int iommu_set_isr(const char *name,
 			 int (*isr)(struct iommu *obj, u32 da, u32 iommu_errs,
 				    void *priv),
 			 void *isr_priv);
+
+extern int iommu_set_secure(const char *name, bool enable, void *data);
 
 extern void iommu_save_ctx(struct iommu *obj);
 extern void iommu_restore_ctx(struct iommu *obj);

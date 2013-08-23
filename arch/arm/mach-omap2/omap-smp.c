@@ -17,7 +17,9 @@
  */
 #include <linux/init.h>
 #include <linux/device.h>
+#include <linux/delay.h>
 #include <linux/smp.h>
+#include <linux/hrtimer.h>
 #include <linux/io.h>
 
 #include <asm/cacheflush.h>
@@ -26,13 +28,37 @@
 #include <mach/hardware.h>
 #include <mach/omap4-common.h>
 
+#include "clockdomain.h"
+
 /* SCU base address */
 static void __iomem *scu_base;
 
 static DEFINE_SPINLOCK(boot_lock);
 
+
+void __iomem *omap4_get_scu_base(void)
+{
+	return scu_base;
+}
+
 void __cpuinit platform_secondary_init(unsigned int cpu)
 {
+	u32 diag0_errata_flags = 0;
+	/* Enable NS access to SMP bit for this CPU on HS devices */
+	if (cpu_is_omap446x() || cpu_is_omap443x()) {
+		if (omap_type() != OMAP2_DEVICE_TYPE_GP)
+			omap4_secure_dispatcher(PPA_SERVICE_DEFAULT_POR_NS_SMP,
+					FLAG_START_CRITICAL,
+					0, 0, 0, 0, 0);
+		else {
+			diag0_errata_flags =
+				omap4_get_diagctrl0_errata_flags();
+			if (diag0_errata_flags)
+				omap_smc1(HAL_DIAGREG_0, diag0_errata_flags);
+		}
+
+	}
+
 	/*
 	 * If any interrupts are already enabled for the primary
 	 * core (e.g. timer irq), then they will not have been enabled
@@ -49,6 +75,9 @@ void __cpuinit platform_secondary_init(unsigned int cpu)
 
 int __cpuinit boot_secondary(unsigned int cpu, struct task_struct *idle)
 {
+	static struct clockdomain *cpu1_clkdm;
+	static bool booted;
+
 	/*
 	 * Set synchronisation state between this boot processor
 	 * and the secondary one
@@ -64,7 +93,57 @@ int __cpuinit boot_secondary(unsigned int cpu, struct task_struct *idle)
 	omap_modify_auxcoreboot0(0x200, 0xfffffdff);
 	flush_cache_all();
 	smp_wmb();
-	gic_raise_softirq(cpumask_of(cpu), 1);
+
+	if (!cpu1_clkdm)
+		cpu1_clkdm = clkdm_lookup("mpu1_clkdm");
+
+	/*
+	 * The SGI(Software Generated Interrupts) are not wakeup capable
+	 * from low power states. This is known limitation on OMAP4 and
+	 * needs to be worked around by using software forced clockdomain
+	 * wake-up. To wakeup CPU1, CPU0 forces the CPU1 clockdomain to
+	 * software force wakeup. After the wakeup, CPU1 restores its
+	 * clockdomain hardware supervised mode.
+	 * More details can be found in OMAP4430 TRM - Version J
+	 * Section :
+	 *	4.3.4.2 Power States of CPU0 and CPU1
+	 */
+	if (booted) {
+		/*
+		 * GIC distributor control register has changed between
+		 * CortexA9 r1pX and r2pX. The Control Register secure
+		 * banked version is now composed of 2 bits:
+		 * bit 0 == Secure Enable
+		 * bit 1 == Non-Secure Enable
+		 * The Non-Secure banked register has not changed
+		 * Because the ROM Code is based on the r1pX GIC, the CPU1
+		 * GIC restoration will cause a problem to CPU0 Non-Secure SW.
+		 * The workaround must be:
+		 * 1) Before doing the CPU1 wakeup, CPU0 must disable
+		 * the GIC distributor
+		 * 2) CPU1 must re-enable the GIC distributor on
+		 * it's wakeup path.
+		 */
+		if (!cpu_is_omap443x()) {
+			local_irq_disable();
+			gic_dist_disable();
+		}
+
+		clkdm_wakeup(cpu1_clkdm);
+
+		if (!cpu_is_omap443x()) {
+			while (gic_dist_disabled()) {
+				udelay(1);
+				cpu_relax();
+			}
+			gic_timer_retrigger();
+			local_irq_enable();
+		}
+
+	} else {
+		dsb_sev();
+		booted = true;
+	}
 
 	/*
 	 * Now the secondary core is starting up let it run its

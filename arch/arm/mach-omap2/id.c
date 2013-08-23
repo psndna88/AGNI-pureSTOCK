@@ -32,6 +32,7 @@ static struct omap_chip_id omap_chip;
 static unsigned int omap_revision;
 
 u32 omap3_features;
+u32 omap4_features;
 
 unsigned int omap_rev(void)
 {
@@ -75,6 +76,8 @@ out:
 }
 EXPORT_SYMBOL(omap_type);
 
+#define OMAP4_SILICON_TYPE_STANDARD	0x01
+#define OMAP4_SILICON_TYPE_PERFORMANCE	0x02
 
 /*----------------------------------------------------------------------------*/
 
@@ -88,6 +91,8 @@ EXPORT_SYMBOL(omap_type);
 #define OMAP_TAP_DIE_ID_44XX_1	0x0208
 #define OMAP_TAP_DIE_ID_44XX_2	0x020c
 #define OMAP_TAP_DIE_ID_44XX_3	0x0210
+#define OMAP_TAP_PROD_ID_44XX_0	0x0214
+#define OMAP_TAP_PROD_ID_44XX_1	0x0218
 
 #define read_tap_reg(reg)	__raw_readl(tap_base  + (reg))
 
@@ -124,6 +129,16 @@ void omap_get_die_id(struct omap_die_id *odi)
 	odi->id_1 = read_tap_reg(OMAP_TAP_DIE_ID_1);
 	odi->id_2 = read_tap_reg(OMAP_TAP_DIE_ID_2);
 	odi->id_3 = read_tap_reg(OMAP_TAP_DIE_ID_3);
+}
+
+void omap_get_production_id(struct omap_die_id *odi)
+{
+	if (cpu_is_omap44xx()) {
+		odi->id_0 = read_tap_reg(OMAP_TAP_PROD_ID_44XX_0);
+		odi->id_1 = read_tap_reg(OMAP_TAP_PROD_ID_44XX_1);
+		odi->id_2 = 0;
+		odi->id_3 = 0;
+	}
 }
 
 static void __init omap24xx_check_revision(void)
@@ -210,6 +225,41 @@ static void __init omap3_check_features(void)
 	 * TODO: Get additional info (where applicable)
 	 *       e.g. Size of L2 cache.
 	 */
+}
+
+static void __init omap4_check_features(void)
+{
+	u32 si_type;
+
+	omap4_features = 0;
+
+	si_type =
+	  (read_tap_reg(OMAP4_CTRL_MODULE_CORE_STD_FUSE_PROD_ID_1) >> 16) & 3;
+
+	switch (si_type) {
+	case OMAP4_SILICON_TYPE_PERFORMANCE:
+		/* High performance device */
+		if (cpu_is_omap443x())
+			omap4_features |= OMAP4_HAS_MPU_1_2GHZ;
+		else if (cpu_is_omap446x() || cpu_is_omap447x()) {
+			omap4_features |= OMAP4_HAS_MPU_1_5GHZ;
+			omap4_features |= OMAP4_HAS_IVA_500MHZ;
+		}
+		/* Fall through to Standard device features */
+	case OMAP4_SILICON_TYPE_STANDARD:
+	default:
+		/* Standard device */
+		if (cpu_is_omap443x())
+			omap4_features |= OMAP4_HAS_MPU_1GHZ;
+		else if (cpu_is_omap446x()) {
+			omap4_features |= OMAP4_HAS_MPU_1_2GHZ;
+			omap4_features |= OMAP4_HAS_IVA_430MHZ;
+		} else if (cpu_is_omap447x()) {
+			omap4_features |= OMAP4_HAS_MPU_1_3GHZ;
+			omap4_features |= OMAP4_HAS_IVA_430MHZ;
+		}
+		break;
+	}
 }
 
 static void __init ti816x_check_features(void)
@@ -331,8 +381,13 @@ static void __init omap3_check_revision(void)
 static void __init omap4_check_revision(void)
 {
 	u32 idcode;
-	u16 hawkeye;
 	u8 rev;
+	/*
+	 * NOTE: OMAP4460+ uses ramp system for identification and hawkeye
+	 * variable is reused for the same. Since the values are unique
+	 * we continue to use the current system
+	 */
+	u16 hawkeye;
 
 	/*
 	 * The IC rev detection is done with hawkeye and rev.
@@ -344,10 +399,10 @@ static void __init omap4_check_revision(void)
 	rev = (idcode >> 28) & 0xf;
 
 	/*
-	 * Few initial ES2.0 samples IDCODE is same as ES1.0
+	 * Few initial 4430 ES2.0 samples IDCODE is same as ES1.0
 	 * Use ARM register to detect the correct ES version
 	 */
-	if (!rev) {
+	if (!rev && ((hawkeye == 0xb852) || (hawkeye == 0xb95c))) {
 		idcode = read_cpuid(CPUID_ID);
 		rev = (idcode & 0xf) - 1;
 	}
@@ -372,15 +427,41 @@ static void __init omap4_check_revision(void)
 			omap_chip.oc |= CHIP_IS_OMAP4430ES2_1;
 			break;
 		case 4:
-		default:
 			omap_revision = OMAP4430_REV_ES2_2;
 			omap_chip.oc |= CHIP_IS_OMAP4430ES2_2;
+			break;
+		case 6:
+		default:
+			omap_revision = OMAP4430_REV_ES2_3;
+			omap_chip.oc |= CHIP_IS_OMAP4430ES2_3;
+		}
+		break;
+	case 0xb94e:
+		switch (rev) {
+		case 0:
+			omap_revision = OMAP4460_REV_ES1_0;
+			omap_chip.oc |= CHIP_IS_OMAP4460ES1_0;
+			break;
+		case 2:
+		default:
+			omap_revision = OMAP4460_REV_ES1_1;
+			omap_chip.oc |= CHIP_IS_OMAP4460ES1_1;
+			break;
+		}
+		break;
+	case 0xb975:
+		switch (rev) {
+		case 0:
+		default:
+			omap_revision = OMAP4470_REV_ES1_0;
+			omap_chip.oc |= CHIP_IS_OMAP4470ES1_0;
+			break;
 		}
 		break;
 	default:
 		/* Unknown default to latest silicon rev as default */
-		omap_revision = OMAP4430_REV_ES2_2;
-		omap_chip.oc |= CHIP_IS_OMAP4430ES2_2;
+		omap_revision = OMAP4430_REV_ES2_3;
+		omap_chip.oc |= CHIP_IS_OMAP4430ES2_3;
 	}
 
 	pr_info("OMAP%04x ES%d.%d\n", omap_rev() >> 16,
@@ -518,6 +599,7 @@ void __init omap2_check_revision(void)
 		return;
 	} else if (cpu_is_omap44xx()) {
 		omap4_check_revision();
+		omap4_check_features();
 		return;
 	} else {
 		pr_err("OMAP revision unknown, please fix!\n");

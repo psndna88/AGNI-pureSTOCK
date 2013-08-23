@@ -285,19 +285,22 @@ long omap2_dpll_round_rate(struct clk *clk, unsigned long target_rate)
 	pr_debug("clock: %s: starting DPLL round_rate, target rate %ld\n",
 		 clk->name, target_rate);
 
-	scaled_rt_rp = target_rate / (dd->clk_ref->rate / DPLL_SCALE_FACTOR);
+	scaled_rt_rp = DIV_ROUND_CLOSEST(target_rate,
+			dd->clk_ref->rate / DPLL_SCALE_FACTOR);
 	scaled_max_m = dd->max_multiplier * DPLL_SCALE_FACTOR;
 
 	dd->last_rounded_rate = 0;
 
 	for (n = dd->min_divider; n <= dd->max_divider; n++) {
 
-		/* Is the (input clk, divider) pair valid for the DPLL? */
-		r = _dpll_test_fint(clk, n);
-		if (r == DPLL_FINT_UNDERFLOW)
-			break;
-		else if (r == DPLL_FINT_INVALID)
-			continue;
+		if (cpu_is_omap34xx()) {
+			/* Is the (input clk, divider)pair valid for the DPLL?*/
+			r = _dpll_test_fint(clk, n);
+			if (r == DPLL_FINT_UNDERFLOW)
+				break;
+			else if (r == DPLL_FINT_INVALID)
+				continue;
+		}
 
 		/* Compute the scaled DPLL multiplier, based on the divider */
 		m = scaled_rt_rp * n;

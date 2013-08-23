@@ -45,7 +45,7 @@
 int omap_type(void);
 
 struct omap_chip_id {
-	u16 oc;
+	u32 oc;
 	u8 type;
 };
 
@@ -88,6 +88,8 @@ unsigned int omap_rev(void);
  * cpu_is_omap243x():	True for OMAP2430
  * cpu_is_omap343x():	True for OMAP3430
  * cpu_is_omap443x():	True for OMAP4430
+ * cpu_is_omap446x():	True for OMAP4460
+ * cpu_is_omap447x():	True for OMAP4470
  */
 #define GET_OMAP_CLASS	(omap_rev() & 0xff)
 
@@ -123,6 +125,8 @@ IS_OMAP_SUBCLASS(243x, 0x243)
 IS_OMAP_SUBCLASS(343x, 0x343)
 IS_OMAP_SUBCLASS(363x, 0x363)
 IS_OMAP_SUBCLASS(443x, 0x443)
+IS_OMAP_SUBCLASS(446x, 0x446)
+IS_OMAP_SUBCLASS(447x, 0x447)
 
 IS_TI_SUBCLASS(816x, 0x816)
 
@@ -137,6 +141,8 @@ IS_TI_SUBCLASS(816x, 0x816)
 #define cpu_is_ti816x()			0
 #define cpu_is_omap44xx()		0
 #define cpu_is_omap443x()		0
+#define cpu_is_omap446x()		0
+#define cpu_is_omap447x()		0
 
 #if defined(MULTI_OMAP1)
 # if defined(CONFIG_ARCH_OMAP730)
@@ -361,8 +367,12 @@ IS_OMAP_TYPE(3517, 0x3517)
 # if defined(CONFIG_ARCH_OMAP4)
 # undef cpu_is_omap44xx
 # undef cpu_is_omap443x
+# undef cpu_is_omap446x
+# undef cpu_is_omap447x
 # define cpu_is_omap44xx()		is_omap44xx()
 # define cpu_is_omap443x()		is_omap443x()
+# define cpu_is_omap446x()		is_omap446x()
+# define cpu_is_omap447x()		is_omap447x()
 # endif
 
 /* Macros to detect if we have OMAP1 or OMAP2 */
@@ -409,6 +419,14 @@ IS_OMAP_TYPE(3517, 0x3517)
 #define OMAP4430_REV_ES2_0	(OMAP443X_CLASS | (0x20 << 8))
 #define OMAP4430_REV_ES2_1	(OMAP443X_CLASS | (0x21 << 8))
 #define OMAP4430_REV_ES2_2	(OMAP443X_CLASS | (0x22 << 8))
+#define OMAP4430_REV_ES2_3	(OMAP443X_CLASS | (0x23 << 8))
+
+#define OMAP446X_CLASS		0x44600044
+#define OMAP4460_REV_ES1_0	(OMAP446X_CLASS | (0x10 << 8))
+#define OMAP4460_REV_ES1_1	(OMAP446X_CLASS | (0x11 << 8))
+
+#define OMAP447X_CLASS		0x44700044
+#define OMAP4470_REV_ES1_0	(OMAP447X_CLASS | (0x10 << 8))
 
 /*
  * omap_chip bits
@@ -438,14 +456,27 @@ IS_OMAP_TYPE(3517, 0x3517)
 #define CHIP_IS_OMAP4430ES2		(1 << 11)
 #define CHIP_IS_OMAP4430ES2_1		(1 << 12)
 #define CHIP_IS_OMAP4430ES2_2		(1 << 13)
-#define CHIP_IS_TI816X			(1 << 14)
+#define CHIP_IS_OMAP4430ES2_3		(1 << 14)
+#define CHIP_IS_TI816X			(1 << 15)
+#define CHIP_IS_OMAP4460ES1_0		(1 << 16)
+#define CHIP_IS_OMAP4460ES1_1		(1 << 17)
+#define CHIP_IS_OMAP4470ES1_0		(1 << 18)
 
 #define CHIP_IS_OMAP24XX		(CHIP_IS_OMAP2420 | CHIP_IS_OMAP2430)
 
-#define CHIP_IS_OMAP4430		(CHIP_IS_OMAP4430ES1 |		\
+#define CHIP_IS_OMAP443X		(CHIP_IS_OMAP4430ES1 |		\
 					 CHIP_IS_OMAP4430ES2 |		\
 					 CHIP_IS_OMAP4430ES2_1 |	\
-					 CHIP_IS_OMAP4430ES2_2)
+					 CHIP_IS_OMAP4430ES2_2 |	\
+					 CHIP_IS_OMAP4430ES2_3)
+
+#define CHIP_IS_OMAP446X		(CHIP_IS_OMAP4460ES1_0 |	\
+					 CHIP_IS_OMAP4460ES1_1)
+
+#define CHIP_IS_OMAP447X		 CHIP_IS_OMAP4470ES1_0
+
+#define CHIP_IS_OMAP44XX		(CHIP_IS_OMAP443X | CHIP_IS_OMAP446X | \
+					 CHIP_IS_OMAP447X)
 
 /*
  * "GE" here represents "greater than or equal to" in terms of ES
@@ -493,5 +524,30 @@ OMAP3_HAS_FEATURE(isp, ISP)
 OMAP3_HAS_FEATURE(192mhz_clk, 192MHZ_CLK)
 OMAP3_HAS_FEATURE(io_wakeup, IO_WAKEUP)
 OMAP3_HAS_FEATURE(sdrc, SDRC)
+
+/*
+ * Runtime detection of OMAP4 features
+ */
+extern u32 omap4_features;
+
+#define OMAP4_HAS_MPU_1GHZ		BIT(0)
+#define OMAP4_HAS_MPU_1_2GHZ		BIT(1)
+#define OMAP4_HAS_MPU_1_3GHZ		BIT(2)
+#define OMAP4_HAS_MPU_1_5GHZ		BIT(3)
+#define OMAP4_HAS_IVA_430MHZ		BIT(4)
+#define OMAP4_HAS_IVA_500MHZ		BIT(5)
+
+#define OMAP4_HAS_FEATURE(feat, flag)			\
+static inline unsigned int omap4_has_ ##feat(void)	\
+{							\
+	return omap4_features & OMAP4_HAS_ ##flag;	\
+}							\
+
+OMAP4_HAS_FEATURE(mpu_1ghz, MPU_1GHZ)
+OMAP4_HAS_FEATURE(mpu_1_2ghz, MPU_1_2GHZ)
+OMAP4_HAS_FEATURE(mpu_1_3ghz, MPU_1_3GHZ)
+OMAP4_HAS_FEATURE(mpu_1_5ghz, MPU_1_5GHZ)
+OMAP4_HAS_FEATURE(iva_430mhz, IVA_430MHZ)
+OMAP4_HAS_FEATURE(iva_500mhz, IVA_500MHZ)
 
 #endif
