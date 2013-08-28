@@ -2868,12 +2868,8 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 	unsigned int j;
 	int rc;
 	int i=0;
-<<<<<<< HEAD:drivers/cpufreq/cpufreq_zzmoove.c
-
-=======
 	int calc_index=0;
-	
->>>>>>> 2b85a62... Version 0.7b - compatibility improved and forgotten things:cpufreq_zzmoove.c
+
 	this_dbs_info = &per_cpu(cs_cpu_dbs_info, cpu);
 
 	table = cpufreq_frequency_get_table(0); // Yank : Get system frequency table
@@ -2920,7 +2916,7 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				// Yank : Continue looping until table end is reached, we need this to set the table size limit below
 			}
 		}
-		
+
 		freq_table_size = i - 1; // Yank : upper index limit of freq. table
 
 		/*
@@ -2930,7 +2926,7 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 		calc_index = freq_table_size - max_scaling_freq_hard; 	// ZZ: calculate the difference and use it as start point
 		if (calc_index == freq_table_size) 			// ZZ: if we are at the end of the table 
 		    calc_index = calc_index - 1;   			// ZZ: shift in range for order calculation below
-		
+
 		// Yank : assert if CPU freq. table is in ascending or descending order
 		if (table[calc_index].frequency > table[calc_index+1].frequency) {
 			freq_table_order = +1;	  // Yank : table is in descending order as expected, lowest freq at the bottom of the table
