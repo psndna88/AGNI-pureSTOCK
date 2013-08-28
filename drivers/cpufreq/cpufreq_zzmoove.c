@@ -257,24 +257,16 @@
  *	- fixed a glitch in hotplug freq threshold tuneables which prevented setting of values in hotplug down freq thresholds when hotplug
  *	  up freq thresholds were set to 0
  *
- * Version 0.7b - compatibility improved and forgotten things
- *
- *	- fixed stuck at max scaling frequency when using stock kernel sources with unmodified cpufreq driver and without any oc capabilities.
- *	- readded forgotten frequency search optimisation in scaling logic (only effective when using governor soft frequency limit)
- *	- readded forgotten minor optimisation in dbs_check_cpu function
- *	- as forgotten to switch in last version Legacy Mode now again disabled by default
- *	- minor code format and comment fixes
- *
  *---------------------------------------------------------------------------------------------------------------------------------------------------------
  *-                                                                                                                                                       -
  *---------------------------------------------------------------------------------------------------------------------------------------------------------
  */
 
 // Yank: Added a sysfs interface to display current zzmoove version
-#define ZZMOOVE_VERSION "0.7b"
+#define ZZMOOVE_VERSION "0.7a"
 
 // Yank: Allow to include or exclude legacy mode (support for SGS3/Note II only and max scaling freq 1800mhz!)
-//#define ENABLE_LEGACY_MODE
+#define ENABLE_LEGACY_MODE
 
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -368,7 +360,7 @@ static int hotplug_thresholds_freq[2][8]={
     };
 
 // ZZ: support for 2,4 or 8 cores (this will enable/disable hotplug threshold tuneables)
-#define MAX_CORES		(2)
+#define MAX_CORES		(4)
 
 // raise sampling rate to SR*multiplier and adjust sampling rate/thresholds/hotplug/scaling/freq limit/freq step on blank screen
 
@@ -667,7 +659,7 @@ int freq_table_order = 1;								// Yank : 1 for descending order, -1 for ascend
 
 #ifdef ENABLE_LEGACY_MODE
 // ZZ: Legacy Mode
-#define LEG_FREQ 0
+#define LAG_FREQ 0
 #endif
 
 /*
@@ -694,7 +686,7 @@ int freq_table_order = 1;								// Yank : 1 for descending order, -1 for ascend
  *     Scaling logic base taken from version 0.4 enhanced with some optimizations
 */
 
-static int leg_freqs[17][7]={
+static int lag_freqs[17][7]={
     {1800000,1800000,1700000,1800000,1700000,1800000,1500000},
     {1700000,1800000,1600000,1800000,1600000,1800000,1400000},
     {1600000,1700000,1500000,1800000,1500000,1800000,1300000},
@@ -715,18 +707,18 @@ static int leg_freqs[17][7]={
 };
 
 // ZZ: Legacy Mode scaling
-static int leg_get_next_freq(unsigned int curfreq, unsigned int updown, unsigned int load) {
+static int lag_get_next_freq(unsigned int curfreq, unsigned int updown, unsigned int load) {
     int i=0;
     
 if (load < dbs_tuners_ins.smooth_up)
     {
 	for(i = 0; i < 17 ; i++)
 	{
-	    if(unlikely(curfreq == leg_freqs[i][LEG_FREQ])) {
+	    if(unlikely(curfreq == lag_freqs[i][LAG_FREQ])) {
 	    if(dbs_tuners_ins.fast_scaling != 0)
-		return leg_freqs[i][updown+4]; // updown 5|6 - fast scaling colums
+		return lag_freqs[i][updown+4]; // updown 5|6 - fast scaling colums
 	    else
-		return leg_freqs[i][updown];   // updown 1|2 - normal colums
+		return lag_freqs[i][updown];   // updown 1|2 - normal colums
 	    }
 	}
     }
@@ -734,11 +726,11 @@ if (load < dbs_tuners_ins.smooth_up)
     {
 	for(i = 0; i < 17; i++)
 	{
-	    if(unlikely(curfreq == leg_freqs[i][LEG_FREQ])){
+	    if(unlikely(curfreq == lag_freqs[i][LAG_FREQ])){
 	    if(dbs_tuners_ins.fast_scaling != 0)
-		return leg_freqs[i][updown+4]; // updown 5|6 - fast scaling colums
+		return lag_freqs[i][updown+4]; // updown 5|6 - fast scaling colums
 	    else
-		return leg_freqs[i][updown+2]; // updown 3|4 - power colums
+		return lag_freqs[i][updown+2]; // updown 3|4 - power colums
 	    }
 	}
     }
@@ -766,7 +758,7 @@ static int mn_get_next_freq(unsigned int curfreq, unsigned int updown, unsigned 
 	else
 		smooth_up_steps=1;		//          load reached, move by two steps
 
-	for(i = max_scaling_freq_soft; (table[i].frequency != CPUFREQ_TABLE_END); i++) { // ZZ: added forgotten max scaling search optimization again
+	for(i = 0; (table[i].frequency != CPUFREQ_TABLE_END); i++) {
 
 		if(unlikely(curfreq == table[i].frequency)) {
 
@@ -1716,7 +1708,7 @@ static ssize_t store_down_threshold_hotplug_freq##name						\
 	}											\
 												\
 	if (input >= dbs_tuners_ins.up_threshold_hotplug_freq##name				\
-		&& dbs_tuners_ins.up_threshold_hotplug_freq##name != 0)				\
+		&& dbs_tuners_ins.up_threshold_hotplug_freq##name !=0)				\
 		return -EINVAL;									\
 												\
 	table = cpufreq_frequency_get_table(0);							\
@@ -2028,7 +2020,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	 * break out if we 'cannot' reduce the speed as the user might
 	 * want freq_step to be zero
 	 */
-	if (unlikely(dbs_tuners_ins.freq_step == 0))
+	if (dbs_tuners_ins.freq_step == 0)
 		return;
 
 	/*
@@ -2116,7 +2108,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 #ifdef ENABLE_LEGACY_MODE
 			// ZZ: Legacy Mode
 			if (unlikely(dbs_tuners_ins.legacy_mode == true))
-				this_dbs_info->requested_freq = leg_get_next_freq(policy->cur, SCALE_FREQ_UP, max_load);
+				this_dbs_info->requested_freq = lag_get_next_freq(policy->cur, SCALE_FREQ_UP, max_load);
 			else
 #endif
 				this_dbs_info->requested_freq = mn_get_next_freq(policy->cur, SCALE_FREQ_UP, max_load);
@@ -2142,9 +2134,9 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	    }
 
 #ifdef ENABLE_LEGACY_MODE
-	    // ZZ: Legacy Mode
+	    // ZZ: Leagcy Mode
 	    if (unlikely(dbs_tuners_ins.legacy_mode == true))
-		this_dbs_info->requested_freq = leg_get_next_freq(policy->cur, SCALE_FREQ_UP, max_load);
+		this_dbs_info->requested_freq = lag_get_next_freq(policy->cur, SCALE_FREQ_UP, max_load);
 	     else
 #endif
 		this_dbs_info->requested_freq = mn_get_next_freq(policy->cur, SCALE_FREQ_UP, max_load);
@@ -2330,7 +2322,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 #ifdef ENABLE_LEGACY_MODE
 		    // ZZ: Legacy Mode
 		    if (unlikely(dbs_tuners_ins.legacy_mode == true))
-			this_dbs_info->requested_freq = leg_get_next_freq(policy->cur, SCALE_FREQ_DOWN, max_load);
+			this_dbs_info->requested_freq = lag_get_next_freq(policy->cur, SCALE_FREQ_DOWN, max_load);
 		    else
 #endif
 			this_dbs_info->requested_freq = mn_get_next_freq(policy->cur, SCALE_FREQ_DOWN, max_load);
@@ -2390,7 +2382,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 #ifdef ENABLE_LEGACY_MODE
 	    // ZZ: Legacy Mode
 	    if (unlikely(dbs_tuners_ins.legacy_mode == true))
-		this_dbs_info->requested_freq = leg_get_next_freq(policy->cur, SCALE_FREQ_DOWN, max_load);
+		this_dbs_info->requested_freq = lag_get_next_freq(policy->cur, SCALE_FREQ_DOWN, max_load);
 	    else
 #endif
 		this_dbs_info->requested_freq = mn_get_next_freq(policy->cur, SCALE_FREQ_DOWN, max_load);
@@ -2868,8 +2860,7 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 	unsigned int j;
 	int rc;
 	int i=0;
-	int calc_index=0;
-	
+
 	this_dbs_info = &per_cpu(cs_cpu_dbs_info, cpu);
 
 	table = cpufreq_frequency_get_table(0); // Yank : Get system frequency table
@@ -2916,19 +2907,11 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				// Yank : Continue looping until table end is reached, we need this to set the table size limit below
 			}
 		}
-		
+
 		freq_table_size = i - 1; // Yank : upper index limit of freq. table
 
-		/*
-		 * ZZ: we have to take care about where we are in the frequency table. when using kernel sources without OC capability
-		 * it might be that index 0 and 1 contains no frequencies so a save index start point is needed.
-		 */
-		calc_index = freq_table_size - max_scaling_freq_hard; 	// ZZ: calculate the difference and use it as start point
-		if (calc_index == freq_table_size) 			// ZZ: if we are at the end of the table 
-		    calc_index = calc_index - 1;   			// ZZ: shift in range for order calculation below
-		
 		// Yank : assert if CPU freq. table is in ascending or descending order
-		if (table[calc_index].frequency > table[calc_index+1].frequency) {
+		if (table[0].frequency > table[1].frequency) {
 			freq_table_order = +1;	  // Yank : table is in descending order as expected, lowest freq at the bottom of the table
 			min_scaling_freq = i - 1; // Yank : last valid frequency step (lowest frequency)
 		} else {
