@@ -27,6 +27,10 @@
 #include <linux/gpio.h>
 #include <linux/irqdesc.h>
 
+#ifdef CONFIG_TOUCH_WAKE
+#include <linux/touch_wake.h>
+#endif
+
 extern struct class *sec_class;
 
 struct gpio_button_data {
@@ -726,6 +730,10 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 			wakeup = 1;
 
 		input_set_capability(input, type, button->code);
+
+		#ifdef CONFIG_TOUCH_WAKE
+			  set_powerkeydev(input);
+		#endif
 	}
 
 	error = sysfs_create_group(&pdev->dev.kobj, &gpio_keys_attr_group);
