@@ -1361,11 +1361,15 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 	struct fb_info *info = file_fb_info(file);
 	struct fb_ops *fb;
 	unsigned long mmio_pgoff;
+	unsigned long off;
 	unsigned long start;
 	u32 len;
 
 	if (!info)
 		return -ENODEV;
+	if (vma->vm_pgoff > (~0UL >> PAGE_SHIFT))
+		return -EINVAL;
+	off = vma->vm_pgoff << PAGE_SHIFT;
 	fb = info->fbops;
 	if (!fb)
 		return -ENODEV;

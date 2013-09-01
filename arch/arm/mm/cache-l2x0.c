@@ -30,6 +30,7 @@ static DEFINE_SPINLOCK(l2x0_lock);
 static uint32_t l2x0_way_mask;	/* Bitmask of active ways */
 static uint32_t l2x0_size;
 static u32 l2x0_cache_id;
+static u32 cache_id;
 static unsigned int l2x0_sets;
 static unsigned int l2x0_ways;
 
