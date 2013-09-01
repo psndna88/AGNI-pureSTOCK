@@ -659,8 +659,34 @@ static int max8997_flash_enable(struct regulator_dev *rdev)
 		return -EINVAL;
 	}
 
-	return ret;
-}
+	if (!gpio_dvs_mode)
+		return max8997_set_voltage_ldobuck(rdev, min_uV, max_uV,
+						selector);
+
+	desc = reg_voltage_map[rid];
+	new_val = max8997_get_voltage_proper_val(desc, min_vol, max_vol);
+	if (new_val < 0)
+		return new_val;
+
+	tmp_dmg = INT_MAX;
+	tmp_idx = -1;
+	tmp_val = -1;
+	do {
+		damage = max8997_assess_side_effect(rdev, new_val, &new_idx);
+		if (damage == 0)
+			goto out;
+
+		if (tmp_dmg > damage) {
+			tmp_idx = new_idx;
+			tmp_val = new_val;
+			tmp_dmg = damage;
+		}
+
+		new_val++;
+	} while (desc->min + desc->step * new_val <= desc->max);
+
+	new_idx = tmp_idx;
+	new_val = tmp_val;
 
 static int max8997_flash_disable(struct regulator_dev *rdev)
 {
