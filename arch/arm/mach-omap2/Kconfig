@@ -459,6 +459,22 @@ config OMAP4_HSOTG_ED_CORRECTION
 	  Select this option to overrive HSOTG PHY settings in
 	  order to improve Eye Diagramm. On 4430 CPUs this should
 	  improve Eye Diagram at least 8%.
+
+config OMAP4_VOLTAGE_CONTROL
+  	bool "Enables OMAP4 Voltage Control"
+  	depends on ARCH_OMAP4
+  	default n
+
+config OMAP4430_CPU_OVERCLOCK
+	bool "Enables OMAP 4430 CPU overclock"
+	depends on ARCH_OMAP4
+	default n
+
+config OMAP4430_GPU_OVERCLOCK
+	bool "Enables OMAP 4430 GPU overclock"
+	depends on ARCH_OMAP4
+	default n
+
 endmenu
 
 endif

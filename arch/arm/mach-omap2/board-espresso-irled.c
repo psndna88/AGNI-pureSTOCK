@@ -185,7 +185,12 @@ static ssize_t clock_store(struct device *dev, struct device_attribute *attr,
 	unsigned int _data;
 	if (sscanf(buf, "%u", &_data) == 1)
 		if (_data == 300000 || _data == 600000 || _data == 800000
-		    || _data == 1008000)
+		    || _data == 1008000
+#ifdef CONFIG_OMAP4430_CPU_OVERCLOCK
+		    || _data == 1200000 || _data == 1350000
+		    || _data == 1420000 /* || _data == 1480000 || _data == 1520000 */
+#endif
+		   )
 			ir_data.cpu_frequency = _data;
 
 	return size;
@@ -314,17 +319,8 @@ int __init omap4_espresso_irled_init(void)
 	int i;
 	unsigned int boardtype = omap4_espresso_get_board_type();
 
-	if (system_rev > 6 && boardtype != SEC_MACHINE_ESPRESSO_USA_BBY) {
-		for (i = 0; i < ARRAY_SIZE(irled_gpios); i++) {
-			irled_gpios[i].gpio =
-			omap_muxtbl_get_gpio_by_name(irled_gpios[i].label);
-			omap_mux_set_gpio(
-				OMAP_PIN_INPUT_PULLDOWN | OMAP_MUX_MODE7,
-				irled_gpios[i].gpio);
-		}
-
+	if (system_rev > 6 && boardtype != SEC_MACHINE_ESPRESSO_USA_BBY)
 		return 0;
-	}
 
 	for (i = 0; i < ARRAY_SIZE(irled_gpios); i++)
 		irled_gpios[i].gpio =
