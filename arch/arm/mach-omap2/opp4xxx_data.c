@@ -94,6 +94,7 @@ struct omap4_ldo_abb_trim_data {
  * voltage dependent data for each VDD.
  */
 
+#define OMAP4430_VDD_MPU_OPP25_UV		925000
 #define OMAP4430_VDD_MPU_OPP50_UV		1025000
 #define OMAP4430_VDD_MPU_OPP100_UV		1200000
 #define OMAP4430_VDD_MPU_OPPTURBO_UV		1313000
@@ -109,6 +110,9 @@ struct omap4_ldo_abb_trim_data {
 #endif
 
 struct omap_volt_data omap443x_vdd_mpu_volt_data[] = {
+	VOLT_DATA_DEFINE(OMAP4430_VDD_MPU_OPP25_UV, 0,
+			OMAP44XX_CONTROL_FUSE_MPU_OPP50,
+			0xf4, 0x0c, OMAP_ABB_NOMINAL_OPP),
 	VOLT_DATA_DEFINE(OMAP4430_VDD_MPU_OPP50_UV, 0,
 			OMAP44XX_CONTROL_FUSE_MPU_OPP50,
 			0xf4, 0x0c, OMAP_ABB_NOMINAL_OPP),
@@ -194,6 +198,8 @@ struct omap_volt_data omap443x_vdd_core_volt_data[] = {
 
 /* OMAP 4430 MPU Core VDD dependency table */
 static struct omap_vdd_dep_volt omap443x_vdd_mpu_core_dep_data[] = {
+	{.main_vdd_volt = OMAP4430_VDD_MPU_OPP25_UV,
+			.dep_vdd_volt = OMAP4430_VDD_CORE_OPP50_UV},
 	{.main_vdd_volt = OMAP4430_VDD_MPU_OPP50_UV,
 			.dep_vdd_volt = OMAP4430_VDD_CORE_OPP50_UV},
 	{.main_vdd_volt = OMAP4430_VDD_MPU_OPP100_UV,
@@ -249,6 +255,8 @@ struct omap_vdd_dep_info omap443x_vddiva_dep_info[] = {
 
 static struct omap_opp_def __initdata omap443x_opp_def_list[] = {
 	/* MPU OPP1 - OPP50 */
+	OPP_INITIALIZER("mpu", "dpll_mpu_ck", "mpu", true,
+			180000000, OMAP4430_VDD_MPU_OPP25_UV),
 	OPP_INITIALIZER("mpu", "dpll_mpu_ck", "mpu", true,
 			300000000, OMAP4430_VDD_MPU_OPP50_UV),
 	/* MPU OPP2 - OPP100 */
