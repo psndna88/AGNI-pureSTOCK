@@ -190,7 +190,7 @@ static ssize_t clock_store(struct device *dev, struct device_attribute *attr,
 		    || _data == 1200000 || _data == 1350000
 		    || _data == 1420000 /* || _data == 1480000 || _data == 1520000 */
 #endif
-)
+		   )
 			ir_data.cpu_frequency = _data;
 
 	return size;
