@@ -213,7 +213,7 @@ static struct omap_vdd_dep_volt omap443x_vdd_mpu_core_dep_data[] = {
 			.dep_vdd_volt = OMAP4430_VDD_CORE_OPP100_OV_UV},
 	{.main_vdd_volt = OMAP4430_VDD_MPU_OPPSUPERSB2_UV,
 			.dep_vdd_volt = OMAP4430_VDD_CORE_OPP100_OV_UV},
-#else	
+#else
 	{.main_vdd_volt = OMAP4430_VDD_MPU_OPPNITROSB_UV,
 			.dep_vdd_volt = OMAP4430_VDD_CORE_OPP100_UV},
 #endif
@@ -262,13 +262,13 @@ static struct omap_opp_def __initdata omap443x_opp_def_list[] = {
 			1008000000, OMAP4430_VDD_MPU_OPPNITRO_UV),
 #ifdef CONFIG_OMAP4430_CPU_OVERCLOCK
 	/* MPU OPP4 - OPP-NITRO2 */
-	OPP_INITIALIZER("mpu", "dpll_mpu_ck", "mpu", true,
+	OPP_INITIALIZER("mpu", "dpll_mpu_ck", "mpu", false,
 			1200000000, OMAP4430_VDD_MPU_OPPNITRO2_UV),
 	/* MPU OPP5 - OPP-NITROSB */
-	OPP_INITIALIZER("mpu", "dpll_mpu_ck", "mpu", true,
+	OPP_INITIALIZER("mpu", "dpll_mpu_ck", "mpu", false,
 			1350000000, OMAP4430_VDD_MPU_OPPNITROSB_UV),
 	/* MPU OPP6 - OPP-NITROSB2 */
-	OPP_INITIALIZER("mpu", "dpll_mpu_ck", "mpu", true,
+	OPP_INITIALIZER("mpu", "dpll_mpu_ck", "mpu", false,
 			1420000000, OMAP4430_VDD_MPU_OPPNITROSB2_UV),
 	/* MPU OPP7 - OPP-SUPERSB */
 	OPP_INITIALIZER("mpu", "dpll_mpu_ck", "mpu", false,
@@ -303,9 +303,9 @@ static struct omap_opp_def __initdata omap443x_opp_def_list[] = {
 	OPP_INITIALIZER("gpu", "dpll_per_m7x2_ck", "core", true,
 			307200000, OMAP4430_VDD_CORE_OPP100_UV),
 #ifdef CONFIG_OMAP4430_GPU_OVERCLOCK
-	OPP_INITIALIZER("gpu", "dpll_per_m7x2_ck", "core", true,
+	OPP_INITIALIZER("gpu", "dpll_per_m7x2_ck", "core", false,
 			384000000, OMAP4430_VDD_CORE_OPP100_UV),
-	OPP_INITIALIZER("gpu", "dpll_per_m7x2_ck", "core", true,
+	OPP_INITIALIZER("gpu", "dpll_per_m7x2_ck", "core", false,
 			512000000, OMAP4430_VDD_CORE_OPP100_OV_UV),
 #endif
 	/* FDIF OPP1 - OPP25 */
@@ -1026,7 +1026,6 @@ int __init omap4_opp_init(void)
 	if (omap4_has_mpu_1_5ghz() && trimmed)
 		omap4_opp_enable("mpu", 1500000000);
 	*/
-
 out:
 	return r;
 }

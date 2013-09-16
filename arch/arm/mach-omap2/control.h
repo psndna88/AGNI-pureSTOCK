@@ -433,4 +433,3 @@ extern int omap3_ctrl_save_padconf(void);
 #endif	/* __ASSEMBLY__ */
 
 #endif /* __ARCH_ARM_MACH_OMAP2_CONTROL_H */
-
