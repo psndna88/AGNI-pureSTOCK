@@ -1,18 +1,21 @@
 #!/bin/sh
 export KERNELDIR=`readlink -f .`
-CROSS_COMPILE=/Working_Directory/android_prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
+. ~/AGNi_stamp_STOCK.sh
+. ~/gcc_4.7.2_armv7l.sh
+
+export ARCH=arm
 
 if [ ! -f $KERNELDIR/.config ];
 then
-  make psn_n7100_zram-snappy_defconfig
+  make defconfig t0_04_defconfig
 fi
 
 . $KERNELDIR/.config
 
-export ARCH=arm
+mv .git .git-halt
 
 cd $KERNELDIR/
-nice -n 10 make -j4 || exit 1
+make -j2 || exit 1
 
 mkdir -p $KERNELDIR/BUILT/lib/modules
 
@@ -20,6 +23,7 @@ rm $KERNELDIR/BUILT/lib/modules/*
 rm $KERNELDIR/BUILT/zImage
 
 find -name '*.ko' -exec cp -av {} $KERNELDIR/BUILT/lib/modules/ \;
-/Working_Directory/android_prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-strip --strip-unneeded $KERNELDIR/BUILT/lib/modules/*
+${CROSS_COMPILE}strip --strip-unneeded $KERNELDIR/BUILT/lib/modules/*
 cp $KERNELDIR/arch/arm/boot/zImage $KERNELDIR/BUILT/
 
+mv .git-halt .git
