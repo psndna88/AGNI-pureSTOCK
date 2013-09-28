@@ -43,6 +43,8 @@ enum s3c_cpu_type {
 	TYPE_ADCV2, /* S3C64XX, S5P64X0, S5PC100 */
 	TYPE_ADCV3, /* S5PV210, S5PC110, EXYNOS4210 */
 	TYPE_ADCV4, /* EXYNOS4412, EXYNOS5250 */
+	TYPE_S3C24XX,
+	TYPE_S3C64XX
 };
 
 struct s3c_adc_client {
@@ -163,19 +165,17 @@ int s3c_adc_start(struct s3c_adc_client *client,
 
 	BUG_ON(!adc);
 
-	if (client->is_ts && adc->ts_pend)
-		return -EAGAIN;
-
-	if (atomic_xchg(&client->running, 1)) {
-		WARN(1, "%s: %p is already running\n", __func__, client);
-		return -EAGAIN;
+	if (!adc) {
+		printk(KERN_ERR "%s: failed to find adc\n", __func__);
+		return -EINVAL;
 	}
 
 	spin_lock_irqsave(&adc->lock, flags);
 
-	client->convert_cb = s3c_convert_done;
-	client->wait = pwake;
-	client->result = -1;
+	if (client->is_ts && adc->ts_pend) {
+		spin_unlock_irqrestore(&adc->lock, flags);
+		return -EAGAIN;
+	}
 
 	client->channel = channel;
 	client->nr_samples = nr_samples;
