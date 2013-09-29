@@ -9,7 +9,7 @@ export ARCH=arm
 
 if [ ! -f $KERNELDIR/.config ];
 then
-  make defconfig android_espresso_omap4430_r04_user_defconfig
+  make defconfig psn_p31xx_v2.2_defconfig
 fi
 
 . $KERNELDIR/.config
