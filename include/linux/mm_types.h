@@ -35,25 +35,6 @@ struct page {
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
 	atomic_t _count;		/* Usage count, see below. */
-	struct address_space *mapping;	/* If low bit clear, points to
-					 * inode address_space, or NULL.
-					 * If page mapped as anonymous
-					 * memory, low bit is set, and
-					 * it points to anon_vma object:
-					 * see PAGE_MAPPING_ANON below.
-					 */
-	/* Second double word */
-	struct {
-		union {
-			pgoff_t index;		/* Our offset within mapping. */
-			void *freelist;		/* slub first free object */
-		};
-
-		union {
-			/* Used for cmpxchg_double in slub */
-			unsigned long counters;
-
-			struct {
 
 				union {
 					/*
@@ -74,23 +55,6 @@ struct page {
 					 */
 					atomic_t _mapcount;
 
-					struct {
-						unsigned inuse:16;
-						unsigned objects:15;
-						unsigned frozen:1;
-					};
-				};
-				atomic_t _count;		/* Usage count, see below. */
-			};
-		};
-	};
-
-	/* Third double word block */
-	union {
-		atomic_t _mapcount;	/* Count of ptes mapped in mms,
-					 * to show when page is mapped
-					 * & limit reverse map searches.
-					 */
 		struct {		/* SLUB */
 			u16 inuse;
 			u16 objects;

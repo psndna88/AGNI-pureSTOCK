@@ -1,7 +1,7 @@
 #!/bin/sh
 export KERNELDIR=`readlink -f .`
 . ~/AGNi_stamp_STOCK.sh
-. ~/gcc_4.4.3.sh
+. ~/gcc_4.7.2_armv7l.sh
 
 mv .git .git-halt
 
