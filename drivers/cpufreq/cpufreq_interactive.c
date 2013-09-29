@@ -993,7 +993,7 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 		pr_info("[%s] CPUFREQ_GOV_STOP\n", __func__);
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-		register_early_suspend(&interactive_early_suspend);
+		unregister_early_suspend(&interactive_early_suspend);
 		if (save_go_hispeed_load)
 			go_hispeed_load = save_go_hispeed_load;
 		save_go_hispeed_load = 0;

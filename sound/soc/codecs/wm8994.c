@@ -163,7 +163,6 @@ static void wm8958_micd_set_rate(struct snd_soc_codec *codec)
 
 static int wm8994_readable(struct snd_soc_codec *codec, unsigned int reg)
 {
-	struct wm8994_priv *wm8994 = snd_soc_codec_get_drvdata(codec);
 	struct wm8994 *control = codec->control_data;
 
 	switch (reg) {
@@ -2332,6 +2331,7 @@ out:
 	return 0;
 }
 
+#ifdef CONFIG_SND_SOC_WM8994_IRQ
 static irqreturn_t wm8994_fll_locked_irq(int irq, void *data)
 {
 	struct completion *completion = data;
@@ -2340,6 +2340,7 @@ static irqreturn_t wm8994_fll_locked_irq(int irq, void *data)
 
 	return IRQ_HANDLED;
 }
+#endif
 
 static int opclk_divs[] = { 10, 20, 30, 40, 55, 60, 80, 120, 160 };
 
@@ -3763,6 +3764,7 @@ out:
 	return IRQ_HANDLED;
 }
 
+#ifdef CONFIG_SND_SOC_WM8994_IRQ
 static irqreturn_t wm8994_fifo_error(int irq, void *data)
 {
 	struct snd_soc_codec *codec = data;
@@ -3789,6 +3791,7 @@ static irqreturn_t wm8994_temp_shut(int irq, void *data)
 
 	return IRQ_HANDLED;
 }
+#endif
 
 static int wm8994_codec_probe(struct snd_soc_codec *codec)
 {

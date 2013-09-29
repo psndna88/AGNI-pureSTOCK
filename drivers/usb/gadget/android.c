@@ -1181,7 +1181,6 @@ static ssize_t enable_store(struct device *pdev, struct device_attribute *attr,
 	if (enabled && !dev->enabled) {
 		cdev->next_string_id = 0;
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
-		struct android_usb_function *f;
 		cdev->next_string_id = composite_string_index;
 #endif
 		/* update values in composite driver's copy of device descriptor */

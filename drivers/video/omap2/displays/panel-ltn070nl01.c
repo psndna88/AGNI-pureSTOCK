@@ -52,9 +52,12 @@ struct ltn070nl01 {
 	struct backlight_device *bd;
 	struct omap_dm_timer *gptimer;	/*For OMAP4430 "gptimer" */
 	struct class *lcd_class;
+	struct workqueue_struct *workqueue;
+	struct delayed_work panel_delayed_work;
 };
 
 static struct brightness_data ltn070nl01_brightness_data;
+static void ltn070nl01_panel_shutdown_worker(struct work_struct *work);
 
 static void backlight_gptimer_update(struct omap_dss_device *dssdev)
 {
@@ -208,6 +211,7 @@ static int ltn070nl01_power_on(struct omap_dss_device *dssdev)
 err:
 	return ret;
 }
+
 
 static int ltn070nl01_power_off(struct omap_dss_device *dssdev)
 {
@@ -382,7 +386,14 @@ static int ltn070nl01_panel_probe(struct omap_dss_device *dssdev)
 	gpio_direction_output(lcd->pdata->led_backlight_reset_gpio, 1);
 
 	mutex_init(&lcd->lock);
+	lcd->workqueue = create_singlethread_workqueue("panel_shutdown");
+	if (lcd->workqueue == NULL) {
+		dev_err(&dssdev->dev, "can't create panel shutdown workqueue\n");
+		ret = -ENOMEM;
+		goto err_wq;
 
+	}
+	INIT_DELAYED_WORK(&lcd->panel_delayed_work, ltn070nl01_panel_shutdown_worker);
 	dev_set_drvdata(&dssdev->dev, lcd);
 
 	/* Register DSI backlight  control */
@@ -450,8 +461,10 @@ err_device_create:
 err_class_create:
 	backlight_device_unregister(lcd->bd);
 err_backlight_device_register:
-	mutex_destroy(&lcd->lock);
+	destroy_workqueue(lcd->workqueue);
 	gpio_free(lcd->pdata->led_backlight_reset_gpio);
+err_wq:
+	 mutex_destroy(&lcd->lock);
 err_backlight_reset_gpio_request:
 	gpio_free(lcd->pdata->lvds_nshdn_gpio);
 err_no_platform_data:
@@ -469,6 +482,8 @@ static void ltn070nl01_panel_remove(struct omap_dss_device *dssdev)
 	class_destroy(lcd->lcd_class);
 	backlight_device_unregister(lcd->bd);
 	mutex_destroy(&lcd->lock);
+	cancel_delayed_work(&lcd->panel_delayed_work);
+	destroy_workqueue(lcd->workqueue);
 	gpio_free(lcd->pdata->led_backlight_reset_gpio);
 	gpio_free(lcd->pdata->lvds_nshdn_gpio);
 	kfree(lcd);
@@ -529,6 +544,38 @@ static void ltn070nl01_panel_disable(struct omap_dss_device *dssdev)
 
 	dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
 	mutex_unlock(&lcd->lock);
+}
+
+static void ltn070nl01_panel_shutdown_worker(struct work_struct *work)
+{
+	struct ltn070nl01 *lcd = container_of(work, struct ltn070nl01,
+			panel_delayed_work.work);
+	struct omap_dss_device *dssdev = lcd->dssdev;
+
+	dev_dbg(&dssdev->dev, "ltn070nl01_panel_shutdown\n");
+
+	mutex_lock(&lcd->lock);
+	if (dssdev->state == OMAP_DSS_DISPLAY_DISABLED) {
+		mutex_unlock(&lcd->lock);
+		return;
+	}
+
+	if (dssdev->state == OMAP_DSS_DISPLAY_ACTIVE)
+		ltn070nl01_stop(dssdev);
+
+	dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
+	mutex_unlock(&lcd->lock);
+
+
+}
+static int ltn070nl01_panel_shutdown(struct omap_dss_device *dssdev)
+{
+	struct ltn070nl01 *lcd = dev_get_drvdata(&dssdev->dev);
+	queue_delayed_work(lcd->workqueue, &lcd->panel_delayed_work,
+			msecs_to_jiffies(550));
+
+	return 0;
+
 }
 
 static int ltn070nl01_panel_suspend(struct omap_dss_device *dssdev)
@@ -604,6 +651,7 @@ static struct omap_dss_driver ltn070nl01_omap_dss_driver = {
 	.disable	= ltn070nl01_panel_disable,
 	.get_resolution	= ltn070nl01_panel_get_resolution,
 	.suspend	= ltn070nl01_panel_suspend,
+	.shutdown	= ltn070nl01_panel_shutdown,
 	.resume		= ltn070nl01_panel_resume,
 
 	.set_timings	= ltn070nl01_panel_set_timings,
@@ -625,6 +673,7 @@ static int __init ltn070nl01_init(void)
 
 static void __exit ltn070nl01_exit(void)
 {
+
 	omap_dss_unregister_driver(&ltn070nl01_omap_dss_driver);
 }
 

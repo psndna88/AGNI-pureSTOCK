@@ -93,12 +93,12 @@
 #endif
 /*-------------------------------------------------------------------------*/
 
-#define MTPG_BULK_BUFFER_SIZE	32768
+#define MTPG_BULK_BUFFER_SIZE	16384
 #define MTPG_INTR_BUFFER_SIZE	28
 
 /* number of rx and tx requests to allocate */
-#define MTPG_RX_REQ_MAX		8
-#define MTPG_MTPG_TX_REQ_MAX	8
+#define MTPG_RX_REQ_MAX			4
+#define MTPG_MTPG_TX_REQ_MAX		4
 #define MTPG_INTR_REQ_MAX	5
 
 /* ID for Microsoft MTP OS String */
@@ -719,11 +719,6 @@ static ssize_t mtpg_write(struct file *fp, const char __user *buf,
 	return r;
 }
 
-static void interrupt_complete(struct usb_ep *ep, struct usb_request *req)
-{
-	printk(KERN_DEBUG "Finished Writing Interrupt Data\n");
-}
-
 static ssize_t interrupt_write(struct file *fd,
 			const char __user *buf, size_t count)
 {
@@ -752,7 +747,6 @@ static ssize_t interrupt_write(struct file *fd,
 	}
 
 	req->length = count;
-	/*req->complete = interrupt_complete;*/
 
 	ret = usb_ep_queue(dev->int_in, req, GFP_ATOMIC);
 	if (ret) {
@@ -770,7 +764,6 @@ static void read_send_work(struct work_struct *work)
 {
 	struct mtpg_dev	*dev = container_of(work, struct mtpg_dev,
 							read_send_work);
-	struct usb_composite_dev *cdev = dev->cdev;
 	struct usb_request *req = 0;
 	struct usb_container_header *hdr;
 	struct file *file;
@@ -816,7 +809,7 @@ static void read_send_work(struct work_struct *work)
 		ret = wait_event_interruptible(dev->write_wq,
 				((req = mtpg_req_get(dev, &dev->tx_idle))
 							|| dev->error));
-		if (ret < 0) {
+		if (ret < 0 || !req) {
 			r = ret;
 			printk(KERN_DEBUG "[%s]\t%d ret = %d\n",
 						__func__, __LINE__, r);
@@ -837,7 +830,7 @@ static void read_send_work(struct work_struct *work)
 		}
 		ret = vfs_read(file, req->buf + hdr_length,
 					xfer - hdr_length, &file_pos);
-		if (ret < 0) {
+		if (ret < 0 || !req) {
 			r = ret;
 			break;
 		}
@@ -846,7 +839,7 @@ static void read_send_work(struct work_struct *work)
 
 		req->length = xfer;
 		ret = usb_ep_queue(dev->bulk_in, req, GFP_KERNEL);
-		if (ret < 0) {
+		if (ret < 0 || !req) {
 			dev->error = 1;
 			r = -EIO;
 			printk(KERN_DEBUG "[%s]\t%d ret = %d\n",
@@ -903,7 +896,7 @@ static long  mtpg_ioctl(struct file *fd, unsigned int code, unsigned long arg)
 			printk(KERN_DEBUG "[%s] B4 disconnecting gadget\tline = [%d]\n",
 					__func__, __LINE__);
 			/* usb_composite_force_reset(dev->cdev); */
-			usleep_range(5000, 5500);
+			msleep(20);
 			usb_gadget_connect(cdev->gadget);
 			printk(KERN_DEBUG "[%s] \tline = [%d] calling usb_gadget_connect after msleep of 5\n",
 					__func__, __LINE__);
@@ -929,7 +922,6 @@ static long  mtpg_ioctl(struct file *fd, unsigned int code, unsigned long arg)
 	case MTP_WRITE_INT_DATA:
 		/*printk(KERN_INFO "[%s]\t%d MTP slep1  intrpt_Write\n",
 						__func__, __LINE__);*/
-		msleep(1);
 		ret_value = interrupt_write(fd, (const char *)arg,
 					MTP_MAX_PACKET_LEN_FROM_APP);
 		if (ret_value < 0) {
@@ -937,8 +929,8 @@ static long  mtpg_ioctl(struct file *fd, unsigned int code, unsigned long arg)
 							 __func__, __LINE__);
 			status = -EIO;
 		} else {
-			printk(KERN_DEBUG "[%s]\t%d intruptFD suces\n",
-							 __func__, __LINE__);
+			/*printk(KERN_DEBUG "[%s]\t%d intruptFD suces\n",
+						__func__, __LINE__);*/
 			status = MTP_MAX_PACKET_LEN_FROM_APP;
 		}
 		break;
@@ -1068,7 +1060,13 @@ static long  mtpg_ioctl(struct file *fd, unsigned int code, unsigned long arg)
 		status = dev->read_send_result;
 		break;
 	}
-
+	case MTP_VBUS_DISABLE:
+		printk(KERN_DEBUG "[%s] line=[%d]\n", __func__, __LINE__);
+		if (dev->cdev && dev->cdev->gadget) {
+			usb_gadget_vbus_disconnect(cdev->gadget);
+			printk(KERN_DEBUG "Restricted policy so disconnecting mtp gadget\n");
+		}
+		break;
 	default:
 		status = -ENOTTY;
 	}
@@ -1200,9 +1198,7 @@ mtpg_function_unbind(struct usb_configuration *c, struct usb_function *f)
 	struct mtpg_dev	*dev = mtpg_func_to_dev(f);
 	struct usb_request *req;
 
-	printk(KERN_INFO "[%s]\tline = [%d]\n", __func__, __LINE__);
-	dev->online = 0;
-	dev->error = 1;
+	printk(KERN_DEBUG "[%s]\tline = [%d]\n", __func__, __LINE__);
 
 	while ((req = mtpg_req_get(dev, &dev->rx_idle)))
 		mtpg_request_free(req, dev->bulk_out);

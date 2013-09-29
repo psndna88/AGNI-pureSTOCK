@@ -3287,6 +3287,13 @@ unsigned long this_cpu_load(void)
 	return this->cpu_load[0];
 }
 
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+unsigned long this_cpu_loadx(int i)
+{
+	struct rq *this = this_rq();
+	return this->cpu_load[i];
+}
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
 
 /* Variables and functions for calc_load */
 static atomic_long_t calc_load_tasks;
@@ -8244,9 +8251,10 @@ void __might_sleep(const char *file, int line, int preempt_offset)
 		"BUG: sleeping function called from invalid context at %s:%d\n",
 			file, line);
 	printk(KERN_ERR
-		"in_atomic(): %d, irqs_disabled(): %d, pid: %d, name: %s\n",
+		"in_atomic(): %d, irqs_disabled(): %d, rcu_preempt_depth(): %d, "
+		"pid: %d, name: %s\n",
 			in_atomic(), irqs_disabled(),
-			current->pid, current->comm);
+			rcu_preempt_depth(), current->pid, current->comm);
 
 	debug_show_held_locks(current);
 	if (irqs_disabled())

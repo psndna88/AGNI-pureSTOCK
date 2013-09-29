@@ -289,14 +289,15 @@ static void batman_get_temp_status(struct charger_device_info *di)
 		di->bat_info.temp =
 			di->pdata->get_fuel_value(READ_FG_TEMP);
 	}
-
-	if (di->bat_info.temp >= di->pdata->high_block_temp) {
-		di->bat_info.health = POWER_SUPPLY_HEALTH_OVERHEAT;
-	} else if (di->bat_info.temp <= di->pdata->high_recover_temp &&
+	if (di->is_cable_attached) {
+		if (di->bat_info.temp >= di->pdata->high_block_temp) {
+			di->bat_info.health = POWER_SUPPLY_HEALTH_OVERHEAT;
+		} else if (di->bat_info.temp <= di->pdata->high_recover_temp &&
 			di->bat_info.temp >= di->pdata->low_recover_temp) {
-		di->bat_info.health = POWER_SUPPLY_HEALTH_GOOD;
-	} else if (di->bat_info.temp <= di->pdata->low_block_temp) {
-		di->bat_info.health = POWER_SUPPLY_HEALTH_COLD;
+			di->bat_info.health = POWER_SUPPLY_HEALTH_GOOD;
+		} else if (di->bat_info.temp <= di->pdata->low_block_temp) {
+			di->bat_info.health = POWER_SUPPLY_HEALTH_COLD;
+		}
 	}
 }
 
@@ -536,6 +537,7 @@ static int otg_handle_notification(struct notifier_block *nb,
 		break;
 	case USB_EVENT_CHARGER_NONE:
 		pr_info("[BAT_MANAGER] Charger Disconnect\n");
+		di->bat_info.health = POWER_SUPPLY_HEALTH_GOOD;
 		wake_unlock(&di->cable_wake_lock);
 		break;
 	default:

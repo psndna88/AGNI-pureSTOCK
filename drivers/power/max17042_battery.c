@@ -198,10 +198,14 @@ static int max17042_get_vcell(struct i2c_client *client)
 static int max17042_get_soc(struct i2c_client *client)
 {
 	u16 data;
+	u16 raw_soc;
 	u16 soc;
 
 	data = max17042_read_reg(client, MAX17042_RepSOC);
-	soc = clamp((data/256), 0, 100);
+	raw_soc = ((data >> 8) * 100) + ((data & 0xFF) * 100) / 256;
+
+	soc = min((raw_soc * 100) / 9800, 100);
+
 	dev_info(&client->dev, "SOC : %d, data : 0x%x\n",
 			soc, data);
 
