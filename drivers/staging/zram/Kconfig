@@ -27,17 +27,28 @@ config ZRAM_DEBUG
 	  This option adds additional debugging code to the compressed
 	  RAM block device driver.
 
+choice ZRAM_COMPRESS
+	prompt "compression method"
+	depends on ZRAM
+	default ZRAM_LZO
+	help
+	  Select the compression method used by zram.
+	  LZO is the default. Snappy compresses a bit worse (around ~2%) but
+	  much (~2x) faster, at least on x86-64, LZ4 is said to be the fasted
+	  for now.
 config ZRAM_LZO
 	bool "LZO compression"
-	default y
-	depends on ZRAM
 	select LZO_COMPRESS
 	select LZO_DECOMPRESS
 config ZRAM_SNAPPY
 	bool "Snappy compression"
-	depends on ZRAM
-	select SNAPPY_COMPRESS
-	select SNAPPY_DECOMPRESS
+	depends on SNAPPY_COMPRESS
+	depends on SNAPPY_DECOMPRESS
+config ZRAM_LZ4
+	bool "LZ4 compression"
+	depends on LZ4_COMPRESS
+	depends on LZ4_DECOMPRESS
+endchoice
 
 config ZRAM_FOR_ANDROID
 	bool "Optimize zram behavior for android"
