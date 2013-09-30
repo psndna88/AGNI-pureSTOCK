@@ -56,6 +56,10 @@
 #include <linux/fb.h>
 #endif
 
+#ifdef CONFIG_TOUCH_WAKE
+#include <linux/touch_wake.h>
+#endif
+
 #define MAX_FINGERS		10
 #define MAX_WIDTH		30
 #define MAX_PRESSURE		255
@@ -1020,6 +1024,7 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 #endif
 			continue;
 		}
+
 		if (info->panel == 'M') {
 			input_mt_slot(info->input_dev, id);
 			input_mt_report_slot_state(info->input_dev,
@@ -1096,6 +1101,9 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 #endif
 		}
 		touch_is_pressed++;
+#ifdef CONFIG_TOUCH_WAKE
+  touch_press();
+#endif
 	}
 	input_sync(info->input_dev);
 
@@ -4257,6 +4265,12 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 	register_early_suspend(&info->early_suspend);
 #endif
 
+#ifdef CONFIG_TOUCH_WAKE
+  touchwake_data = info;
+    if (touchwake_data == NULL)
+    pr_err("[TOUCHWAKE] Failed to set touchwake_data\n");
+#endif  
+
 #ifdef CONFIG_INPUT_FBSUSPEND
 	ret = tsp_register_fb(info);
 	if (ret)
@@ -4323,18 +4337,18 @@ static int __devexit mms_ts_remove(struct i2c_client *client)
 #if defined(CONFIG_PM) || defined(CONFIG_HAS_EARLYSUSPEND)
 static int mms_ts_suspend(struct device *dev)
 {
-	struct i2c_client *client = to_i2c_client(dev);
-	struct mms_ts_info *info = i2c_get_clientdata(client);
+  struct i2c_client *client = to_i2c_client(dev);
+  struct mms_ts_info *info = i2c_get_clientdata(client);
 
-	if (!info->enabled) {
+  if (!info->enabled) {
 #ifdef CONFIG_INPUT_FBSUSPEND
-		info->was_enabled_at_suspend = false;
+    info->was_enabled_at_suspend = false;
 #endif
-		return 0;
-	}
+    return 0;
+  }
 
 #ifdef CONFIG_INPUT_FBSUSPEND
-	info->was_enabled_at_suspend = true;
+  info->was_enabled_at_suspend = true;
 #endif
 	dev_notice(&info->client->dev, "%s: users=%d\n", __func__,
 		   info->input_dev->users);
@@ -4356,15 +4370,15 @@ static int mms_ts_suspend(struct device *dev)
 
 static int mms_ts_resume(struct device *dev)
 {
-	struct i2c_client *client = to_i2c_client(dev);
-	struct mms_ts_info *info = i2c_get_clientdata(client);
+  struct i2c_client *client = to_i2c_client(dev);
+  struct mms_ts_info *info = i2c_get_clientdata(client);
 
-	if (info->enabled)
-		return 0;
+  if (info->enabled)
+    return 0;
 
 #ifdef CONFIG_INPUT_FBSUSPEND
-	if (!info->was_enabled_at_suspend)
-		return 0;
+  if (!info->was_enabled_at_suspend)
+    return 0;
 #endif
 	dev_notice(&info->client->dev, "%s: users=%d\n", __func__,
 		   info->input_dev->users);
@@ -4404,18 +4418,42 @@ static int mms_ts_resume(struct device *dev)
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void mms_ts_early_suspend(struct early_suspend *h)
 {
-	struct mms_ts_info *info;
-	info = container_of(h, struct mms_ts_info, early_suspend);
-	mms_ts_suspend(&info->client->dev);
-
+#ifndef CONFIG_TOUCH_WAKE
+  struct mms_ts_info *info;
+  info = container_of(h, struct mms_ts_info, early_suspend);
+  mms_ts_suspend(&info->client->dev);
+#endif
 }
 
 static void mms_ts_late_resume(struct early_suspend *h)
 {
-	struct mms_ts_info *info;
-	info = container_of(h, struct mms_ts_info, early_suspend);
-	mms_ts_resume(&info->client->dev);
+#ifndef CONFIG_TOUCH_WAKE
+  struct mms_ts_info *info;
+  info = container_of(h, struct mms_ts_info, early_suspend);
+  mms_ts_resume(&info->client->dev);
+#endif
 }
+#endif
+
+#ifdef CONFIG_TOUCH_WAKE
+static struct mms_ts_info * touchwake_data;
+void touchscreen_disable(void)
+{
+  if (likely(touchwake_data != NULL))
+    mms_ts_suspend(&touchwake_data->client->dev);
+
+    return;
+}
+EXPORT_SYMBOL(touchscreen_disable);
+
+void touchscreen_enable(void)
+{
+  if (likely(touchwake_data != NULL))
+    mms_ts_resume(&touchwake_data->client->dev);
+
+    return;
+}
+EXPORT_SYMBOL(touchscreen_enable);
 #endif
 
 #if defined(CONFIG_PM) && !defined(CONFIG_HAS_EARLYSUSPEND)
