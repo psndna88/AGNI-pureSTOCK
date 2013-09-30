@@ -148,7 +148,17 @@ config CPU_FREQ_DEFAULT_GOV_LULZACTIVEQ
         select CPU_FREQ_GOV_LULZACTIVEQ
         help
           'lulzactiveq' - hotplug mechanism added in lulzactive
-	
+
+config CPU_FREQ_DEFAULT_GOV_ZZMOOVE
+	bool "zzmoove"
+	select CPU_FREQ_GOV_ZZMOOVE
+	help
+	  ZZMoove governor is based on the modified conservative'smoove' governor
+	  from Michael Weingaertner. Modified by Zane Zaminsky November 2012 to be
+	  hotplug-able and optimzed for use with Samsung I9300.
+	  CPU Hotplug modifications partially taken from ktoonservative governor from
+ 	  ktoonsez KT747-JB kernel
+
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -325,6 +335,15 @@ config CPU_FREQ_GOV_ADAPTIVE
 
 config CPU_FREQ_GOV_PEGASUSQ
 	tristate "'pegasusq' cpufreq policy governor"
+
+config CPU_FREQ_GOV_ZZMOOVE
+	tristate "'zzmoove' cpufreq governor"
+	depends on CPU_FREQ
+	help
+	  'zzmoove' - ZZMoove governor is based on the modified
+ 	  conservative 'smoove' governor from Michael Weingaertner.
+	  Modified by Zane Zaminsky November 2012 to be
+	  hotplug-able and optimzed for use with Samsung I9300.
 
 config CPU_FREQ_GOV_SLP
 	tristate "'slp' cpufreq policy governor"
