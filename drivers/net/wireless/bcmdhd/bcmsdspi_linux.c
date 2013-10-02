@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmsdspi_linux.c 356773 2012-09-13 22:50:30Z $
+ * $Id: bcmsdspi_linux.c 355376 2012-09-06 13:23:59Z $
  */
 
 #include <typedefs.h>
@@ -34,7 +34,6 @@
 #include <pcicfg.h>
 #include <sdio.h>		/* SDIO Device and Protocol Specs */
 #include <linux/sched.h>	/* request_irq(), free_irq() */
-
 #include <bcmsdspi.h>
 #include <bcmspi.h>
 
@@ -215,7 +214,7 @@ spi_osinit(sdioh_info_t *sd)
 	spin_lock_init(&sdos->lock);
 	init_waitqueue_head(&sdos->intr_wait_queue);
 #endif /* !BCMSPI_ANDROID */
-	return BCME_OK;
+return BCME_OK;
 }
 
 void
