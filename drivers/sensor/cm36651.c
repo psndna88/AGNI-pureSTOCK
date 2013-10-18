@@ -33,10 +33,6 @@
 #include <linux/sensor/cm36651.h>
 #include <linux/sensor/sensors_core.h>
 
-#ifdef CONFIG_TOUCH_WAKE
-#include <linux/touch_wake.h>
-#endif
-
 /* For debugging */
 #undef	CM36651_DEBUG
 
@@ -483,12 +479,6 @@ static ssize_t proximity_enable_store(struct device *dev,
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_TOUCH_WAKE
-	if (!new_value) { // Yank555.lu : Proxy disabled, consider proximity not detected
-		proximity_off();
-	}
-#endif
-
 	mutex_lock(&cm36651->power_lock);
 	pr_info("%s, new_value = %d, threshold = %d\n", __func__, new_value,
 		ps_reg_setting[1][1]);
@@ -518,14 +508,6 @@ static ssize_t proximity_enable_store(struct device *dev,
 		input_report_abs(cm36651->proximity_input_dev,
 			ABS_DISTANCE, val);
 		input_sync(cm36651->proximity_input_dev);
-
-#ifdef CONFIG_TOUCH_WAKE
-		if (!val) { // 0 is close = proximity detected
-			proximity_detected();
-		} else {
-			proximity_off();
-		}
-#endif
 
 		enable_irq(cm36651->irq);
 		enable_irq_wake(cm36651->irq);
@@ -766,16 +748,6 @@ irqreturn_t cm36651_irq_thread_fn(int irq, void *data)
 	/* 0 is close, 1 is far */
 	input_report_abs(cm36651->proximity_input_dev, ABS_DISTANCE, val);
 	input_sync(cm36651->proximity_input_dev);
-
-// Yank555.lu : this is where we will know is something changes in proximity detection
-#ifdef CONFIG_TOUCH_WAKE
-		if (!val) { // 0 is close = proximity detected
-			proximity_detected();
-		} else {
-			proximity_off();
-		}
-#endif
-
 	wake_lock_timeout(&cm36651->prx_wake_lock, 3 * HZ);
 #ifdef CONFIG_SLP
 	pm_wakeup_event(cm36651->proximity_dev, 0);
