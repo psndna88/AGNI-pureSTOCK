@@ -329,8 +329,12 @@ void flush_kernel_dcache_page(struct page *page)
 			 * kunmap_atomic() takes care of cache
 			 * flushing already.
 			 */
-			if (!IS_ENABLED(CONFIG_HIGHMEM) || addr)
+#ifndef CONFIG_HIGHMEM
+			__cpuc_flush_dcache_area(addr, PAGE_SIZE);
+#else
+			if (addr)
 				__cpuc_flush_dcache_area(addr, PAGE_SIZE);
+#endif
 		}
 	}
 }
