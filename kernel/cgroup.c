@@ -2660,15 +2660,13 @@ static int cgroup_create_dir(struct cgroup *cgrp, struct dentry *dentry,
         struct dentry *parent;
         int error = 0;
 
-        parent = cgrp->parent->dentry;
-        error = cgroup_create_file(dentry, S_IFDIR | mode, cgrp->root->sb);
-        if (!error) {
-                dentry->d_fsdata = cgrp;
-                inc_nlink(parent->d_inode);
-                rcu_assign_pointer(cgrp->dentry, dentry);
-                dget(dentry);
-        }
-        dput(dentry);
+	parent = cgrp->parent->dentry;
+	error = cgroup_create_file(dentry, S_IFDIR | mode, cgrp->root->sb);
+	if (!error) {
+		dentry->d_fsdata = cgrp;
+		inc_nlink(parent->d_inode);
+		rcu_assign_pointer(cgrp->dentry, dentry);
+	}
 
         return error;
 }
