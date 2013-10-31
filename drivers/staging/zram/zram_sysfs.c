@@ -29,18 +29,9 @@ static u64 zram_stat64_read(struct zram *zram, u64 *v)
 	return val;
 }
 
-static struct zram *dev_to_zram(struct device *dev)
+static inline struct zram *dev_to_zram(struct device *dev)
 {
-	int i;
-	struct zram *zram = NULL;
-
-	for (i = 0; i < num_devices; i++) {
-		zram = &devices[i];
-		if (disk_to_dev(zram->disk) == dev)
-			break;
-	}
-
-	return zram;
+	return (struct zram *)dev_to_disk(dev)->private_data;
 }
 
 static ssize_t disksize_show(struct device *dev,
@@ -55,19 +46,23 @@ static ssize_t disksize_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
 	int ret;
+	u64 disksize;
 	struct zram *zram = dev_to_zram(dev);
 
+	ret = kstrtoull(buf, 10, &disksize);
+	if (ret)
+		return ret;
+
+	down_write(&zram->init_lock);
 	if (zram->init_done) {
+		up_write(&zram->init_lock);
 		pr_info("Cannot change disksize for initialized device\n");
 		return -EBUSY;
 	}
 
-	ret = strict_strtoull(buf, 10, &zram->disksize);
-	if (ret)
-		return ret;
-
-	zram->disksize = PAGE_ALIGN(zram->disksize);
+	zram->disksize = PAGE_ALIGN(disksize);
 	set_capacity(zram->disk, zram->disksize >> SECTOR_SHIFT);
+	up_write(&zram->init_lock);
 
 	return len;
 }
@@ -80,11 +75,47 @@ static ssize_t initstate_show(struct device *dev,
 	return sprintf(buf, "%u\n", zram->init_done);
 }
 
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+extern int swapon(const char*specialfile, int swap_flags);
+
+static ssize_t initstate_store(struct device *dev,
+			       struct device_attribute *attr, const char *buf,
+			       size_t len)
+{
+	int ret;
+	unsigned long do_init;
+	struct zram *zram = dev_to_zram(dev);
+
+	if (zram->init_done) {
+		pr_info("the device is initialized device\n");
+		return -EBUSY;
+	}
+
+	ret = strict_strtoul(buf, 10, &do_init);
+	if (ret)
+		return ret;
+	if (!do_init)
+		return -EINVAL;
+
+	zram_init_device(zram);
+	swapon("/dev/block/zram0", 0);
+	return len;
+}
+#else
+static inline ssize_t initstate_store(struct device *dev,
+				      struct device_attribute *attr,
+				      const char *buf, size_t len)
+{
+	return 0;
+}
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
+
+
 static ssize_t reset_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
 	int ret;
-	unsigned long do_reset;
+	unsigned short do_reset;
 	struct zram *zram;
 	struct block_device *bdev;
 
@@ -95,7 +126,7 @@ static ssize_t reset_store(struct device *dev,
 	if (bdev->bd_holders)
 		return -EBUSY;
 
-	ret = strict_strtoul(buf, 10, &do_reset);
+	ret = kstrtou16(buf, 10, &do_reset);
 	if (ret)
 		return ret;
 
@@ -106,8 +137,10 @@ static ssize_t reset_store(struct device *dev,
 	if (bdev)
 		fsync_bdev(bdev);
 
+	down_write(&zram->init_lock);
 	if (zram->init_done)
-		zram_reset_device(zram);
+		__zram_reset_device(zram);
+	up_write(&zram->init_lock);
 
 	return len;
 }
@@ -180,17 +213,19 @@ static ssize_t mem_used_total_show(struct device *dev,
 	u64 val = 0;
 	struct zram *zram = dev_to_zram(dev);
 
+	down_read(&zram->init_lock);
 	if (zram->init_done) {
 		val = xv_get_total_size_bytes(zram->mem_pool) +
 			((u64)(zram->stats.pages_expand) << PAGE_SHIFT);
 	}
+	up_read(&zram->init_lock);
 
 	return sprintf(buf, "%llu\n", val);
 }
 
 static DEVICE_ATTR(disksize, S_IRUGO | S_IWUSR,
 		disksize_show, disksize_store);
-static DEVICE_ATTR(initstate, S_IRUGO, initstate_show, NULL);
+static DEVICE_ATTR(initstate, S_IRUGO | S_IWUSR, initstate_show, initstate_store);
 static DEVICE_ATTR(reset, S_IWUSR, NULL, reset_store);
 static DEVICE_ATTR(num_reads, S_IRUGO, num_reads_show, NULL);
 static DEVICE_ATTR(num_writes, S_IRUGO, num_writes_show, NULL);
