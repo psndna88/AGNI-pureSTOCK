@@ -25,6 +25,9 @@
 #include <linux/gpio_keys.h>
 #include <linux/workqueue.h>
 #include <linux/gpio.h>
+#include <linux/irqdesc.h>
+
+extern struct class *sec_class;
 
 struct gpio_button_data {
 	struct gpio_keys_button *button;
@@ -33,15 +36,19 @@ struct gpio_button_data {
 	struct work_struct work;
 	int timer_debounce;	/* in msecs */
 	bool disabled;
+	bool key_state;
+	bool wakeup;
 };
 
 struct gpio_keys_drvdata {
 	struct input_dev *input;
+	struct device *sec_key;
 	struct mutex disable_lock;
 	unsigned int n_buttons;
 	int (*enable)(struct device *dev);
 	void (*disable)(struct device *dev);
 	struct gpio_button_data data[0];
+	/* WARNING: this area can be expanded. Do NOT add any member! */
 };
 
 /*
@@ -317,20 +324,219 @@ static struct attribute_group gpio_keys_attr_group = {
 	.attrs = gpio_keys_attrs,
 };
 
+static ssize_t key_pressed_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct gpio_keys_drvdata *ddata = dev_get_drvdata(dev);
+	int i;
+	int keystate = 0;
+
+	for (i = 0; i < ddata->n_buttons; i++) {
+		struct gpio_button_data *bdata = &ddata->data[i];
+		keystate |= bdata->key_state;
+	}
+
+	if (keystate)
+		sprintf(buf, "PRESS");
+	else
+		sprintf(buf, "RELEASE");
+
+	return strlen(buf);
+}
+
+/* the volume keys can be the wakeup keys in special case */
+static ssize_t wakeup_enable(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct gpio_keys_drvdata *ddata = dev_get_drvdata(dev);
+	int n_events = get_n_events_by_type(EV_KEY);
+	unsigned long *bits;
+	ssize_t error;
+	int i;
+
+	bits = kcalloc(BITS_TO_LONGS(n_events),
+		sizeof(*bits), GFP_KERNEL);
+	if (!bits)
+		return -ENOMEM;
+
+	error = bitmap_parselist(buf, bits, n_events);
+	if (error)
+		goto out;
+
+	for (i = 0; i < ddata->n_buttons; i++) {
+		struct gpio_button_data *button = &ddata->data[i];
+		if (test_bit(button->button->code, bits))
+			button->button->wakeup = 1;
+		else
+			button->button->wakeup = 0;
+	}
+
+out:
+	kfree(bits);
+	return count;
+}
+
+static DEVICE_ATTR(sec_key_pressed, 0664, key_pressed_show, NULL);
+static DEVICE_ATTR(wakeup_keys, 0664, NULL, wakeup_enable);
+
+static struct attribute *sec_key_attrs[] = {
+	&dev_attr_sec_key_pressed.attr,
+	&dev_attr_wakeup_keys.attr,
+	NULL,
+};
+
+static struct attribute_group sec_key_attr_group = {
+	.attrs = sec_key_attrs,
+};
+
+#ifdef CONFIG_MACH_GC1
+void gpio_keys_check_zoom_exception(unsigned int code,
+	bool *zoomkey, unsigned int *hotkey, unsigned int *index)
+{
+	switch (code) {
+	case KEY_CAMERA_ZOOMIN:
+		*hotkey = 0x221;
+		*index = 5;
+		break;
+	case KEY_CAMERA_ZOOMOUT:
+		*hotkey = 0x222;
+		*index = 6;
+		break;
+	case 0x221:
+		*hotkey = KEY_CAMERA_ZOOMIN;
+		*index = 3;
+		break;
+	case 0x222:
+		*hotkey = KEY_CAMERA_ZOOMOUT;
+		*index = 4;
+		break;
+	default:
+		*zoomkey = false;
+		return;
+	}
+	*zoomkey = true;
+}
+#endif
+
+#ifdef CONFIG_FAST_BOOT
+extern bool fake_shut_down;
+
+struct timer_list fake_timer;
+bool fake_pressed;
+
+static void gpio_keys_fake_off_check(unsigned long _data)
+{
+	struct input_dev *input = (struct input_dev *)_data;
+	unsigned int type = EV_KEY;
+
+	if (fake_pressed == false)
+		return ;
+
+	printk(KERN_DEBUG"[Keys] make event\n");
+
+	input_event(input, type, KEY_FAKE_PWR, 1);
+	input_sync(input);
+
+	input_event(input, type, KEY_FAKE_PWR, 0);
+	input_sync(input);
+}
+#endif
+
 static void gpio_keys_report_event(struct gpio_button_data *bdata)
 {
 	struct gpio_keys_button *button = bdata->button;
 	struct input_dev *input = bdata->input;
 	unsigned int type = button->type ?: EV_KEY;
-	int state = (gpio_get_value_cansleep(button->gpio) ? 1 : 0) ^ button->active_low;
+	int state = (gpio_get_value_cansleep(button->gpio) ? 1 : 0)
+		^ button->active_low;
+#ifdef CONFIG_MACH_GC1
+	struct gpio_keys_drvdata *ddata = input_get_drvdata(input);
+	struct gpio_button_data *tmp_bdata;
+	static bool overlapped;
+	static unsigned int hotkey;
+	unsigned int index_hotkey = 0;
+	bool zoomkey = false;
+
+#ifdef CONFIG_FAST_BOOT
+	/*Fake pwr off control*/
+	if (fake_shut_down) {
+		if (button->code == KEY_POWER) {
+			if (!!state) {
+				printk(KERN_DEBUG"[Keys] start fake check\n");
+				fake_pressed = true;
+				mod_timer(&fake_timer,
+					jiffies + msecs_to_jiffies(1000));
+			} else {
+				printk(KERN_DEBUG"[Keys] end fake checkPwr 0\n");
+				fake_pressed = false;
+			}
+		}
+		return ;
+	}
+#endif
+	if (system_rev < 6 && system_rev >= 2) {
+		if (overlapped) {
+			if (hotkey == button->code && !state) {
+				bdata->key_state = !!state;
+				bdata->wakeup = false;
+				overlapped = false;
+#ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
+				printk(KERN_DEBUG"[KEYS] Ignored\n");
+#else
+				printk(KERN_DEBUG"[KEYS] Ignore %d %d\n",
+						hotkey, state);
+#endif
+				return;
+			}
+		}
+
+		gpio_keys_check_zoom_exception(button->code, &zoomkey,
+				&hotkey, &index_hotkey);
+	}
+#endif
 
 	if (type == EV_ABS) {
-		if (state)
+		if (state) {
 			input_event(input, type, button->code, button->value);
+			input_sync(input);
+			}
 	} else {
+		if (bdata->wakeup && !state) {
+			input_event(input, type, button->code, !state);
+			input_sync(input);
+			if (button->code == KEY_POWER)
+				printk(KERN_DEBUG"[keys] f PWR %d\n", !state);
+		}
+
+		bdata->key_state = !!state;
+		bdata->wakeup = false;
+
+
+#ifdef CONFIG_MACH_GC1
+		if (system_rev < 6 && system_rev >= 2
+				&& zoomkey && state) {
+			tmp_bdata = &ddata->data[index_hotkey];
+
+			if (tmp_bdata->key_state) {
+#ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
+				printk(KERN_DEBUG"[KEYS] overlapped\n");
+#else
+				printk(KERN_DEBUG"[KEYS] overlapped. Forced release c %d h %d\n",
+					tmp_bdata->button->code, hotkey);
+#endif
+				input_event(input, type, hotkey, 0);
+				input_sync(input);
+
+				overlapped = true;
+			}
+		}
+#endif
 		input_event(input, type, button->code, !!state);
+		input_sync(input);
+
+		if (button->code == KEY_POWER)
+			printk(KERN_DEBUG"[keys]PWR %d\n", !!state);
 	}
-	input_sync(input);
 }
 
 static void gpio_keys_work_func(struct work_struct *work)
@@ -352,14 +558,27 @@ static irqreturn_t gpio_keys_isr(int irq, void *dev_id)
 {
 	struct gpio_button_data *bdata = dev_id;
 	struct gpio_keys_button *button = bdata->button;
+	struct irq_desc *desc = irq_to_desc(irq);
+	int state = (gpio_get_value_cansleep(button->gpio) ? 1 : 0)
+		^ button->active_low;
 
 	BUG_ON(irq != gpio_to_irq(button->gpio));
+
+	if (desc) {
+		if (0 < desc->wake_depth) {
+			bdata->wakeup = true;
+			printk(KERN_DEBUG"[keys] in the sleep\n");
+		}
+	}
 
 	if (bdata->timer_debounce)
 		mod_timer(&bdata->timer,
 			jiffies + msecs_to_jiffies(bdata->timer_debounce));
 	else
 		schedule_work(&bdata->work);
+
+	if (button->isr_hook)
+		button->isr_hook(button->code, state);
 
 	return IRQ_HANDLED;
 }
@@ -414,6 +633,9 @@ static int __devinit gpio_keys_setup_key(struct platform_device *pdev,
 	 */
 	if (!button->can_disable)
 		irqflags |= IRQF_SHARED;
+
+	if (button->wakeup)
+		irqflags |= IRQF_NO_SUSPEND;
 
 	error = request_any_context_irq(irq, gpio_keys_isr, irqflags, desc, bdata);
 	if (error < 0) {
@@ -513,6 +735,18 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 		goto fail2;
 	}
 
+	ddata->sec_key =
+	    device_create(sec_class, NULL, 0, ddata, "sec_key");
+	if (IS_ERR(ddata->sec_key))
+		dev_err(dev, "Failed to create sec_key device\n");
+
+	error = sysfs_create_group(&ddata->sec_key->kobj, &sec_key_attr_group);
+	if (error) {
+		dev_err(dev, "Failed to create the test sysfs: %d\n",
+			error);
+		goto fail2;
+	}
+
 	error = input_register_device(input);
 	if (error) {
 		dev_err(dev, "Unable to register input device, error: %d\n",
@@ -525,12 +759,19 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 		gpio_keys_report_event(&ddata->data[i]);
 	input_sync(input);
 
+#ifdef CONFIG_FAST_BOOT
+	/*Fake power off*/
+	input_set_capability(input, EV_KEY, KEY_FAKE_PWR);
+	setup_timer(&fake_timer, gpio_keys_fake_off_check,
+			(unsigned long)input);
+#endif
 	device_init_wakeup(&pdev->dev, wakeup);
 
 	return 0;
 
  fail3:
 	sysfs_remove_group(&pdev->dev.kobj, &gpio_keys_attr_group);
+	sysfs_remove_group(&ddata->sec_key->kobj, &sec_key_attr_group);
  fail2:
 	while (--i >= 0) {
 		free_irq(gpio_to_irq(pdata->buttons[i].gpio), &ddata->data[i]);
