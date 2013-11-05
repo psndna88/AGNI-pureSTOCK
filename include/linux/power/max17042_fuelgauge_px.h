@@ -61,6 +61,7 @@
 #define FG_CHECK_STATUS 6
 #define FG_VF_SOC 7
 #define FG_VOLTAGE_NOW 8
+#define FG_RAW_LEVEL 9
 
 #define LOW_BATT_COMP_RANGE_NUM	5
 #define LOW_BATT_COMP_LEVEL_NUM	2
@@ -167,7 +168,7 @@ struct max17042_chip {
 #define ATL_Range2_3_Slope		76
 #define ATL_Range1_1_Slope		0
 #define ATL_Range1_3_Slope		0
-#elif defined(CONFIG_MACH_P4NOTE)	/* P4W battery parameter */
+#elif defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) || defined(CONFIG_MACH_TAB3)	/* P4W battery parameter */
 /* Current range for P4W(not dependent on battery type */
 #define CURRENT_RANGE1	0
 #define CURRENT_RANGE2	-200

@@ -243,4 +243,3 @@ int bbm_data(HANDLE hDevice, u16 addr, u8 *data, u32 length)
 		return BBM_E_BB_WRITE;
 	return BBM_OK;
 }
-

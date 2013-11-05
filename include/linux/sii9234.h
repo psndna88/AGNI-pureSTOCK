@@ -42,6 +42,7 @@ struct sii9234_platform_data {
 	int (*get_vbus_status)(void);
 	void (*sii9234_otg_control)(bool onoff);
 #endif
+	void (*sii9234_muic_cb)(bool otg_enable, int plim);
 	struct i2c_client *mhl_tx_client;
 	struct i2c_client *tpi_client;
 	struct i2c_client *hdmi_rx_client;

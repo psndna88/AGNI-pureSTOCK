@@ -186,10 +186,13 @@ void sync_mm_rss(struct task_struct *task, struct mm_struct *mm)
 	__sync_task_rss_stat(task, mm);
 }
 #else /* SPLIT_RSS_COUNTING */
-
+#ifdef CONFIG_LOWMEM_CHECK
+#define inc_mm_counter_fast(mm, member, page) inc_mm_counter(mm, member, page)
+#define dec_mm_counter_fast(mm, member, page) dec_mm_counter(mm, member, page)
+#else
 #define inc_mm_counter_fast(mm, member) inc_mm_counter(mm, member)
 #define dec_mm_counter_fast(mm, member) dec_mm_counter(mm, member)
-
+#endif
 static void check_sync_rss_stat(struct task_struct *task)
 {
 }
@@ -914,12 +917,30 @@ copy_one_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 
 	page = vm_normal_page(vma, addr, pte);
 	if (page) {
+	#ifdef CONFIG_LOWMEM_CHECK
+		int type;
+	#endif
 		get_page(page);
 		page_dup_rmap(page);
 		if (PageAnon(page))
+		#ifdef CONFIG_LOWMEM_CHECK
+			type = MM_ANONPAGES;
+		#else
 			rss[MM_ANONPAGES]++;
+		#endif
 		else
+		#ifdef CONFIG_LOWMEM_CHECK
+			type = MM_FILEPAGES;
+		#else
 			rss[MM_FILEPAGES]++;
+		#endif
+	#ifdef CONFIG_LOWMEM_CHECK
+		rss[type]++;
+		if (is_lowmem_page(page)) {
+			type += LOWMEM_COUNTER;
+			rss[type]++;
+		}
+	#endif
 	}
 
 out_set_pte:
@@ -1115,6 +1136,9 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
 	struct mm_struct *mm = tlb->mm;
 	int force_flush = 0;
 	int rss[NR_MM_COUNTERS];
+#ifdef CONFIG_LOWMEM_CHECK
+	int type;
+#endif
 	spinlock_t *ptl;
 	pte_t *start_pte;
 	pte_t *pte;
@@ -1163,15 +1187,30 @@ again:
 				set_pte_at(mm, addr, pte,
 					   pgoff_to_pte(page->index));
 			if (PageAnon(page))
+			#ifdef CONFIG_LOWMEM_CHECK
+				type = MM_ANONPAGES;
+			#else
 				rss[MM_ANONPAGES]--;
+			#endif
 			else {
 				if (pte_dirty(ptent))
 					set_page_dirty(page);
 				if (pte_young(ptent) &&
 				    likely(!VM_SequentialReadHint(vma)))
 					mark_page_accessed(page);
+			#ifdef CONFIG_LOWMEM_CHECK
+				type = MM_FILEPAGES;
+			#else
 				rss[MM_FILEPAGES]--;
+			#endif
 			}
+		#ifdef CONFIG_LOWMEM_CHECK
+			rss[type]--;
+			if (is_lowmem_page(page)) {
+				type += LOWMEM_COUNTER;
+				rss[type]--;
+			}
+		#endif
 			page_remove_rmap(page);
 			if (unlikely(page_mapcount(page) < 0))
 				print_bad_pte(vma, addr, ptent, page);
@@ -2079,7 +2118,11 @@ static int insert_page(struct vm_area_struct *vma, unsigned long addr,
 
 	/* Ok, finally just insert the thing.. */
 	get_page(page);
+#ifdef CONFIG_LOWMEM_CHECK
+	inc_mm_counter_fast(mm, MM_FILEPAGES, page);
+#else
 	inc_mm_counter_fast(mm, MM_FILEPAGES);
+#endif
 	page_add_file_rmap(page);
 	set_pte_at(mm, addr, pte, mk_pte(page, prot));
 
@@ -2368,6 +2411,55 @@ int remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 	return err;
 }
 EXPORT_SYMBOL(remap_pfn_range);
+
+/**
+ * vm_iomap_memory - remap memory to userspace
+ * @vma: user vma to map to
+ * @start: start of area
+ * @len: size of area
+ *
+ * This is a simplified io_remap_pfn_range() for common driver use. The
+ * driver just needs to give us the physical memory range to be mapped,
+ * we'll figure out the rest from the vma information.
+ *
+ * NOTE! Some drivers might want to tweak vma->vm_page_prot first to get
+ * whatever write-combining details or similar.
+ */
+int vm_iomap_memory(struct vm_area_struct *vma, phys_addr_t start,
+							unsigned long len)
+{
+	unsigned long vm_len, pfn, pages;
+
+	/* Check that the physical memory area passed in looks valid */
+	if (start + len < start)
+		return -EINVAL;
+	/*
+	 * You *really* shouldn't map things that aren't page-aligned,
+	 * but we've historically allowed it because IO memory might
+	 * just have smaller alignment.
+	 */
+	len += start & ~PAGE_MASK;
+	pfn = start >> PAGE_SHIFT;
+	pages = (len + ~PAGE_MASK) >> PAGE_SHIFT;
+	if (pfn + pages < pfn)
+		return -EINVAL;
+
+	/* We start the mapping 'vm_pgoff' pages into the area */
+	if (vma->vm_pgoff > pages)
+		return -EINVAL;
+	pfn += vma->vm_pgoff;
+	pages -= vma->vm_pgoff;
+
+	/* Can we fit all of the mapping? */
+	vm_len = vma->vm_end - vma->vm_start;
+	if (vm_len >> PAGE_SHIFT > pages)
+		return -EINVAL;
+
+	/* Ok, let it rip */
+	return io_remap_pfn_range(vma, vma->vm_start, pfn, vm_len,
+							vma->vm_page_prot);
+}
+EXPORT_SYMBOL(vm_iomap_memory);
 
 static int apply_to_pte_range(struct mm_struct *mm, pmd_t *pmd,
 				     unsigned long addr, unsigned long end,
@@ -2752,11 +2844,20 @@ gotten:
 	if (likely(pte_same(*page_table, orig_pte))) {
 		if (old_page) {
 			if (!PageAnon(old_page)) {
+			#ifdef CONFIG_LOWMEM_CHECK
+				dec_mm_counter_fast(mm, MM_FILEPAGES, old_page);
+				inc_mm_counter_fast(mm, MM_ANONPAGES, new_page);
+			#else
 				dec_mm_counter_fast(mm, MM_FILEPAGES);
 				inc_mm_counter_fast(mm, MM_ANONPAGES);
+			#endif
 			}
 		} else
+		#ifdef CONFIG_LOWMEM_CHECK
+			inc_mm_counter_fast(mm, MM_ANONPAGES, new_page);
+		#else
 			inc_mm_counter_fast(mm, MM_ANONPAGES);
+		#endif
 		flush_cache_page(vma, address, pte_pfn(orig_pte));
 		entry = mk_pte(new_page, vma->vm_page_prot);
 		entry = maybe_mkwrite(pte_mkdirty(entry), vma);
@@ -3071,9 +3172,13 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	 * in page->private. In this case, a record in swap_cgroup  is silently
 	 * discarded at swap_free().
 	 */
-
+#ifdef CONFIG_LOWMEM_CHECK
+	inc_mm_counter_fast(mm, MM_ANONPAGES, page);
+	dec_mm_counter_fast(mm, MM_SWAPENTS, page);
+#else
 	inc_mm_counter_fast(mm, MM_ANONPAGES);
 	dec_mm_counter_fast(mm, MM_SWAPENTS);
+#endif
 	pte = mk_pte(page, vma->vm_page_prot);
 	if ((flags & FAULT_FLAG_WRITE) && reuse_swap_page(page)) {
 		pte = maybe_mkwrite(pte_mkdirty(pte), vma);
@@ -3217,8 +3322,11 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	page_table = pte_offset_map_lock(mm, pmd, address, &ptl);
 	if (!pte_none(*page_table))
 		goto release;
-
+#ifdef CONFIG_LOWMEM_CHECK
+	inc_mm_counter_fast(mm, MM_ANONPAGES, page);
+#else
 	inc_mm_counter_fast(mm, MM_ANONPAGES);
+#endif
 	page_add_new_anon_rmap(page, vma, address);
 setpte:
 	set_pte_at(mm, address, page_table, entry);
@@ -3375,10 +3483,18 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		if (flags & FAULT_FLAG_WRITE)
 			entry = maybe_mkwrite(pte_mkdirty(entry), vma);
 		if (anon) {
+		#ifdef CONFIG_LOWMEM_CHECK
+			inc_mm_counter_fast(mm, MM_ANONPAGES, page);
+		#else
 			inc_mm_counter_fast(mm, MM_ANONPAGES);
+		#endif
 			page_add_new_anon_rmap(page, vma, address);
 		} else {
+		#ifdef CONFIG_LOWMEM_CHECK
+			inc_mm_counter_fast(mm, MM_FILEPAGES, page);
+		#else
 			inc_mm_counter_fast(mm, MM_FILEPAGES);
+		#endif
 			page_add_file_rmap(page);
 			if (flags & FAULT_FLAG_WRITE) {
 				dirty_page = page;

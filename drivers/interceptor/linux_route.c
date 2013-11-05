@@ -6,7 +6,7 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
- */
+ */ 
 
 /*
  * linux_route.c
@@ -32,33 +32,38 @@ typedef struct SshInterceptorRouteResultRec
 #if (defined LINUX_FRAGMENTATION_AFTER_NF_POST_ROUTING) \
   || (defined LINUX_FRAGMENTATION_AFTER_NF6_POST_ROUTING)
 
-/* Create a child dst_entry with locked interface MTU, and attach it to `dst'.
+/* Create a child dst_entry with locked interface MTU, and attach it to `dst'. 
    This is needed on newer linux kernels and IP_ONLY_INTERCEPTOR builds,
    where the IP stack fragments packets to path MTU after ssh_interceptor_send.
 */
-static struct dst_entry *
+static struct dst_entry * 
 interceptor_route_create_child_dst(struct dst_entry *dst, Boolean ipv6)
 {
   struct dst_entry *child;
-#ifdef LINUX_HAS_DST_COPY_METRICS
-  SshUInt32 set;
+#ifdef LINUX_DST_ALLOC_REQUIRES_ZEROING
   struct rt6_info *rt6;
   struct rtable *rt;
-#endif /* LINUX_HAS_DST_COPY_METRICS */
+#endif /* LINUX_DST_ALLOC_REQUIRES_ZEROING */
+#ifdef LINUX_HAS_DST_METRICS_ACCESSORS
+  SshUInt32 set;
+#endif /* LINUX_HAS_DST_METRICS_ACCESSORS */
 
   /* Allocate a dst_entry and copy relevant fields from dst. */
   child = SSH_DST_ALLOC(dst);
   if (child == NULL)
     return NULL;
-
+  
   child->input = dst->input;
   child->output = dst->output;
-
+  
   /* Child is not added to dst hash, and linux native IPsec is disabled. */
   child->flags |= (DST_NOHASH | DST_NOPOLICY | DST_NOXFRM);
-
-  /* Copy route metrics and lock MTU to interface MTU. */
-#ifdef LINUX_HAS_DST_COPY_METRICS
+  
+#ifdef LINUX_DST_ALLOC_REQUIRES_ZEROING
+  /* Starting from kernel version 3.0 the dst entries are allocated
+     using kmem_cache_alloc() instead of kmem_cache_zalloc(). Therefore
+     the caller is responsible for initializing the rest of the data
+     after the common dst_entry part. */
   if (ipv6 == TRUE)
     {
       rt6 = (struct rt6_info *)child;
@@ -67,27 +72,36 @@ interceptor_route_create_child_dst(struct dst_entry *dst, Boolean ipv6)
   else
     {
       rt = (struct rtable *)child;
-      memset(&SSH_RTABLE_FIRST_MEMBER(rt), 0,
+      memset(&SSH_RTABLE_FIRST_MEMBER(rt), 0, 
 	     sizeof(*rt) - sizeof(struct dst_entry));
     }
-
+#endif /* LINUX_DST_ALLOC_REQUIRES_ZEROING */
+  
+  /* Copy route metrics and lock MTU to interface MTU. */
+#ifdef LINUX_HAS_DST_METRICS_ACCESSORS
   dst_copy_metrics(child, dst);
   set = dst_metric(child, RTAX_LOCK);
   set |= 1 << RTAX_MTU;
   dst_metric_set(child, RTAX_LOCK, set);
-#else  /* LINUX_HAS_DST_COPY_METRICS */
+  if (dst->dev != NULL)
+    dst_metric_set(child, RTAX_MTU, dst->dev->mtu);
+#else  /* LINUX_HAS_DST_METRICS_ACCESSORS */
   memcpy(child->metrics, dst->metrics, sizeof(child->metrics));
   child->metrics[RTAX_LOCK-1] |= 1 << RTAX_MTU;
-#endif /* LINUX_HAS_DST_COPY_METRICS */
-
-#ifdef CONFIG_NET_CLS_ROUTE
+  if (dst->dev != NULL)
+    child->metrics[RTAX_MTU-1] = dst->dev->mtu;
+#endif /* LINUX_HAS_DST_METRICS_ACCESSORS */
+  if (dst->expires > 0)
+    child->expires = dst->expires;
+  
+#ifdef CONFIG_NET_CLS_ROUTE  
   child->tclassid = dst->tclassid;
 #endif /* CONFIG_NET_CLS_ROUTE */
-
-#ifdef CONFIG_XFRM
+  
+#ifdef CONFIG_XFRM 
   child->xfrm = NULL;
 #endif /* CONFIG_XFRM */
-
+  
 #ifdef LINUX_HAS_HH_CACHE
   if (dst->hh)
     {
@@ -96,14 +110,12 @@ interceptor_route_create_child_dst(struct dst_entry *dst, Boolean ipv6)
     }
 #endif /* LINUX_HAS_HH_CACHE */
 
-#ifdef LINUX_HAS_DST_NEIGHBOUR_FUNCTIONS
-  if (dst_get_neighbour(dst) != NULL)
-    dst_set_neighbour(child, neigh_clone(dst_get_neighbour(dst)));
-#else  /* LINUX_HAS_DST_NEIGHBOUR_FUNCTIONS */
-  if (dst->neighbour != NULL)
-    child->neighbour = neigh_clone(dst->neighbour);
-#endif /* LINUX_HAS_DST_NEIGHBOUR_FUNCTIONS */
-
+  SSH_DST_NEIGHBOUR_READ_LOCK();
+  if (SSH_DST_GET_NEIGHBOUR(dst) != NULL)
+    SSH_DST_SET_NEIGHBOUR(child,
+                          neigh_clone(SSH_DST_GET_NEIGHBOUR(dst)));
+  SSH_DST_NEIGHBOUR_READ_UNLOCK();
+    
   if (dst->dev)
     {
       dev_hold(dst->dev);
@@ -112,18 +124,18 @@ interceptor_route_create_child_dst(struct dst_entry *dst, Boolean ipv6)
 
   SSH_ASSERT(dst->child == NULL);
   dst->child = dst_clone(child);
-
+  
   SSH_DEBUG(SSH_D_MIDOK, ("Allocated child %p dst_entry for dst %p mtu %d",
 			  child, dst, dst_mtu(dst)));
 
   return child;
 }
 
-#endif /* LINUX_FRAGMENTATION_AFTER_NF_POST_ROUTING
+#endif /* LINUX_FRAGMENTATION_AFTER_NF_POST_ROUTING 
 	  || LINUX_FRAGMENTATION_AFTER_NF6_POST_ROUTING */
 #endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
 
-static inline int interceptor_ip4_route_output(struct rtable **rt,
+static inline int interceptor_ip4_route_output(struct rtable **rt, 
 					       struct flowi *fli)
 {
   int rval = 0;
@@ -140,10 +152,10 @@ static inline int interceptor_ip4_route_output(struct rtable **rt,
       SSH_DEBUG(SSH_D_FAIL, ("Failed to get nf afinfo"));
       return -1;
     }
-
+  
   rval = afinfo->route(&init_net, &dst, fli, TRUE);
   rcu_read_unlock();
-
+  
   *rt = (struct rtable *)dst;
 
 #else /* LINUX_USE_NF_FOR_ROUTE_OUTPUT */
@@ -188,14 +200,14 @@ static inline struct dst_entry *interceptor_ip6_route_output(struct flowi *fli)
       SSH_DEBUG(SSH_D_FAIL, ("Failed to get route from IPv6 NF"));
       return NULL;
     }
-#else /* LINUX_USE_NF_FOR_ROUTE_OUTPUT */
+#else /* LINUX_USE_NF_FOR_ROUTE_OUTPUT */  
 
 #ifdef LINUX_IP6_ROUTE_OUTPUT_KEY_HAS_NET_ARGUMENT
   dst = ip6_route_output(&init_net, NULL, fli);
 #else /* LINUX_IP6_ROUTE_OUTPUT_KEY_HAS_NET_ARGUMENT */
   dst = ip6_route_output(NULL, fli);
 #endif /* LINUX_IP6_ROUTE_OUTPUT_KEY_HAS_NET_ARGUMENT */
-#endif /* LINUX_USE_NF_FOR_ROUTE_OUTPUT */
+#endif /* LINUX_USE_NF_FOR_ROUTE_OUTPUT */  
 
   return dst;
 }
@@ -207,7 +219,7 @@ static inline struct dst_entry *interceptor_ip6_route_output(struct flowi *fli)
    The route lookup will use the following selectors:
    dst, src, outbound ifnum, ip protocol, tos, and fwmark.
    The source address is expected to be local or undefined.
-
+   
    The following selectors are ignored:
    dst port, src port, icmp type, icmp code, ipsec spi. */
 Boolean
@@ -228,10 +240,10 @@ ssh_interceptor_route_output_ipv4(SshInterceptor interceptor,
   unsigned char src_buf[SSH_IP_ADDR_STRING_SIZE];
 #endif /* DEBUG_LIGHT */
 
-  SSH_IP4_ENCODE(&key->dst, (unsigned char *) &daddr);
+  SSH_IP4_ENCODE(&key->dst, (unsigned char *) &daddr);  
 
   /* Initialize rt_key with zero values */
-  memset(&rt_key, 0, sizeof(rt_key));
+  memset(&rt_key, 0, sizeof(rt_key));  
 
   rt_key.fl4_dst = daddr;
   if (selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC)
@@ -247,7 +259,7 @@ ssh_interceptor_route_output_ipv4(SshInterceptor interceptor,
     rt_key.fl4_tos = key->nh.ip4.tos;
   rt_key.fl4_scope = RT_SCOPE_UNIVERSE;
 
-#if (SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS > 0)
+#if (SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS > 0)	
 #ifdef SSH_LINUX_FWMARK_EXTENSION_SELECTOR
 
   /* Use linux fw_mark in routing */
@@ -257,7 +269,7 @@ ssh_interceptor_route_output_ipv4(SshInterceptor interceptor,
       rt_key.mark = key->extension[SSH_LINUX_FWMARK_EXTENSION_SELECTOR];
 #else /* LINUX_HAS_SKB_MARK */
 #ifdef CONFIG_IP_ROUTE_FWMARK
-      rt_key.fl4_fwmark =
+      rt_key.fl4_fwmark = 
 	key->extension[SSH_LINUX_FWMARK_EXTENSION_SELECTOR];
 #endif /* CONFIG_IP_ROUTE_FWMARK */
 #endif /* LINUX_HAS_SKB_MARK */
@@ -268,22 +280,22 @@ ssh_interceptor_route_output_ipv4(SshInterceptor interceptor,
 
 #endif /* SSH_LINUX_FWMARK_EXTENSION_SELECTOR */
 #endif /* (SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS > 0) */
-
+  
   SSH_DEBUG(SSH_D_LOWOK,
 	    ("Route lookup: "
 	     "dst %s src %s ifnum %d ipproto %d tos 0x%02x fwmark 0x%lx",
 	     ssh_ipaddr_print(&key->dst, dst_buf, sizeof(dst_buf)),
 	     ((selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC) ?
 	      ssh_ipaddr_print(&key->src, src_buf, sizeof(src_buf)) : NULL),
-	     (int) ((selector & SSH_INTERCEPTOR_ROUTE_KEY_OUT_IFNUM)?
+	     (int) ((selector & SSH_INTERCEPTOR_ROUTE_KEY_OUT_IFNUM)? 
 		    key->ifnum : -1),
-	     (int) ((selector & SSH_INTERCEPTOR_ROUTE_KEY_IPPROTO) ?
+	     (int) ((selector & SSH_INTERCEPTOR_ROUTE_KEY_IPPROTO) ? 
 		    key->ipproto : -1),
-	     ((selector & SSH_INTERCEPTOR_ROUTE_KEY_IP4_TOS) ?
+	     ((selector & SSH_INTERCEPTOR_ROUTE_KEY_IP4_TOS) ? 
 	      key->nh.ip4.tos : 0),
-	     (unsigned long) ((selector & SSH_INTERCEPTOR_ROUTE_KEY_EXTENSION)?
+	     (unsigned long) ((selector & SSH_INTERCEPTOR_ROUTE_KEY_EXTENSION)? 
 	      fwmark : 0)));
-
+    
   /* Perform route lookup */
 
   rval = interceptor_ip4_route_output(&rt, &rt_key);
@@ -343,7 +355,7 @@ ssh_interceptor_route_output_ipv4(SshInterceptor interceptor,
     }
 #endif /* DEBUG_LIGHT */
 
-  SSH_DEBUG(SSH_D_LOWOK,
+  SSH_DEBUG(SSH_D_LOWOK, 
 	    ("Route result: dst %s via %s ifnum %d[%s] mtu %d type %s [%d]",
 	     dst_buf, ssh_ipaddr_print(result->gw, src_buf, sizeof(src_buf)),
 	     (int) result->ifnum,
@@ -362,11 +374,11 @@ ssh_interceptor_route_output_ipv4(SshInterceptor interceptor,
     }
 #endif /* LINUX_FRAGMENTATION_AFTER_NF_POST_ROUTING */
 #endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
-
+  
   /* Release the routing table entry ; otherwise a memory leak occurs
      in the route entry table. */
   ip_rt_put(rt);
-
+  
   /* Assert that ifnum fits into the SshInterceptorIfnum data type. */
   SSH_LINUX_ASSERT_IFNUM(result->ifnum);
 
@@ -399,7 +411,7 @@ ssh_interceptor_route_output_ipv4(SshInterceptor interceptor,
    The route lookup will use the following selectors:
    dst, src, inbound ifnum, ip protocol, tos, and fwmark.
    The source address is expected to be non-local and it must be defined.
-
+   
    The following selectors are ignored:
    dst port, src port, icmp type, icmp code, ipsec spi. */
 Boolean
@@ -424,7 +436,7 @@ ssh_interceptor_route_input_ipv4(SshInterceptor interceptor,
   unsigned char src_buf[SSH_IP_ADDR_STRING_SIZE];
 #endif /* DEBUG_LIGHT */
 
-  SSH_IP4_ENCODE(&key->dst, (unsigned char *) &daddr);
+  SSH_IP4_ENCODE(&key->dst, (unsigned char *) &daddr);  
 
   /* Initialize */
   saddr = 0;
@@ -449,14 +461,14 @@ ssh_interceptor_route_input_ipv4(SshInterceptor interceptor,
   if (selector & SSH_INTERCEPTOR_ROUTE_KEY_IP4_TOS)
     tos = key->nh.ip4.tos;
 
-#if (SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS > 0)
+#if (SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS > 0)	
 #ifdef SSH_LINUX_FWMARK_EXTENSION_SELECTOR
   /* Use linux fw_mark in routing */
   if (selector & SSH_INTERCEPTOR_ROUTE_KEY_EXTENSION)
     fwmark = key->extension[SSH_LINUX_FWMARK_EXTENSION_SELECTOR];
 #endif /* SSH_LINUX_FWMARK_EXTENSION_SELECTOR */
-#endif /* (SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS > 0) */
-
+#endif /* (SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS > 0) */  
+  
   /* Build dummy skb */
   skbp = alloc_skb(SSH_IPH4_HDRLEN, GFP_ATOMIC);
   if (skbp == NULL)
@@ -469,18 +481,18 @@ ssh_interceptor_route_input_ipv4(SshInterceptor interceptor,
       dev_kfree_skb(skbp);
       goto fail;
     }
-  SSH_SKB_SET_NETHDR(skbp, (unsigned char *) iph);
+  SSH_SKB_SET_NETHDR(skbp, (unsigned char *) iph); 
 
   SSH_SKB_DST_SET(skbp, NULL);
   skbp->protocol = __constant_htons(ETH_P_IP);
   SSH_SKB_MARK(skbp) = fwmark;
   iph->protocol = ipproto;
-
+  
   SSH_DEBUG(SSH_D_LOWOK,
 	    ("Route lookup: "
 	     "dst %s src %s ifnum %d[%s] ipproto %d tos 0x%02x fwmark 0x%x",
 	     ssh_ipaddr_print(&key->dst, dst_buf, sizeof(dst_buf)),
-	     ((selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC) ?
+	     ((selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC) ? 
 	      ssh_ipaddr_print(&key->src, src_buf, sizeof(src_buf)) : NULL),
 	     dev->ifindex, dev->name,
 	     ipproto, tos, fwmark));
@@ -489,7 +501,7 @@ ssh_interceptor_route_input_ipv4(SshInterceptor interceptor,
 
   rval = ip_route_input(skbp, daddr, saddr, tos, dev);
   if (rval < 0 || SSH_SKB_DST(skbp) == NULL)
-    {
+    {      
       dev_kfree_skb(skbp);
       goto fail;
     }
@@ -500,7 +512,7 @@ ssh_interceptor_route_input_ipv4(SshInterceptor interceptor,
   result->mtu = SSH_DST_MTU(SSH_SKB_DST(skbp));
   result->ifnum = SSH_SKB_DST(skbp)->dev->ifindex;
   rt_type = rt->rt_type;
-
+  
 #ifdef DEBUG_LIGHT
   switch (rt_type)
     {
@@ -545,7 +557,7 @@ ssh_interceptor_route_input_ipv4(SshInterceptor interceptor,
     }
 #endif /* DEBUG_LIGHT */
 
-  SSH_DEBUG(SSH_D_LOWOK,
+  SSH_DEBUG(SSH_D_LOWOK, 
 	    ("Route result: dst %s via %s ifnum %d[%s] mtu %d type %s [%d]",
 	     dst_buf, ssh_ipaddr_print(result->gw, src_buf, sizeof(src_buf)),
 	     (int) result->ifnum,
@@ -567,10 +579,10 @@ ssh_interceptor_route_input_ipv4(SshInterceptor interceptor,
 
   /* Release the routing table entry ; otherwise a memory leak occurs
      in the route entry table. */
-  dst_release(SSH_SKB_DST(skbp));
-  SSH_SKB_DST_SET(skbp, NULL);
+  SSH_SKB_DST_DROP(skbp);
+  
   dev_kfree_skb(skbp);
-
+  
   /* Assert that ifnum fits into the SshInterceptorIfnum data type. */
   SSH_LINUX_ASSERT_IFNUM(result->ifnum);
 
@@ -589,11 +601,11 @@ ssh_interceptor_route_input_ipv4(SshInterceptor interceptor,
       SSH_LINUX_ASSERT_VALID_IFNUM(result->ifnum);
       return TRUE;
     }
-
+  
   /* Fail route lookup for other route types. */
  fail:
   ssh_interceptor_release_netdev(dev);
-
+  
   SSH_DEBUG(SSH_D_FAIL,
 	    ("Route lookup for %s failed with code %d",
 	     ssh_ipaddr_print(&key->dst, dst_buf, sizeof(dst_buf)), rval));
@@ -607,11 +619,11 @@ ssh_interceptor_route_input_ipv4(SshInterceptor interceptor,
 
    The route lookup will use the following selectors:
    dst, src, outbound ifnum.
-
+   
    The following selectors are ignored:
-   ipv6 priority, flowlabel, ip protocol, dst port, src port,
+   ipv6 priority, flowlabel, ip protocol, dst port, src port, 
    icmp type, icmp code, ipsec spi, and fwmark. */
-Boolean
+Boolean 
 ssh_interceptor_route_output_ipv6(SshInterceptor interceptor,
 				  SshInterceptorRouteKey key,
 				  SshUInt16 selector,
@@ -644,9 +656,9 @@ ssh_interceptor_route_output_ipv6(SshInterceptor interceptor,
   SSH_DEBUG(SSH_D_LOWOK,
 	    ("Route lookup: dst %s src %s ifnum %d",
 	     ssh_ipaddr_print(&key->dst, dst_buf, sizeof(dst_buf)),
-	     ((selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC) ?
+	     ((selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC) ? 
 	      ssh_ipaddr_print(&key->src, src_buf, sizeof(src_buf)) : NULL),
-	     (int) ((selector & SSH_INTERCEPTOR_ROUTE_KEY_OUT_IFNUM) ?
+	     (int) ((selector & SSH_INTERCEPTOR_ROUTE_KEY_OUT_IFNUM) ? 
 		    key->ifnum : -1)));
 
   dst = interceptor_ip6_route_output(&rt_key);
@@ -661,34 +673,32 @@ ssh_interceptor_route_output_ipv6(SshInterceptor interceptor,
       dst_release(dst);
       goto fail;
     }
-
+  
   rt = (struct rt6_info *) dst;
-
+  
   /* Get the gateway, mtu and ifnum */
 
   /* For an example of retrieving routing information for IPv6
      within Linux kernel (2.4.19) see inet6_rtm_getroute()
      in /usr/src/linux/net/ipv6/route.c */
-#ifdef LINUX_HAS_DST_NEIGHBOUR_FUNCTIONS
-  neigh = dst_get_neighbour(&rt->dst);
-#else  /* LINUX_HAS_DST_NEIGHBOUR_FUNCTIONS */
-  neigh = rt->rt6i_nexthop;
-#endif /* LINUX_HAS_DST_NEIGHBOUR_FUNCTIONS */
 
+  SSH_DST_NEIGHBOUR_READ_LOCK();
+  neigh = SSH_DST_GET_NEIGHBOUR(dst);
   if (neigh != NULL)
     SSH_IP6_DECODE(result->gw, &neigh->primary_key);
   else
       SSH_IP6_DECODE(result->gw, &rt_key.fl6_dst.s6_addr);
-
-  result->mtu = SSH_DST_MTU(&SSH_RT_DST(rt));
-
+  SSH_DST_NEIGHBOUR_READ_UNLOCK();
+  
+  result->mtu = SSH_DST_MTU(&SSH_RT_DST(rt)); 
+ 
   /* The interface number might not be ok, but that is a problem
      for the recipient of the routing information. */
   result->ifnum = dst->dev->ifindex;
 
   rt6i_flags = rt->rt6i_flags;
 
-  SSH_DEBUG(SSH_D_LOWOK,
+  SSH_DEBUG(SSH_D_LOWOK, 
 	    ("Route result: %s via %s ifnum %d[%s] mtu %d flags 0x%08x[%s%s]",
 	     dst_buf, ssh_ipaddr_print(result->gw, src_buf, sizeof(src_buf)),
 	     (int) result->ifnum, (dst->dev ? dst->dev->name : "none"),
@@ -722,11 +732,11 @@ ssh_interceptor_route_output_ipv6(SshInterceptor interceptor,
   /* Accept only valid routes */
   if ((rt6i_flags & RTF_UP)
       && (rt6i_flags & RTF_REJECT) == 0)
-    {
+    {      
       SSH_LINUX_ASSERT_VALID_IFNUM(result->ifnum);
       return TRUE;
     }
-
+ 
   /* Fail route lookup for reject and unknown routes */
  fail:
   SSH_DEBUG(SSH_D_FAIL, ("Route lookup for %s failed with code %d",
@@ -736,7 +746,7 @@ ssh_interceptor_route_output_ipv6(SshInterceptor interceptor,
 }
 #endif /* SSH_LINUX_INTERCEPTOR_IPV6 */
 
-/* Performs a route lookup for the given destination address.
+/* Performs a route lookup for the given destination address. 
    This also always calls a callback function. */
 
 void
@@ -747,7 +757,7 @@ ssh_interceptor_route(SshInterceptor interceptor,
 {
   SshInterceptorRouteResultStruct result;
 
-  /* It is a fatal error to call ssh_interceptor_route with
+  /* It is a fatal error to call ssh_interceptor_route with 
      a routing key that does not specify the destination address. */
   SSH_ASSERT(SSH_IP_DEFINED(&key->dst));
 
@@ -764,11 +774,11 @@ ssh_interceptor_route(SshInterceptor interceptor,
 	  SSH_ASSERT(SSH_IP_IS4(&key->src));
 	  SSH_ASSERT(key->selector & SSH_INTERCEPTOR_ROUTE_KEY_IN_IFNUM);
 
-	  if (!ssh_interceptor_route_input_ipv4(interceptor, key,
+	  if (!ssh_interceptor_route_input_ipv4(interceptor, key, 
 						key->selector, &result))
 	    goto fail;
 	}
-
+      
       /* Otherwise use ssh_interceptor_route_output_ipv4 */
       else
 	{
@@ -778,7 +788,7 @@ ssh_interceptor_route(SshInterceptor interceptor,
 	  SSH_ASSERT((key->selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC) == 0
 		     || SSH_IP_IS4(&key->src));
 
-	  /* Key specifies non-local src address.
+	  /* Key specifies non-local src address. 
 	     Linux ip_route_output_key will fail such route lookups,
 	     so we must clear the src address selector and do the
 	     route lookup as if src was one of local addresses.
@@ -802,7 +812,7 @@ ssh_interceptor_route(SshInterceptor interceptor,
       /* Assert that all mandatory selectors are present. */
       SSH_ASSERT((key->selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC) == 0
 		 || SSH_IP_IS6(&key->src));
-
+      
       /* Always use ip6_route_output for IPv6 */
       if (!ssh_interceptor_route_output_ipv6(interceptor, key, key->selector,
 					     &result))
@@ -812,7 +822,7 @@ ssh_interceptor_route(SshInterceptor interceptor,
       return;
     }
 #endif /* SSH_LINUX_INTERCEPTOR_IPV6 */
-
+  
   /* Fallback to error */
  fail:
   SSH_DEBUG(SSH_D_FAIL, ("Route lookup failed, unknown dst address type"));
@@ -823,7 +833,7 @@ ssh_interceptor_route(SshInterceptor interceptor,
 /**************************** Rerouting of Packets **************************/
 
 
-/* Route IPv4 packet 'skbp', using the route key selectors in
+/* Route IPv4 packet 'skbp', using the route key selectors in 
    'route_selector' and the interface number 'ifnum_in'. */
 Boolean
 ssh_interceptor_reroute_skb_ipv4(SshInterceptor interceptor,
@@ -847,9 +857,7 @@ ssh_interceptor_reroute_skb_ipv4(SshInterceptor interceptor,
 
   /* Release old dst_entry */
   if (SSH_SKB_DST(skbp))
-    dst_release(SSH_SKB_DST(skbp));
-
-  SSH_SKB_DST_SET(skbp, NULL);
+    SSH_SKB_DST_DROP(skbp);
 
   if ((route_selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC)
       && (route_selector & SSH_INTERCEPTOR_ROUTE_KEY_FLAG_LOCAL_SRC) == 0
@@ -869,7 +877,7 @@ ssh_interceptor_reroute_skb_ipv4(SshInterceptor interceptor,
 
       if (route_selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC)
 	saddr = iph->saddr;
-
+           
       /* Map 'ifnum_in' to a net_device. */
       SSH_LINUX_ASSERT_VALID_IFNUM(ifnum_in);
       dev = ssh_interceptor_ifnum_to_netdev(interceptor, ifnum_in);
@@ -878,7 +886,7 @@ ssh_interceptor_reroute_skb_ipv4(SshInterceptor interceptor,
 
       /* Clear the IP protocol, if selector does not define it. */
       if ((route_selector & SSH_INTERCEPTOR_ROUTE_KEY_IPPROTO) == 0)
-	{
+	{	  
 	  ipproto = iph->protocol;
 	  iph->protocol = 0;
 	}
@@ -896,11 +904,17 @@ ssh_interceptor_reroute_skb_ipv4(SshInterceptor interceptor,
 	}
 #endif /* SSH_LINUX_FWMARK_EXTENSION_SELECTOR */
 #endif /* (SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS > 0) */
-
+      
       /* Call ip_route_input */
-      if (ip_route_input(skbp, iph->daddr, saddr, tos, dev) < 0)
+      if (
+#ifdef LINUX_USE_SKB_DST_NOREF
+          ip_route_input_noref(skbp, iph->daddr, saddr, tos, dev)
+#else /* LINUX_USE_SKB_DST_NOREF */
+          ip_route_input(skbp, iph->daddr, saddr, tos, dev)
+#endif /* LINUX_USE_SKB_DST_NOREF */
+          < 0)
 	{
-	  SSH_DEBUG(SSH_D_FAIL,
+	  SSH_DEBUG(SSH_D_FAIL, 
 		    ("ip_route_input failed. (0x%08x -> 0x%08x)",
 		     iph->saddr, iph->daddr));
 
@@ -908,7 +922,7 @@ ssh_interceptor_reroute_skb_ipv4(SshInterceptor interceptor,
 		    ("dst 0x%08x src 0x%08x iif %d[%s] proto %d tos 0x%02x "
 		     "fwmark 0x%x",
 		     iph->daddr, saddr, (dev ? dev->ifindex : -1),
-		     (dev ? dev->name : "none"), iph->protocol, tos,
+		     (dev ? dev->name : "none"), iph->protocol, tos, 
 		     SSH_SKB_MARK(skbp)));
 
 	  /* Release netdev reference */
@@ -942,7 +956,7 @@ ssh_interceptor_reroute_skb_ipv4(SshInterceptor interceptor,
 	route_selector &= ~SSH_INTERCEPTOR_ROUTE_KEY_SRC;
 
       memset(&rt_key, 0, sizeof(rt_key));
-
+      
       rt_key.fl4_dst = iph->daddr;
       if (route_selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC)
 	rt_key.fl4_src = iph->saddr;
@@ -968,11 +982,11 @@ ssh_interceptor_reroute_skb_ipv4(SshInterceptor interceptor,
 	}
 #endif /* SSH_LINUX_FWMARK_EXTENSION_SELECTOR */
 #endif /* (SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS > 0) */
-
+      
       rval = interceptor_ip4_route_output(&rt, &rt_key);
       if (rval < 0)
 	{
-	  SSH_DEBUG(SSH_D_FAIL,
+	  SSH_DEBUG(SSH_D_FAIL, 
 		    ("ip_route_output_key failed (0x%08x -> 0x%08x): %d",
 		     iph->saddr, iph->daddr, rval));
 
@@ -980,7 +994,7 @@ ssh_interceptor_reroute_skb_ipv4(SshInterceptor interceptor,
 		    ("dst 0x%08x src 0x%08x oif %d[%s] proto %d tos 0x%02x"
 		     "fwmark 0x%x",
 		     iph->daddr,
-		     ((route_selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC) ?
+		     ((route_selector & SSH_INTERCEPTOR_ROUTE_KEY_SRC) ? 
 		      iph->saddr : 0),
 		     ((route_selector & SSH_INTERCEPTOR_ROUTE_KEY_OUT_IFNUM) ?
 		      rt_key.oif : -1),
@@ -997,39 +1011,56 @@ ssh_interceptor_reroute_skb_ipv4(SshInterceptor interceptor,
 	}
 
       /* Make a new dst because we just rechecked the route. */
-      SSH_SKB_DST_SET(skbp, dst_clone(&SSH_RT_DST(rt)));
-
+#ifdef LINUX_USE_SKB_DST_NOREF
+      skb_dst_set_noref(skbp, &SSH_RT_DST(rt));
+#else /* LINUX_USE_SKB_DST_NOREF */
+      skb_dst_set(skbp, dst_clone(&SSH_RT_DST(rt)));
+#endif /* LINUX_USE_SKB_DST_NOREF */
+      
       /* Release the routing table entry ; otherwise a memory leak occurs
 	 in the route entry table. */
       ip_rt_put(rt);
     }
-
+  
   SSH_ASSERT(SSH_SKB_DST(skbp) != NULL);
 
 #ifdef SSH_IPSEC_IP_ONLY_INTERCEPTOR
 #ifdef LINUX_FRAGMENTATION_AFTER_NF_POST_ROUTING
   if (route_selector & SSH_INTERCEPTOR_ROUTE_KEY_FLAG_TRANSFORM_APPLIED)
     {
+      struct dst_entry *dst;
+
       /* Check if need to create a child dst_entry with interface MTU. */
-      if (SSH_SKB_DST(skbp)->child == NULL)
+      dst = SSH_SKB_DST(skbp);
+      if (dst->child == NULL)
 	{
-          if (interceptor_route_create_child_dst(SSH_SKB_DST(skbp), FALSE)
-	      == NULL)
+          if (interceptor_route_create_child_dst(dst, FALSE) == NULL)
 	    {
 	      SSH_DEBUG(SSH_D_ERROR,
 			("Could not create child dst_entry for dst %p",
-			 SSH_SKB_DST(skbp)));
+			 dst));
 	      return FALSE;
 	    }
 	}
-
-      /* Pop dst stack and use the child entry with interface MTU
+      else if (dst->child->dev != NULL
+               && dst_mtu(dst->child) < dst->child->dev->mtu)
+        {
+          SSH_DEBUG(SSH_D_LOWOK,
+                    ("Adjusting child dst_entry mtu from %d to %d",
+                     dst_mtu(dst->child), dst->child->dev->mtu));
+#ifdef LINUX_HAS_DST_METRICS_ACCESSORS
+          dst_metric_set(dst->child, RTAX_MTU, dst->child->dev->mtu);
+#else /* LINUX_HAS_DST_METRICS_ACCESSORS */
+          dst->child->metrics[RTAX_MTU-1] = dst->child->dev->mtu;
+#endif /* LINUX_HAS_DST_METRICS_ACCESSORS */
+        }
+     
+      /* Pop dst stack and use the child entry with interface MTU 
 	 for sending the packet. */
-#ifdef LINUX_DST_POP_IS_SKB_DST_POP
-      SSH_SKB_DST_SET(skbp, dst_clone(skb_dst_pop(skbp)));
-#else /* LINUX_DST_POP_IS_SKB_DST_POP */
-      SSH_SKB_DST_SET(skbp, dst_pop(SSH_SKB_DST(skbp)));
-#endif /*LINUX_DST_POP_IS_SKB_DST_POP */
+      dst = dst->child;
+      dst_clone(dst);
+      SSH_SKB_DST_DROP(skbp);
+      skb_dst_set(skbp, dst);      
     }
 #endif /* LINUX_FRAGMENTATION_AFTER_NF_POST_ROUTING */
 #endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
@@ -1040,7 +1071,7 @@ ssh_interceptor_reroute_skb_ipv4(SshInterceptor interceptor,
 
 #ifdef SSH_LINUX_INTERCEPTOR_IPV6
 
-/* Route IPv6 packet 'skbp', using the route key selectors in
+/* Route IPv6 packet 'skbp', using the route key selectors in 
    'route_selector' and the interface number 'ifnum_in'. */
 Boolean
 ssh_interceptor_reroute_skb_ipv6(SshInterceptor interceptor,
@@ -1079,14 +1110,14 @@ ssh_interceptor_reroute_skb_ipv6(SshInterceptor interceptor,
       if (dst != NULL)
         dst_release(dst);
 
-      SSH_DEBUG(SSH_D_FAIL,
+      SSH_DEBUG(SSH_D_FAIL, 
 		("ip6_route_output failed."));
 
-      SSH_DEBUG_HEXDUMP(SSH_D_NICETOKNOW,
-			("dst "),
+      SSH_DEBUG_HEXDUMP(SSH_D_NICETOKNOW, 
+			("dst "), 
 			(unsigned char *) &iph6->daddr, sizeof(iph6->daddr));
-      SSH_DEBUG_HEXDUMP(SSH_D_NICETOKNOW,
-			("src "),
+      SSH_DEBUG_HEXDUMP(SSH_D_NICETOKNOW, 
+			("src "), 
 			(unsigned char *) &iph6->saddr, sizeof(iph6->saddr));
       SSH_DEBUG(SSH_D_NICETOKNOW,
 		("oif %d[%s]",
@@ -1095,16 +1126,12 @@ ssh_interceptor_reroute_skb_ipv6(SshInterceptor interceptor,
       return FALSE;
     }
   if (SSH_SKB_DST(skbp))
-    dst_release(SSH_SKB_DST(skbp));
+    SSH_SKB_DST_DROP(skbp);
 
 #ifdef SSH_IPSEC_IP_ONLY_INTERCEPTOR
 #ifdef LINUX_FRAGMENTATION_AFTER_NF6_POST_ROUTING
   if (route_selector & SSH_INTERCEPTOR_ROUTE_KEY_FLAG_TRANSFORM_APPLIED)
     {
-      SSH_DEBUG(SSH_D_LOWOK,
-		("Creating a new child entry for dst %p, child %p %lu",
-		 dst, dst->child, skbp->_skb_refdst));
-
       /* Check if need to create a child dst_entry with interface MTU. */
       if (dst->child == NULL)
 	{
@@ -1118,8 +1145,22 @@ ssh_interceptor_reroute_skb_ipv6(SshInterceptor interceptor,
 	      return FALSE;
 	    }
 	}
+      else if (dst->child->dev != NULL
+               && dst_mtu(dst->child) < dst->child->dev->mtu)
+        {
+          SSH_DEBUG(SSH_D_LOWOK,
+                    ("Adjusting child dst_entry mtu from %d to %d",
+                     dst_mtu(dst->child), dst->child->dev->mtu));
+#ifdef LINUX_HAS_DST_METRICS_ACCESSORS
+          dst_metric_set(dst->child, RTAX_MTU, dst->child->dev->mtu);
+#else /* LINUX_HAS_DST_METRICS_ACCESSORS */
+          dst->child->metrics[RTAX_MTU-1] = dst->child->dev->mtu;
+#endif /* LINUX_HAS_DST_METRICS_ACCESSORS */
+        }
 
-      SSH_SKB_DST_SET(skbp, dst_clone(dst->child));
+      /* Pop dst stack and use the child entry with interface MTU 
+	 for sending the packet. */
+      skb_dst_set(skbp, dst_clone(dst->child));
       dst_release(dst);
     }
   else

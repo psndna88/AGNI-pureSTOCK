@@ -6,7 +6,7 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
- */
+ */ 
 
 /*
  * usermodeforwarder.c
@@ -132,7 +132,7 @@ void ssh_engine_packet_callback(SshInterceptorPacket pp, void *context)
           else
             if (pp->protocol == SSH_PROTOCOL_FDDI ||
                 pp->protocol == SSH_PROTOCOL_TOKENRING)
-              mediahdr_len = 22;
+              mediahdr_len = 22; 
             else
               mediahdr_len = 0;
 
@@ -233,7 +233,7 @@ void ssh_engine_interfaces_callback(SshUInt32 num_interfaces,
 #ifdef WITH_IPV6
 				SSH_FORMAT_UINT32, (SshUInt32) 0,
 #endif /* WITH_IPV6 */
-
+                                
                                 SSH_FORMAT_UINT32_STR, "", (size_t)0L,
                                 SSH_FORMAT_UINT32, (SshUInt32) ifs[i].ifnum,
 				SSH_FORMAT_UINT32, (SshUInt32) ifs[i].flags,
@@ -548,7 +548,7 @@ void ssh_engine_notify_ipm_open(SshEngine engine)
 		      engine->queued_interfaces_message,
 		      engine->queued_interfaces_len,
                       SSH_FORMAT_END);
-
+      
       /* queued_interfaces_message is not freed, as it either will be
          freed on _stop or next interfaces callback */
     }
@@ -584,10 +584,10 @@ typedef struct SshEngineFromIpmRouteRec
 /* Callback function to be called when a route lookup completes.  This sends
    a response to the user-mode interceptor. */
 
-void ssh_engine_route_completion(Boolean reachable,
+void ssh_engine_route_completion(Boolean reachable, 
 				 SshIpAddr next_hop_gw,
-                                 SshInterceptorIfnum ifnum,
-				 size_t mtu,
+                                 SshInterceptorIfnum ifnum, 
+				 size_t mtu, 
 				 void *context)
 {
   SshEngineFromIpmRoute rr = (SshEngineFromIpmRoute) context;
@@ -616,8 +616,8 @@ void ssh_engine_route_completion(Boolean reachable,
               ("sending route reply id=%d reachable=%d ifnum=%d mtu=%d "
                "next_hop=%s",
                (int) rr->id, reachable, (int) ifnum, (int) mtu,
-	       (next_hop_gw != NULL ?
-		ssh_ipaddr_print(next_hop_gw, next_hop_buf,
+	       (next_hop_gw != NULL ? 
+		ssh_ipaddr_print(next_hop_gw, next_hop_buf, 
 				 sizeof(next_hop_buf)) : NULL)));
   else
     SSH_DEBUG(SSH_D_NICETOKNOW,
@@ -712,6 +712,11 @@ void ssh_engine_from_ipm_route(SshEngine engine,
 
   /* Allocate and initialize a context structure. */
   rr = ssh_calloc(1, sizeof(*rr));
+  if (rr == NULL)
+    {
+      SSH_DEBUG(SSH_D_FAIL, ("Failed to allocate routing context."));
+      return;
+    }
   rr->engine = engine;
   rr->id = id;
   ssh_interceptor_route(engine->interceptor, &key,
@@ -731,6 +736,9 @@ void ssh_engine_from_ipm_packet(SshEngine engine,
 #endif /* (SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS > 0) */
   unsigned char *packet_ptr, *internal_ptr;
   size_t packet_len, internal_len, bytes;
+#ifdef SSH_IPSEC_IP_ONLY_INTERCEPTOR
+  SshUInt16 route_selector;
+#endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
 
   /* Decode the packet. */
   bytes = ssh_decode_array(data, len,
@@ -739,6 +747,11 @@ void ssh_engine_from_ipm_packet(SshEngine engine,
                                   SSH_FORMAT_UINT32, &ifnum_out,
                                   SSH_FORMAT_UINT32, &protocol,
                                   SSH_FORMAT_UINT32, &media_header_len,
+#ifdef SSH_IPSEC_IP_ONLY_INTERCEPTOR
+                                 SSH_FORMAT_UINT16, &route_selector,
+#else /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
+                                 SSH_FORMAT_UINT16, NULL,
+#endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
                                   SSH_FORMAT_UINT32_STR_NOCOPY,
                                     &packet_ptr, &packet_len,
                                   SSH_FORMAT_UINT32_STR_NOCOPY,
@@ -780,9 +793,12 @@ void ssh_engine_from_ipm_packet(SshEngine engine,
   SSH_ASSERT(((SshUInt32)ifnum_out) <= ((SshUInt32)SSH_INTERCEPTOR_MAX_IFNUM));
 
   /* Allocate a packet object and copy data into it. */
-  flags &= SSH_PACKET_FROMADAPTER | SSH_PACKET_FROMPROTOCOL;
+  flags &= (SSH_PACKET_FROMADAPTER | 
+            SSH_PACKET_FROMPROTOCOL |
+            SSH_PACKET_FORWARDED |
+            SSH_PACKET_UNMODIFIED);
   pp = ssh_interceptor_packet_alloc(engine->interceptor,
-                                    flags, protocol,
+                                    flags, protocol, 
 				    ifnum_in, ifnum_out,
 				    packet_len);
   if (pp == NULL)
@@ -802,6 +818,10 @@ void ssh_engine_from_ipm_packet(SshEngine engine,
       return;
     }
 
+#ifdef SSH_IPSEC_IP_ONLY_INTERCEPTOR
+  pp->route_selector = route_selector;
+#endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
+
 #if (SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS > 0)
   for (i = 0; i < SSH_INTERCEPTOR_NUM_EXTENSION_SELECTORS; i++)
     {
@@ -820,7 +840,7 @@ void ssh_engine_from_ipm_enable_interception(SshEngine engine,
 {
   size_t bytes;
   SshUInt32 enable;
-
+  
   bytes = ssh_decode_array(data, len,
 			   SSH_FORMAT_UINT32, &enable,
 			   SSH_FORMAT_END);
@@ -830,10 +850,10 @@ void ssh_engine_from_ipm_enable_interception(SshEngine engine,
 			data, len);
       return;
     }
-
+  
   SSH_DEBUG(SSH_D_LOWOK, ("%s packet interception",
 			  (enable == 0 ? "Disabling" : "Enabling")));
-
+  
   if (enable == 0)
     ssh_interceptor_enable_interception(engine->interceptor, FALSE);
   else
@@ -855,12 +875,12 @@ void ssh_engine_from_ipm_set_debug(SshEngine engine,
 
 
 void ssh_engine_from_ipm_internal_data_discarded(SshEngine engine,
-						 const unsigned char *data,
+						 const unsigned char *data, 
 						 size_t len)
 {
   unsigned char *data_ptr;
   size_t data_len, bytes;
-
+  
   /* Decode the packet. */
   bytes = ssh_decode_array(data, len,
 			   SSH_FORMAT_UINT32_STR_NOCOPY,
@@ -954,7 +974,7 @@ ssh_engine_ipm_virtual_adapter_status_cb(SshVirtualAdapterError error,
 					 void *adapter_context,
                                          void *context)
 {
-  SshEngineIpmVirtualAdapterOpCtx ctx =
+  SshEngineIpmVirtualAdapterOpCtx ctx = 
     (SshEngineIpmVirtualAdapterOpCtx) context;
   size_t adapter_name_len = 0;
 
@@ -962,8 +982,8 @@ ssh_engine_ipm_virtual_adapter_status_cb(SshVirtualAdapterError error,
     adapter_name_len = strlen(adapter_name);
 
   ssh_engine_send(ctx->engine, FALSE, TRUE,
-		  SSH_FORMAT_UINT32, (SshUInt32) 0,
-		  SSH_FORMAT_CHAR, (unsigned int)
+		  SSH_FORMAT_UINT32, (SshUInt32) 0, 
+		  SSH_FORMAT_CHAR, (unsigned int) 
 		  SSH_ENGINE_IPM_FORWARDER_VIRTUAL_ADAPTER_STATUS_CB,
 		  SSH_FORMAT_UINT32, ctx->operation_id,
 		  SSH_FORMAT_UINT32, error,
@@ -988,11 +1008,19 @@ ssh_engine_from_ipm_virtual_adapter_send(SshEngine engine,
   const unsigned char *packet, *internal;
   size_t packet_len, internal_len;
   SshInterceptorPacket pp;
+#ifdef SSH_IPSEC_IP_ONLY_INTERCEPTOR
+  SshUInt16 route_selector;
+#endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
 
   if (ssh_decode_array(data, len,
                        SSH_FORMAT_UINT32, &ifnum_in,
                        SSH_FORMAT_UINT32, &ifnum_out,
                        SSH_FORMAT_UINT32, &protocol,
+#ifdef SSH_IPSEC_IP_ONLY_INTERCEPTOR
+                       SSH_FORMAT_UINT16, &route_selector,
+#else /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
+                       SSH_FORMAT_UINT16, NULL,
+#endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
                        SSH_FORMAT_UINT32_STR_NOCOPY, &packet, &packet_len,
                        SSH_FORMAT_UINT32_STR_NOCOPY, &internal, &internal_len,
                        SSH_FORMAT_END) != len)
@@ -1006,7 +1034,7 @@ ssh_engine_from_ipm_virtual_adapter_send(SshEngine engine,
   /* Allocate an interceptor packet. */
   pp = ssh_interceptor_packet_alloc(engine->interceptor,
                                     SSH_PACKET_FROMADAPTER,
-                                    protocol,
+                                    protocol, 
 				    ifnum_in,
 				    ifnum_out,
 				    packet_len);
@@ -1027,6 +1055,10 @@ ssh_engine_from_ipm_virtual_adapter_send(SshEngine engine,
       SSH_DEBUG(SSH_D_ERROR, ("internal import failed, dropping packet"));
       return;
     }
+
+#ifdef SSH_IPSEC_IP_ONLY_INTERCEPTOR
+  pp->route_selector = route_selector;
+#endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
 
   ssh_virtual_adapter_send(engine->interceptor, pp);
 }
@@ -1063,8 +1095,8 @@ ssh_engine_from_ipm_virtual_adapter_attach(SshEngine engine,
 
       ssh_engine_ipm_virtual_adapter_status_cb(
 				       SSH_VIRTUAL_ADAPTER_ERROR_OUT_OF_MEMORY,
-				       (SshInterceptorIfnum) adapter_ifnum,
-				       NULL,
+				       (SshInterceptorIfnum) adapter_ifnum, 
+				       NULL, 
 				       SSH_VIRTUAL_ADAPTER_STATE_UNDEFINED,
 				       NULL, &ctx_struct);
       return;
@@ -1074,7 +1106,7 @@ ssh_engine_from_ipm_virtual_adapter_attach(SshEngine engine,
   ctx->operation_id = operation_id;
   ctx->dynamic = TRUE;
 
-  ssh_virtual_adapter_attach(engine->interceptor,
+  ssh_virtual_adapter_attach(engine->interceptor, 
 			     (SshInterceptorIfnum) adapter_ifnum,
                              ssh_engine_ipm_virtual_adapter_packet_cb,
 			     NULL_FNPTR,
@@ -1115,8 +1147,8 @@ ssh_engine_from_ipm_virtual_adapter_detach(SshEngine engine,
 
       ssh_engine_ipm_virtual_adapter_status_cb(
 				       SSH_VIRTUAL_ADAPTER_ERROR_OUT_OF_MEMORY,
-				       (SshInterceptorIfnum) adapter_ifnum,
-				       NULL,
+				       (SshInterceptorIfnum) adapter_ifnum, 
+				       NULL, 
 				       SSH_VIRTUAL_ADAPTER_STATE_UNDEFINED,
 				       NULL, &ctx_struct);
       return;
@@ -1154,7 +1186,7 @@ ssh_engine_from_ipm_virtual_adapter_configure(SshEngine engine,
   const unsigned char *ip_ptr, *param_ptr;
   size_t ip_len, param_len;
   size_t decode_len;
-  SshUInt32 i;
+  SshUInt32 i;  
   SshEngineIpmVirtualAdapterOpCtxStruct ctx_struct;
   SshEngineIpmVirtualAdapterOpCtx ctx;
   SshVirtualAdapterError error = SSH_VIRTUAL_ADAPTER_ERROR_UNKNOWN_ERROR;
@@ -1201,7 +1233,7 @@ ssh_engine_from_ipm_virtual_adapter_configure(SshEngine engine,
       if (!ssh_virtual_adapter_param_decode(&p, param_ptr, param_len))
 	goto error;
     }
-
+  
   /* Create context. */
   ctx = ssh_calloc(1, sizeof(*ctx));
   if (ctx == NULL)
@@ -1218,7 +1250,7 @@ ssh_engine_from_ipm_virtual_adapter_configure(SshEngine engine,
      virtual adapter configure. */
   ssh_engine_ipm_virtual_adapter_status_cb(
 					 SSH_VIRTUAL_ADAPTER_ERROR_NONEXISTENT,
-					 (SshInterceptorIfnum) adapter_ifnum,
+					 (SshInterceptorIfnum) adapter_ifnum, 
 					 NULL,
 					 SSH_VIRTUAL_ADAPTER_STATE_UNDEFINED,
 					 NULL, ctx);
@@ -1230,7 +1262,7 @@ ssh_engine_from_ipm_virtual_adapter_configure(SshEngine engine,
   ctx_struct.operation_id = operation_id;
   ctx_struct.dynamic = FALSE;
 
-  ssh_engine_ipm_virtual_adapter_status_cb(error,
+  ssh_engine_ipm_virtual_adapter_status_cb(error, 
 					   (SshInterceptorIfnum) adapter_ifnum,
 					   NULL,
 					   SSH_VIRTUAL_ADAPTER_STATE_UNDEFINED,
@@ -1281,9 +1313,9 @@ ssh_engine_from_ipm_virtual_adapter_get_status(SshEngine engine,
   ctx->operation_id = operation_id;
   ctx->dynamic = TRUE;
 
-  ssh_virtual_adapter_get_status(engine->interceptor,
+  ssh_virtual_adapter_get_status(engine->interceptor, 
 				 (SshInterceptorIfnum) adapter_ifnum,
-				 ssh_engine_ipm_virtual_adapter_status_cb,
+				 ssh_engine_ipm_virtual_adapter_status_cb, 
 				 ctx);
 }
 
@@ -1361,3 +1393,4 @@ void ssh_engine_packet_from_ipm(SshEngine engine,
       break;
     }
 }
+

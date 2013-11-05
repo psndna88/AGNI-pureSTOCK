@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Hypervisor Support
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -37,14 +37,6 @@
 #error "MVP requires a host kernel newer than 2.6.35"
 #endif
 
-/* module loading ability */
-#ifndef CONFIG_MODULES
-#error "MVP requires kernel loadable module support be enabled (CONFIG_MODULES)"
-#endif
-#ifndef CONFIG_MODULE_UNLOAD
-#error "MVP requires kernel module unload support be enabled (CONFIG_MODULE_UNLOAD)"
-#endif
-
 /* sysfs */
 #ifndef CONFIG_SYSFS
 #error "MVP requires sysfs support (CONFIG_SYSFS)"
@@ -67,7 +59,7 @@
 #endif
 
 /* VPN support */
-#if !defined(CONFIG_TUN) && !defined(CONFIG_TUN_MODULE)
+#if !defined(CONFIG_TUN)
 #error "MVP VPN support requires TUN device support (CONFIG_TUN)"
 #endif
 

@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP PVTCP Server
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -347,7 +347,14 @@ PvtcpCloseNtf(void *ntfData,
               const CommTranspInitArgs *transpArgs,
               int inBH);
 
-void *PvtcpBufAlloc(unsigned int size);
+void *
+PvtcpBufAlloc(unsigned int size,
+              CommChannel channel,
+              CommPacket *header,
+              int (*copy)(CommChannel channel,
+                          void *dest,
+                          unsigned int size,
+                          int kern));
 void PvtcpBufFree(void *buf);
 
 void PvtcpReleaseSocket(PvtcpSock *pvsk);
@@ -456,3 +463,4 @@ PvtcpI6AddrUnpack(unsigned int addr[4],
 #endif // __LP64__ || __LLP64__
 
 #endif // _PVTCP_H_
+

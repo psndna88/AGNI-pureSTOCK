@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Hypervisor Support
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -66,6 +66,7 @@
 #define CACHE_SIZE_ID                       1,  c0,  c0, 0
 #define CACHE_LEVEL_ID                      1,  c0,  c0, 1
 #define CACHE_SIZE_SELECTION                2,  c0,  c0, 0
+#define PROC_FEATURE_0                      0,  c0,  c1, 0
 #define MEM_MODEL_FEATURE_0                 0,  c0,  c1, 4
 #define CONTROL_REGISTER                    0,  c1,  c0, 0
 #define TTBASE0_POINTER                     0,  c2,  c0, 0
@@ -140,6 +141,7 @@
 #define PERF_MON_EVENT_SELECT               0,  c9, c12, 5
 #define PERF_MON_EVENT_TYPE                 0,  c9, c13, 1
 #define PERF_MON_EVENT_COUNT                0,  c9, c13, 2
+#define PERF_MON_USER_ENR                   0,  c9, c14, 0
 #define PERF_MON_INTEN_SET                  0,  c9, c14, 1
 #define PERF_MON_INTEN_CLR                  0,  c9, c14, 2
 

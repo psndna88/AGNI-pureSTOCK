@@ -44,6 +44,9 @@
 #endif
 
 #include <linux/exynos_audio.h>
+#ifdef CONFIG_USE_ADC_DET
+#include <linux/sec_jack.h>
+#endif
 
 static bool midas_snd_mclk_enabled;
 
@@ -57,6 +60,60 @@ struct si47xx_info {
 
 #define I2C_NUM_CODEC	4
 #define SET_PLATDATA_CODEC(i2c_pd)	s3c_i2c4_set_platdata(i2c_pd)
+
+#ifdef CONFIG_USE_ADC_DET
+static struct jack_zone midas_jack_zones[] = {
+	{
+		/* adc == 0, unstable zone, default to 3pole if it stays
+		 * in this range for 100ms (10ms delays, 10 samples)
+		 */
+		.adc_high = 0,
+		.delay_ms = 10,
+		.check_count = 10,
+		.jack_type = SEC_HEADSET_3POLE,
+	},
+	{
+		/* 0 < adc <= 1200, unstable zone, default to 3pole if it stays
+		 * in this range for 100ms (10ms delays, 10 samples)
+		 */
+#if defined(CONFIG_MACH_GD2)
+		.adc_high = 1150,
+#else
+		.adc_high = 1200,
+#endif
+		.delay_ms = 10,
+		.check_count = 10,
+		.jack_type = SEC_HEADSET_3POLE,
+	},
+	{
+		/* 1200 < adc <= 2600, unstable zone, default to 4pole if it
+		 * stays in this range for 100ms (10ms delays, 10 samples)
+		 */
+		.adc_high = 2600,
+		.delay_ms = 10,
+		.check_count = 10,
+		.jack_type = SEC_HEADSET_4POLE,
+	},
+	{
+		/* 2600 < adc <= 3800, 4 pole zone, default to 4pole if it
+		 * stays in this range for 100ms (10ms delays, 10 samples)
+		 */
+		.adc_high = 3800,
+		.delay_ms = 10,
+		.check_count = 10,
+		.jack_type = SEC_HEADSET_4POLE,
+	},
+	{
+		/* adc > 3800, unstable zone, default to 3pole if it stays
+		 * in this range for two seconds (10ms delays, 200 samples)
+		 */
+		.adc_high = 0x7fffffff,
+		.delay_ms = 10,
+		.check_count = 200,
+		.jack_type = SEC_HEADSET_3POLE,
+	},
+};
+#endif
 
 static DEFINE_SPINLOCK(midas_snd_spinlock);
 
@@ -168,6 +225,16 @@ static struct wm8994_drc_cfg drc_value[] = {
 		.regs[3] = 0x0210,
 		.regs[4] = 0x0000,
 	},
+#if defined(CONFIG_MACH_GD2)
+	{
+		.name = "GD2 EXTMIC DRC",
+		.regs[0] = 0x019B,
+		.regs[1] = 0x0853,
+		.regs[2] = 0x7420,
+		.regs[3] = 0x064E,
+		.regs[4] = 0x00E0,
+	},
+#endif
 };
 
 static struct wm8994_pdata wm1811_pdata = {
@@ -202,7 +269,7 @@ static struct wm8994_pdata wm1811_pdata = {
 	.jd_ext_cap = 1,
 
 	/* Regulated mode at highest output voltage */
-	.micbias = {0x2f, 0x27},
+	.micbias = {0x2f, 0x2b},
 
 	.micd_lvl_sel = 0xFF,
 
@@ -298,6 +365,17 @@ static void t0_gpio_init(void)
 	gpio_free(GPIO_SUB_MIC_BIAS_EN);
 #endif
 
+#ifdef CONFIG_MACH_GD2
+	/* Ext Microphone BIAS */
+	err = gpio_request(GPIO_EXTMIC_EN, "EXT MIC");
+	if (err) {
+		pr_err(KERN_ERR "EXTMIC_EN GPIO set error!\n");
+		return;
+	}
+	gpio_direction_output(GPIO_EXTMIC_EN, 0);
+	gpio_free(GPIO_EXTMIC_EN);
+#endif
+
 #ifdef CONFIG_SND_USE_LINEOUT_SWITCH
 	err = gpio_request(GPIO_VPS_SOUND_EN, "LINEOUT_EN");
 	if (err) {
@@ -377,9 +455,6 @@ static void t0_set_ext_main_mic(int on)
 	/* Main Microphone BIAS */
 	gpio_set_value(GPIO_MIC_BIAS_EN, on);
 
-	if (on)
-		msleep(100);
-
 	pr_info("%s: main_mic bias on = %d\n", __func__, on);
 #endif
 }
@@ -390,10 +465,17 @@ static void t0_set_ext_sub_mic(int on)
 	/* Sub Microphone BIAS */
 	gpio_set_value(GPIO_SUB_MIC_BIAS_EN, on);
 
-	if (on)
-		msleep(100);
-
 	pr_info("%s: sub_mic bias on = %d\n", __func__, on);
+#endif
+}
+
+static void t0_set_ext_ext_mic(int on)
+{
+#ifdef CONFIG_MACH_GD2
+	/* Ext Microphone BIAS */
+	gpio_set_value(GPIO_EXTMIC_EN, on);
+
+	pr_info("%s: ext_mic bias on = %d\n", __func__, on);
 #endif
 }
 
@@ -434,6 +516,7 @@ struct exynos_sound_platform_data t0_sound_pdata __initdata = {
 	.set_lineout_switch	= t0_set_lineout_switch,
 	.set_ext_main_mic	= t0_set_ext_main_mic,
 	.set_ext_sub_mic	= t0_set_ext_sub_mic,
+	.set_ext_ext_mic	= t0_set_ext_ext_mic,
 #ifdef CONFIG_JACK_GROUND_DET
 	.get_ground_det_value	= t0_get_ground_det_value,
 	.get_ground_det_irq_num = t0_get_ground_det_irq_num,
@@ -443,6 +526,10 @@ struct exynos_sound_platform_data t0_sound_pdata __initdata = {
 #endif
 	.dcs_offset_l = -9,
 	.dcs_offset_r = -7,
+#ifdef CONFIG_USE_ADC_DET
+	.zones = midas_jack_zones,
+	.num_zones = ARRAY_SIZE(midas_jack_zones),
+#endif
 };
 
 static struct platform_device *t0_sound_devices[] __initdata = {
@@ -458,8 +545,33 @@ void __init midas_sound_init(void)
 #if defined(CONFIG_MACH_T0_EUR_LTE)
 	t0_sound_pdata.dcs_offset_l = -11;
 	t0_sound_pdata.dcs_offset_r = -8;
+#elif defined(CONFIG_MACH_T0_USA_VZW)
+	t0_sound_pdata.dcs_offset_l = -12;
+	t0_sound_pdata.dcs_offset_r = -9;
+#elif defined(CONFIG_MACH_T0_USA_ATT)
+	t0_sound_pdata.dcs_offset_l = -13;
+	t0_sound_pdata.dcs_offset_r = -9;
+#elif defined(CONFIG_MACH_T0_USA_TMO)
+	t0_sound_pdata.dcs_offset_l = -11;
+	t0_sound_pdata.dcs_offset_r = -9;
+#elif defined(CONFIG_MACH_T0_USA_SPR)
+	t0_sound_pdata.dcs_offset_l = -12;
+	t0_sound_pdata.dcs_offset_r = -9;
+#elif defined(CONFIG_MACH_T0_USA_USCC)
+	t0_sound_pdata.dcs_offset_l = -11;
+	t0_sound_pdata.dcs_offset_r = -8;
 #endif
 
+	pr_info("%s: system rev = %d\n", __func__, system_rev);
+#ifdef CONFIG_USE_ADC_DET
+#if defined(CONFIG_MACH_T0_USA_TMO) || defined(CONFIG_MACH_T0_USA_USCC) || \
+	defined(CONFIG_MACH_T0_USA_ATT)
+	if (system_rev >= 11)
+		t0_sound_pdata.use_jackdet_type = 1;
+#elif defined(CONFIG_MACH_ZEST) || defined(CONFIG_MACH_GD2)
+	t0_sound_pdata.use_jackdet_type = 1;
+#endif
+#endif
 	t0_gpio_init();
 
 	platform_add_devices(t0_sound_devices,
@@ -468,6 +580,12 @@ void __init midas_sound_init(void)
 	pr_info("%s: set sound platform data for T0 device\n", __func__);
 	if (exynos_sound_set_platform_data(&t0_sound_pdata))
 		pr_err("%s: failed to register sound pdata\n", __func__);
+
+#if defined(CONFIG_MACH_GD2)
+	/* modified ear_send_end gpio pin from hw id 06 */
+	if (system_rev >= 6)
+		i2c_wm1811[0].irq = IRQ_EINT(25);
+#endif
 
 	SET_PLATDATA_CODEC(NULL);
 	i2c_register_board_info(I2C_NUM_CODEC, i2c_wm1811,

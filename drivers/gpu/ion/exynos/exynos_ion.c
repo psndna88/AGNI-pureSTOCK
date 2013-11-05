@@ -487,8 +487,10 @@ static int ion_exynos_contig_heap_allocate(struct ion_heap *heap,
 	}
 
 	buffer->flags = flags;
+#ifdef CONFIG_ION_EXYNOS_CONTIGHEAP_DEBUG
 	printk(KERN_INFO "[ION] alloc: 0x%x\n",
 		(unsigned int)buffer->priv_phys);
+#endif
 
 	return 0;
 }
@@ -503,8 +505,10 @@ static void ion_exynos_contig_heap_free(struct ion_buffer *buffer)
 #endif
 
 	ret = cma_free(buffer->priv_phys);
+#ifdef CONFIG_ION_EXYNOS_CONTIGHEAP_DEBUG
 	printk(KERN_INFO "[ION] free: 0x%x, [0x%x]\n",
 		(unsigned int)buffer->priv_phys, ret);
+#endif
 }
 
 static int ion_exynos_contig_heap_phys(struct ion_heap *heap,

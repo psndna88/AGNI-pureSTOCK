@@ -789,4 +789,3 @@ int fc8150_scan_status(HANDLE hDevice)
 
 	return BBM_OK;
 }
-

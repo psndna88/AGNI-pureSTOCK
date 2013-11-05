@@ -6,7 +6,7 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
- */
+ */ 
 
 /*
  * linux_internal.h
@@ -150,12 +150,12 @@ typedef struct sk_buff *SshHookSkb;
 #endif /* LINUX_HAS_DST_MTU */
 
 /* Before 2.6.22 kernels, the net devices were accessed
-   using directly global variables.
+   using directly global variables. 
    2.6.22 -> 2.6.23 introduced new functions accessing
-   the net device list.
+   the net device list. 
    2.6.24 -> these new functions started taking new
    arguments. */
-#ifndef LINUX_HAS_NETDEVICE_ACCESSORS
+#ifndef LINUX_HAS_NETDEVICE_ACCESSORS 
 /* For 2.4.x -> 2.6.21 kernels */
 #define SSH_FIRST_NET_DEVICE()     dev_base
 #define SSH_NEXT_NET_DEVICE(_dev)  _dev->next
@@ -164,7 +164,7 @@ typedef struct sk_buff *SshHookSkb;
 #ifndef LINUX_NET_DEVICE_HAS_ARGUMENT
 /* For 2.6.22 -> 2.6.23 kernels */
 #define SSH_FIRST_NET_DEVICE()     first_net_device()
-#define SSH_NEXT_NET_DEVICE(_dev)  next_net_device(_dev)
+#define SSH_NEXT_NET_DEVICE(_dev)  next_net_device(_dev) 
 
 #else /* LINUX_NET_DEVICE_HAS_ARGUMENT */
 /* For 2.6.24 -> kernels */
@@ -188,9 +188,9 @@ typedef struct sk_buff *SshHookSkb;
 #endif /* LINUX_NET_DEVICE_HAS_ARGUMENT */
 
 #ifdef LINUX_HAS_SKB_DATA_ACCESSORS
-/* On new kernel versions the skb->end, skb->tail, skb->network_header,
+/* On new kernel versions the skb->end, skb->tail, skb->network_header, 
    skb->mac_header, and skb->transport_header are either pointers to
-   skb->data (on 32bit platforms) or offsets from skb->data
+   skb->data (on 32bit platforms) or offsets from skb->data 
    (on 64bit platforms). */
 
 #define SSH_SKB_GET_END(__skb) (skb_end_pointer((__skb)))
@@ -238,7 +238,7 @@ typedef struct sk_buff *SshHookSkb;
 #endif /* LINUX_HAS_SKB_DATA_ACCESSORS */
 
 #ifdef LINUX_HAS_SKB_CSUM_OFFSET
-/* On linux-2.6.20 and later skb->csum is split into
+/* On linux-2.6.20 and later skb->csum is split into 
    a union of csum and csum_offset. */
 #define SSH_SKB_CSUM_OFFSET(__skb) ((__skb)->csum_offset)
 #define SSH_SKB_CSUM(__skb) ((__skb)->csum)
@@ -297,16 +297,52 @@ typedef struct sk_buff *SshHookSkb;
 #ifdef LINUX_HAS_SKB_DST_FUNCTIONS
 #define SSH_SKB_DST(__skb) skb_dst((__skb))
 #define SSH_SKB_DST_SET(__skb, __dst) skb_dst_set((__skb), (__dst))
+#define SSH_SKB_DST_DROP(__skb) skb_dst_drop((__skb))
 #else /* LINUX_HAS_SKB_DST_FUNCTIONS */
 #define SSH_SKB_DST(__skb) ((__skb)->dst)
 #define SSH_SKB_DST_SET(__skb, __dst) ((void)((__skb)->dst = (__dst)))
+#define SSH_SKB_DST_DROP(__skb)                    \
+  do {                                             \
+    struct sk_buff *___skb_p = (__skb);            \
+    dst_release(skb_dst((___skb_p)));              \
+    skb_dst_set((___skb_p), NULL);                 \
+  } while (0)
 #endif /* LINUX_HAS_SKB_DST_FUNCTIONS */
+
+#ifdef LINUX_HAS_DST_NEIGHBOUR_FUNCTIONS
+
+#define SSH_DST_NEIGHBOUR_READ_LOCK() rcu_read_lock()
+#define SSH_DST_NEIGHBOUR_READ_UNLOCK() rcu_read_unlock()
+#define SSH_DST_SET_NEIGHBOUR(_dst, _neigh) dst_set_neighbour((_dst), (_neigh))
+#ifdef LINUX_USE_DST_GET_NEIGHBOUR_NOREF
+#define SSH_DST_GET_NEIGHBOUR(_dst) dst_get_neighbour_noref((_dst))
+#else  /* LINUX_USE_DST_GET_NEIGHBOUR_NOREF */
+#define SSH_DST_GET_NEIGHBOUR(_dst) dst_get_neighbour((_dst))
+#endif /* LINUX_USE_DST_GET_NEIGHBOUR_NOREF */
+
+#else /* LINUX_HAS_DST_NEIGHBOUR_FUNCTIONS */
+
+#define SSH_DST_NEIGHBOUR_READ_LOCK() do { } while (0)
+#define SSH_DST_NEIGHBOUR_READ_UNLOCK() do { } while (0)
+#define SSH_DST_GET_NEIGHBOUR(_dst) (_dst)->neighbour
+#define SSH_DST_SET_NEIGHBOUR(_dst, _neigh)     \
+  do {                                          \
+    (_dst)->neighbour = (_neigh);               \
+  } while (0)
+#endif /* LINUX_HAS_DST_NEIGHBOUR_FUNCTIONS */
 
 #ifdef IP6CB
 #define SSH_LINUX_IP6CB(skbp) IP6CB(skbp)
 #else /* IP6CB */
 #define SSH_LINUX_IP6CB(skbp) ((struct inet6_skb_parm *) ((skbp)->cb))
 #endif /* IP6CB */
+
+/* This HAVE_NET_DEVICE_OPS was removed in 3.1.x */
+#ifdef LINUX_HAS_NET_DEVICE_OPS
+#ifndef HAVE_NET_DEVICE_OPS
+#define HAVE_NET_DEVICE_OPS 1
+#endif /* HAVE_NET_DEVICE_OPS */
+#endif /* LINUX_HAS_NET_DEVICE_OPS */
 
 /* Stating from linux 2.6.35 the IPv6 address list needs to be iterated
    using the list_for_each_* macros. */
@@ -344,7 +380,7 @@ typedef struct sk_buff *SshHookSkb;
 #endif /* LINUX_VERSION_CODE */
 #endif /* defined(LINUX_SSH_RTABLE_FIRST_ELEMENT_NEEDED) */
 
-/* Linux 2.6.39 removed fl4_dst and fl6_dst defines. We like to use
+/* Linux 2.6.39 removed fl4_dst and fl6_dst defines. We like to use 
    those so redefinig those for our purposes. */
 #ifdef LINUX_FLOWI_NO_FL4_ACCESSORS
 #define fl4_dst u.ip4.daddr
@@ -384,14 +420,14 @@ while (0)
 
 /****************************** Interface handling ***************************/
 
-/* Sanity check that the interface index 'ifnum' fits into
-   the SshInterceptorIfnum data type. 'ifnum' may be equal to
+/* Sanity check that the interface index 'ifnum' fits into 
+   the SshInterceptorIfnum data type. 'ifnum' may be equal to 
    SSH_INTERCEPTOR_INVALID_IFNUM. */
 #define SSH_LINUX_ASSERT_IFNUM(ifnum) \
 SSH_ASSERT(((SshUInt32) (ifnum)) < ((SshUInt32) SSH_INTERCEPTOR_MAX_IFNUM) \
 || ((SshUInt32) (ifnum)) == ((SshUInt32) SSH_INTERCEPTOR_INVALID_IFNUM))
 
-/* Sanity check that the interface index 'ifnum' is a valid
+/* Sanity check that the interface index 'ifnum' is a valid 
    SshInterceptorIfnum. */
 #define SSH_LINUX_ASSERT_VALID_IFNUM(ifnum) \
 SSH_ASSERT(((SshUInt32) (ifnum)) < ((SshUInt32) SSH_INTERCEPTOR_MAX_IFNUM) \
@@ -436,13 +472,13 @@ struct SshInterceptorInternalInterfaceRec
    one receive buffer. */
 #define SSH_LINUX_IPM_RECV_BUFFER_SIZE 66000
 
-/* Ipm channel message structure. These structures are used for queueing
+/* Ipm channel message structure. These structures are used for queueing 
    messages from kernel to userspace. The maximum number of allocated messages
    is limited by SSH_LINUX_MAX_IPM_MESSAGES (in linux_params.h). */
-typedef struct SshInterceptorIpmMsgRec
+typedef struct SshInterceptorIpmMsgRec 
 SshInterceptorIpmMsgStruct, *SshInterceptorIpmMsg;
 
-struct SshInterceptorIpmMsgRec
+struct SshInterceptorIpmMsgRec 
 {
   /* Send queue is doubly linked, freelist uses only `next'. */
   SshInterceptorIpmMsg next;
@@ -453,7 +489,7 @@ struct SshInterceptorIpmMsgRec
 
   /* Offset for partially sent message */
   size_t offset;
-
+  
   /* Message length and data. */
   size_t len;
   unsigned char *buf;
@@ -467,7 +503,7 @@ typedef struct SshInterceptorIpmRec
 
   /* Is ipm channel open */
   atomic_t open;
-
+  
   /* Message freelist and number of allocated messages. */
   SshInterceptorIpmMsg msg_freelist;
   SshUInt32 msg_allocated;
@@ -494,10 +530,10 @@ typedef struct SshInterceptorIpmProcEntryRec
   /* Is an userspace application using this entry */
   Boolean open;
 
-  /* Is another read ongoing? When this is TRUE
+  /* Is another read ongoing? When this is TRUE 
      then `send_msg' is owned by the reader. */
   Boolean read_active;
-
+  
   /* Is another write ongoing? When this is TRUE
      then `recv_buf' is owned by the writer. */
   Boolean write_active;
@@ -514,7 +550,7 @@ typedef struct SshInterceptorIpmProcEntryRec
   /* Input message buffer */
   size_t recv_buf_size;
   unsigned char *recv_buf;
-
+  
 } SshInterceptorIpmProcEntryStruct, *SshInterceptorIpmProcEntry;
 
 
@@ -529,8 +565,8 @@ typedef struct SshInterceptorProcEntryRec
 
   /* Is an userspace application using this entry */
   Boolean open;
-
-  /* Is another read or write ongoing? When this is TRUE
+  
+  /* Is another read or write ongoing? When this is TRUE 
      then `buf' is owned by the reader/writer. */
   Boolean active;
 
@@ -633,7 +669,7 @@ struct SshInterceptorRec
   struct proc_dir_entry *proc_dir;
 
   SshInterceptorIpmProcEntryStruct ipm_proc_entry;
-
+  
   SshInterceptorProcEntryStruct version_proc_entry;
 
   /* Main mutex for interceptor use */
@@ -759,16 +795,16 @@ ssh_interceptor_packet_align(SshInterceptorPacket packet, size_t offset);
 /* Verify that `skbp' has enough headroom to be sent out through `skbp->dev'.
    On failure this frees `skbp' and returns NULL. */
 struct sk_buff *
-ssh_interceptor_packet_verify_headroom(struct sk_buff *skbp,
+ssh_interceptor_packet_verify_headroom(struct sk_buff *skbp, 
 				       size_t media_header_len);
 
-void
-ssh_interceptor_packet_return_dst_entry(SshInterceptor interceptor,
+void 
+ssh_interceptor_packet_return_dst_entry(SshInterceptor interceptor, 
 					SshUInt32 dst_entry_id,
 					SshInterceptorPacket pp,
 					Boolean remove_only);
-SshUInt32
-ssh_interceptor_packet_cache_dst_entry(SshInterceptor interceptor,
+SshUInt32 
+ssh_interceptor_packet_cache_dst_entry(SshInterceptor interceptor, 
 				       SshInterceptorPacket pp);
 
 Boolean

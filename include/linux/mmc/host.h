@@ -363,6 +363,9 @@ struct mmc_host {
 	} embedded_sdio_data;
 #endif
 
+	struct device *bus_dev;
+	struct device *host_dev;
+
 	struct mmc_async_req	*areq;		/* active async req */
 
 	unsigned long		private[0] ____cacheline_aligned;

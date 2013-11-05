@@ -45,15 +45,14 @@
 #include <asm/uaccess.h>
 
 #include "queue.h"
+
+#include <mach/dev.h>
+
 #include "../core/core.h"
 
 MODULE_ALIAS("mmc:block");
 
 #if defined(CONFIG_MMC_CPRM)
-#define MMC_ENABLE_CPRM
-#endif
-
-#ifdef MMC_ENABLE_CPRM
 #include "cprmdrv_samsung.h"
 #include <linux/ioctl.h>
 #define MMC_IOCTL_BASE		0xB3 /* Same as MMC block device major number */
@@ -341,9 +340,8 @@ struct scatterlist *mmc_blk_get_sg(struct mmc_card *card,
 	int max_seg_size, len;
 
 	sl = kmalloc(sizeof(struct scatterlist) * card->host->max_segs, GFP_KERNEL);
-	if (!sl) {
+	if (!sl)
 		return NULL;
-	}
 
 	sg = (struct scatterlist *)sl;
 	sg_init_table(sg, card->host->max_segs);
@@ -373,6 +371,7 @@ struct scatterlist *mmc_blk_get_sg(struct mmc_card *card,
 
 	return sl;
 }
+
 static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 	struct mmc_ioc_cmd __user *ic_ptr)
 {
@@ -384,6 +383,7 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 	struct mmc_request mrq = {0};
 	struct scatterlist *sg = 0;
 	int err = 0;
+	struct mmc_host *host;	
 
 	/*
 	 * The caller must have CAP_SYS_RAWIO, and must be calling this on the
@@ -409,16 +409,21 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 		goto cmd_done;
 	}
 
+	if( idata->ic.ext_flags )
+	{
+		switch( idata->ic.ext_flags )
+		{
+			case MMC_IOC_EXT_SET_CLOCK:
+				mmc_set_clock(card->host, idata->ic.arg);
+				break;
+			defualt: printk(KERN_ERR"Unkown ext flags on mmc_ioc_cmd\n");
+		}
+		goto cmd_done;
+	}
+
 	cmd.opcode = idata->ic.opcode;
 	cmd.arg = idata->ic.arg;
 	cmd.flags = idata->ic.flags;
-
-	if( cmd.opcode == MMC_IOC_CLOCK )
-	{
-		mmc_set_clock(card->host, cmd.arg);
-		err = 0;
-		goto cmd_done;
-	}
 
 	if (idata->buf_bytes) {
 		int len;
@@ -426,7 +431,6 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 		data.blocks = idata->ic.blocks;
 
 		sg = mmc_blk_get_sg(card, idata->buf, &len, idata->buf_bytes);
-
 		data.sg = sg;
 		data.sg_len = len;
 
@@ -461,6 +465,10 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 	mrq.cmd = &cmd;
 
 	mmc_claim_host(card->host);
+
+	host = card->host;
+	if (host->bus_dev && host->host_dev)
+		dev_lock(host->bus_dev, host->host_dev, 160160);
 
 	if (idata->ic.is_acmd) {
 		err = mmc_app_cmd(card->host, card);
@@ -505,13 +513,14 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 
 cmd_rel_host:
 	mmc_release_host(card->host);
+	if (host->bus_dev && host->host_dev)
+		dev_unlock(host->bus_dev, host->host_dev);
 
 cmd_done:
 	if (md)
 		mmc_blk_put(md);
 	if (sg)
 		kfree(sg);
-
 	kfree(idata->buf);
 	kfree(idata);
 	return err;
@@ -520,9 +529,10 @@ cmd_done:
 static int mmc_blk_ioctl(struct block_device *bdev, fmode_t mode,
 	unsigned int cmd, unsigned long arg)
 {
-#ifdef MMC_ENABLE_CPRM
+#if defined(CONFIG_MMC_CPRM)
 	struct mmc_blk_data *md = bdev->bd_disk->private_data;
 	struct mmc_card *card = md->queue.card;
+
 	static int i;
 	static unsigned long temp_arg[16] = {0};
 #endif
@@ -530,7 +540,7 @@ static int mmc_blk_ioctl(struct block_device *bdev, fmode_t mode,
 	if (cmd == MMC_IOC_CMD)
 		ret = mmc_blk_ioctl_cmd(bdev, (struct mmc_ioc_cmd __user *)arg);
 
-#ifdef MMC_ENABLE_CPRM
+#if defined(CONFIG_MMC_CPRM)
 	printk(KERN_DEBUG " %s ], %x ", __func__, cmd);
 
 	switch (cmd) {
@@ -538,6 +548,7 @@ static int mmc_blk_ioctl(struct block_device *bdev, fmode_t mode,
 		cprm_ake_retry_flag = 1;
 		ret = 0;
 		break;
+
 	case MMC_IOCTL_GET_SECTOR_COUNT: {
 		int size = 0;
 
@@ -548,6 +559,7 @@ static int mmc_blk_ioctl(struct block_device *bdev, fmode_t mode,
 		return copy_to_user((void *)arg, &size, sizeof(u64));
 		}
 		break;
+
 	case ACMD13:
 	case ACMD18:
 	case ACMD25:
@@ -559,49 +571,45 @@ static int mmc_blk_ioctl(struct block_device *bdev, fmode_t mode,
 	case ACMD48: {
 		struct cprm_request *req = (struct cprm_request *)arg;
 
-		printk(KERN_DEBUG "[%s]: cmd [%x]\n", __func__, cmd);
-			if (cmd == ACMD43) {
-				printk(KERN_DEBUG"storing acmd43 arg[%d] = %ul\n"
-									, i, (unsigned int)req->arg);
-				temp_arg[i] = req->arg;
-				i++;
-				if(i >= 16){
-					printk(KERN_DEBUG"reset acmd43 i = %d\n",
-						i);
+		printk(KERN_DEBUG "%s:cmd [%x]\n",
+			__func__, cmd);
+
+		if (cmd == ACMD43) {
+			printk(KERN_DEBUG"storing acmd43 arg[%d] = %ul\n",
+				i, (unsigned int)req->arg);
+			temp_arg[i] = req->arg;
+			i++;
+			if (i >= 16) {
+				printk(KERN_DEBUG"reset acmd43 i = %d\n", i);
 					i = 0;
-				}
 			}
+		}
 
-			
-			if (cmd == ACMD45 && cprm_ake_retry_flag == 1) {
-				cprm_ake_retry_flag = 0;
-				printk(KERN_DEBUG"ACMD45.. I'll call ACMD43 and ACMD44 first\n");
+		if (cmd == ACMD45 && cprm_ake_retry_flag == 1) {
+			cprm_ake_retry_flag = 0;
+			printk(KERN_DEBUG"ACMD45.. I'll call ACMD43 and ACMD44 first\n");
 
-				for (i = 0; i < 16; i++) {
-					printk(KERN_DEBUG"calling ACMD43 with arg[%d] = %ul\n",
-										i, (unsigned int)temp_arg[i]);
-					if (stub_sendcmd(card,
-						ACMD43, temp_arg[i],
-						 512, NULL) < 0) {
-
-						printk(KERN_DEBUG"error ACMD43 %d\n", i);
-						return -EINVAL;
-					}
-				}
-
-
-				printk(KERN_DEBUG"calling ACMD44\n");
-				if (stub_sendcmd(card, ACMD44, 0, 8, NULL) < 0)
-				{
-
-					printk(KERN_DEBUG"error in ACMD44 %d\n",
-						i);
+			for (i = 0; i < 16; i++) {
+				printk(KERN_DEBUG"calling ACMD43 with arg[%d] = %ul\n",
+					i, (unsigned int)temp_arg[i]);
+				if (stub_sendcmd(card, ACMD43, temp_arg[i],
+					512, NULL) < 0) {
+					printk(KERN_DEBUG"error ACMD43 %d\n",
+						 i);
 					return -EINVAL;
 				}
-				
 			}
-		return stub_sendcmd(card, req->cmd, req->arg, \
-				req->len, req->buff);
+
+			printk(KERN_DEBUG"calling ACMD44\n");
+			if (stub_sendcmd(card, ACMD44, 0, 8, NULL) < 0) {
+
+				printk(KERN_DEBUG"error in ACMD44 %d\n",
+					i);
+				return -EINVAL;
+			}
+		}
+		return stub_sendcmd(card, req->cmd,
+					req->arg, req->len, req->buff);
 		}
 		break;
 
@@ -1121,9 +1129,9 @@ static int mmc_blk_err_check(struct mmc_card *card,
 	 */
 	if (brq->sbc.error || brq->cmd.error || brq->stop.error ||
 	    brq->data.error) {
-#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_P4NOTE) || \
+#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) || \
 		defined(CONFIG_MACH_C1_USA_ATT) \
-		|| defined(CONFIG_MACH_GRANDE) || defined(CONFIG_MACH_IRON)
+		|| defined(CONFIG_MACH_GRANDE) || defined(CONFIG_MACH_IRON) || defined(CONFIG_MACH_TAB3)
 		if (mmc_card_mmc(card)) {
 			pr_err("brq->sbc.opcode=%d,"
 					"brq->cmd.opcode=%d.\n",
@@ -1991,6 +1999,15 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *rqc)
 				break;
 			}
 			/*
+			 * case : SDcard Sector 0 read timeout even single read
+			 * skip reading other blocks.
+			 */
+			if (mmc_card_sd(card) &&
+					(unsigned)blk_rq_pos(req) == 0 &&
+					brq->data.error == -ETIMEDOUT)
+				goto cmd_abort;
+
+			/*
 			 * After an error, we redo I/O one sector at a
 			 * time, so we only reach here after trying to
 			 * read a single sector.
@@ -2051,9 +2068,9 @@ snd_packed_rd:
 			spin_unlock_irq(&md->lock);
 		}
 	}
-#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_P4NOTE) || \
+#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) || \
 		defined(CONFIG_MACH_C1_USA_ATT) \
-		|| defined(CONFIG_MACH_GRANDE) || defined(CONFIG_MACH_IRON)
+		|| defined(CONFIG_MACH_GRANDE) || defined(CONFIG_MACH_IRON) || defined(CONFIG_MACH_TAB3)
 	/*
 	 * It's for Engineering DEBUGGING only
 	 * This has to be removed before PVR(guessing)
@@ -2108,6 +2125,7 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	int ret;
 	struct mmc_blk_data *md = mq->data;
 	struct mmc_card *card = md->queue.card;
+	struct mmc_host *host = card->host;	
 
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 	if (mmc_bus_needs_resume(card->host)) {
@@ -2116,9 +2134,12 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	}
 #endif
 
-	if (req && !mq->mqrq_prev->req)
+	if (req && !mq->mqrq_prev->req) {
 		/* claim host only for the first request */
 		mmc_claim_host(card->host);
+		if (host->bus_dev && host->host_dev)
+			dev_lock(host->bus_dev, host->host_dev, 160160);
+	}
 
 	ret = mmc_blk_part_switch(card, md);
 	if (ret) {
@@ -2145,9 +2166,12 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	}
 
 out:
-	if (!req)
+	if (!req) {
 		/* release host only when there are no more requests */
 		mmc_release_host(card->host);
+		if (host->bus_dev && host->host_dev)
+			dev_unlock(host->bus_dev, host->host_dev);
+	}
 	return ret;
 }
 
@@ -2449,6 +2473,34 @@ static const struct mmc_fixup blk_fixups[] =
 		  MMC_QUIRK_MOVINAND_SECURE),
 	MMC_FIXUP("VZL00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
 		  MMC_QUIRK_MOVINAND_SECURE),
+
+	/* Some TLC movinand cards needs Sync operation for performance*/ 
+	MMC_FIXUP("S5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("J5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("J5U00B", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("J5U00A", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("L7U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("N5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("K5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("K5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("K7U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("M4G1YC", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("M8G1WA", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("MAG2WA", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("MBG4WA", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
 
 	END_FIXUP
 };

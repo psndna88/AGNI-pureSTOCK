@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP PVTCP Server
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -217,3 +217,4 @@ PvskSetFlag(struct PvtcpSock *pvsk,
 int PvtcpOffSockInit(PvtcpSock *pvsk, CommChannel channel);
 
 #endif // _PVTCP_OFF_H_
+

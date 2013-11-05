@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Hypervisor Support
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -71,9 +71,9 @@
  *
  */
 
-#define MVP_VERSION_CODE 16800005
+#define MVP_VERSION_CODE 16800037
 #define MVP_VERSION_CODE_FORMATSTR       "%s_%d"
-#define MVP_VERSION_CODE_FORMATARGSV(V_) MVP_STRINGIFY(1.1.3), (V_)
+#define MVP_VERSION_CODE_FORMATARGSV(V_) MVP_STRINGIFY(1.5.0), (V_)
 #define MVP_VERSION_CODE_FORMATARGS             \
    MVP_VERSION_CODE_FORMATARGSV(MVP_VERSION_CODE)
 
@@ -84,7 +84,7 @@
 #define MVP_VERSION_FORMATARGS      \
    MVP_VERSION_CODE_FORMATARGS,     \
    __DATE__,                        \
-   MVP_STRINGIFY(5c995a85564cd060562bdbcd1422709e7a326301),     \
+   MVP_STRINGIFY(b9dde5cc454d937417c6454b5620ca203af963e9),     \
    MVP_STRINGIFY()
 
 #define MvpVersion_Map(map_, version_)           \
@@ -110,7 +110,10 @@
  * determined, they must be entered here. Then the various APIs can
  * remove code that has been obsoleted before the new minimum versions.
  */
-#define VVP_VERSION_CODE_MIN 0x0100020e
+#define VVP_VERSION_CODE_MIN 16800015
 #define OEK_VERSION_CODE_MIN 0x01000001
+
+#define BALLOON_WATCHDOG     16800010
+#define GUEST_SAME_MINFREE   16800033
 
 #endif /* _MVP_VERSION_H_ */

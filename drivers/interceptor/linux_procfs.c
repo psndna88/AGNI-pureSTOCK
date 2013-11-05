@@ -6,7 +6,7 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
- */
+ */ 
 
 /*
  * linux_procfs.c
@@ -66,7 +66,7 @@ interceptor_proc_entry_fop_open(SshInterceptorProcEntry entry,
     {
       write_unlock(&entry->lock);
       return -EBUSY;
-    }
+    }    
 
   /* Increment module ref to prohibit module unloading. */
   if (!ssh_linux_module_inc_use_count())
@@ -112,8 +112,8 @@ static int interceptor_proc_entry_iop_permission(struct inode *inode,
 {
   if (op & MAY_EXEC)
     return -EACCES;
-
-  if ((op & (MAY_READ | MAY_WRITE)) &&
+  
+  if ((op & (MAY_READ | MAY_WRITE)) && 
 #ifdef LINUX_HAS_TASK_CRED_STRUCT
       current_euid() == (uid_t) ssh_procfs_uid
 #else /* LINUX_HAS_TASK_CRED_STRUCT */
@@ -123,7 +123,7 @@ static int interceptor_proc_entry_iop_permission(struct inode *inode,
     {
       return 0;
     }
-
+  
   return -EACCES;
 }
 
@@ -146,7 +146,7 @@ interceptor_ipm_proc_entry_fop_read(struct file *file,
   ssize_t msg_len;
 
   write_lock(&interceptor->ipm_proc_entry.lock);
-
+  
   /* Allow only one read at a time. */
   if (interceptor->ipm_proc_entry.read_active)
     {
@@ -161,25 +161,25 @@ interceptor_ipm_proc_entry_fop_read(struct file *file,
   /* Continue from the partial message. */
   if (interceptor->ipm_proc_entry.send_msg != NULL)
     msg = interceptor->ipm_proc_entry.send_msg;
-
-
- retry:
+  
+  
+ retry:  
   if (msg == NULL)
     {
       /* Get the next message from send queue. */
       local_bh_disable();
       write_lock(&interceptor->ipm.lock);
-
+      
       /* Take next message from send queue. */
       if (interceptor->ipm.send_queue != NULL)
 	{
 	  msg = interceptor->ipm.send_queue;
-
+	  
 	  interceptor->ipm.send_queue = msg->next;
 	  if (msg->next)
 	    msg->next->prev = NULL;
 	  msg->next = NULL;
-
+	  
 	  if (msg == interceptor->ipm.send_queue_tail)
 	    interceptor->ipm.send_queue_tail = msg->next;
 
@@ -189,11 +189,11 @@ interceptor_ipm_proc_entry_fop_read(struct file *file,
               interceptor->ipm.send_queue_num_unreliable--;
             }
 	}
-
+      
       write_unlock(&interceptor->ipm.lock);
       local_bh_enable();
     }
-
+  
   if (msg == NULL)
     {
       /* Non-blocking mode, fail read. */
@@ -202,13 +202,13 @@ interceptor_ipm_proc_entry_fop_read(struct file *file,
 	  write_lock(&interceptor->ipm_proc_entry.lock);
 	  interceptor->ipm_proc_entry.read_active = FALSE;
 	  write_unlock(&interceptor->ipm_proc_entry.lock);
-
+	  
 	  return -EAGAIN;
 	}
-
+      
       /* Blocking mode, sleep until a message or a signal arrives. */
       interruptible_sleep_on(&interceptor->ipm_proc_entry.wait_queue);
-
+      
       if (signal_pending(current))
 	{
 	  SSH_LINUX_PROCFS_DEBUG("interceptor_ipm_proc_entry_fop_read: "
@@ -217,20 +217,20 @@ interceptor_ipm_proc_entry_fop_read(struct file *file,
 	  write_lock(&interceptor->ipm_proc_entry.lock);
 	  interceptor->ipm_proc_entry.read_active = FALSE;
 	  write_unlock(&interceptor->ipm_proc_entry.lock);
-
+	  
 	  return -ERESTARTSYS;
 	}
 
       goto retry;
     }
-
+  
   interceptor->ipm_proc_entry.send_msg = msg;
 
   /* Copy message to userspace. */
   msg_len = msg->len - msg->offset;
   if (len < msg_len)
     msg_len = len;
-
+  
   if (copy_to_user(buf, msg->buf + msg->offset, msg_len))
     {
       SSH_LINUX_PROCFS_WARN("interceptor_ipm_proc_entry_fop_read: "
@@ -244,9 +244,9 @@ interceptor_ipm_proc_entry_fop_read(struct file *file,
       interceptor_ipm_message_free(interceptor, msg);
       return -EFAULT;
     }
-
+  
   msg->offset += msg_len;
-
+  
   /* Whole message was sent. */
   if (msg->offset >= msg->len)
     {
@@ -283,16 +283,16 @@ interceptor_ipm_proc_entry_fop_write(struct file *file,
     write_len = SSH_LINUX_PROCFS_IPM_WRITE_MAX_LENGTH;
   else
     write_len = len;
-
+  
   /* Refuse to receive any data if send queue is getting full.
      Note this here checks if the IPM message freelist is empty,
      which indicates that all IPM messages are in the send queue.
-
+     
      Allowing a new write in such condition could cause a number
      of reply IPM messages to be queued for sending and this would
      cause either unreliable IPM messages to be discarded from the
      send queue or an emergency mallocation of a reliable IPM message.
-
+     
      A better way to solve this problem is to refuse this write
      operation and force the application to read messages from the send
      queue before allowing another write. */
@@ -303,14 +303,14 @@ interceptor_ipm_proc_entry_fop_write(struct file *file,
     write_len = 0;
   read_unlock(&interceptor->ipm.lock);
   local_bh_enable();
-
+  
   if (write_len == 0)
     return -EAGAIN;
 
   /* Check if there is another write going on. */
  retry:
   write_lock(&interceptor->ipm_proc_entry.lock);
-
+  
   if (interceptor->ipm_proc_entry.write_active)
     {
       write_unlock(&interceptor->ipm_proc_entry.lock);
@@ -321,17 +321,17 @@ interceptor_ipm_proc_entry_fop_write(struct file *file,
 
       /* Blocking mode, wait until other writes are done. */
       interruptible_sleep_on(&interceptor->ipm_proc_entry.wait_queue);
-
+      
       if (signal_pending(current))
 	{
 	  SSH_LINUX_PROCFS_DEBUG("interceptor_ipm_proc_entry_fop_write: "
 				 "-ERESTARTSYS\n");
 	  return -ERESTARTSYS;
 	}
-
+      
       goto retry;
     }
-
+  
   interceptor->ipm_proc_entry.write_active = TRUE;
   write_unlock(&interceptor->ipm_proc_entry.lock);
 
@@ -344,7 +344,7 @@ interceptor_ipm_proc_entry_fop_write(struct file *file,
          allowed write size. */
       user_buf = (char *) (buf + total_len);
 
-      recv_buf = (interceptor->ipm_proc_entry.recv_buf
+      recv_buf = (interceptor->ipm_proc_entry.recv_buf 
 		  + interceptor->ipm_proc_entry.recv_len);
       recv_len = (interceptor->ipm_proc_entry.recv_buf_size
 		  - interceptor->ipm_proc_entry.recv_len);
@@ -355,20 +355,20 @@ interceptor_ipm_proc_entry_fop_write(struct file *file,
 
       if (recv_len > (write_len - total_len))
 	recv_len = (write_len - total_len);
-
+      
       if (copy_from_user(recv_buf, user_buf, recv_len))
 	{
 	  SSH_LINUX_PROCFS_WARN("interceptor_ipm_proc_entry_fop_write: "
 				"copy_from_user failed, dropping message\n");
-
+	  
 	  write_lock(&interceptor->ipm_proc_entry.lock);
-	  interceptor->ipm_proc_entry.write_active = FALSE;
+	  interceptor->ipm_proc_entry.write_active = FALSE;	  
 	  write_unlock(&interceptor->ipm_proc_entry.lock);
-
+	  
 	  wake_up_interruptible(&interceptor->ipm_proc_entry.wait_queue);
 	  return -EFAULT;
 	}
-
+  
       total_len += recv_len;
       interceptor->ipm_proc_entry.recv_len += recv_len;
 
@@ -376,7 +376,7 @@ interceptor_ipm_proc_entry_fop_write(struct file *file,
       consumed = 0;
       while (consumed < interceptor->ipm_proc_entry.recv_len)
 	{
-	  msg_len =
+	  msg_len = 
 	    ssh_interceptor_receive_from_ipm(interceptor->ipm_proc_entry.
 					     recv_buf + consumed,
 					     interceptor->ipm_proc_entry.
@@ -399,7 +399,7 @@ interceptor_ipm_proc_entry_fop_write(struct file *file,
 	    memmove(interceptor->ipm_proc_entry.recv_buf,
 		    interceptor->ipm_proc_entry.recv_buf + consumed,
 		    interceptor->ipm_proc_entry.recv_len - consumed);
-
+	  
 	  interceptor->ipm_proc_entry.recv_len -= consumed;
 	}
 
@@ -407,7 +407,7 @@ interceptor_ipm_proc_entry_fop_write(struct file *file,
     }
 
   write_lock(&interceptor->ipm_proc_entry.lock);
-  interceptor->ipm_proc_entry.write_active = FALSE;
+  interceptor->ipm_proc_entry.write_active = FALSE;	  
   write_unlock(&interceptor->ipm_proc_entry.lock);
 
   if (total_len == 0)
@@ -416,18 +416,18 @@ interceptor_ipm_proc_entry_fop_write(struct file *file,
                             "Out of receive buffer space\n");
       return -ENOMEM;
     }
-
+  
   SSH_ASSERT(total_len <= write_len);
   return total_len;
 }
 
-static unsigned int
+static unsigned int 
 interceptor_ipm_proc_entry_fop_poll(struct file *file,
 				    struct poll_table_struct *table)
 {
   unsigned int mask = 0;
   SshInterceptor interceptor = file->private_data;
-
+  
   poll_wait(file, &interceptor->ipm_proc_entry.wait_queue, table);
 
   /* Check if there are messages in the send queue. */
@@ -440,12 +440,12 @@ interceptor_ipm_proc_entry_fop_poll(struct file *file,
   /* Check if there is a message pending for sending. */
   if (interceptor->ipm.send_queue != NULL)
     mask |= (POLLIN | POLLRDNORM);
-
+  
   /* /proc entry is always writable, unless send queue is too long. */
   if (interceptor->ipm.msg_freelist != NULL
       || interceptor->ipm.msg_allocated < SSH_LINUX_MAX_IPM_MESSAGES)
     mask |= (POLLOUT | POLLWRNORM);
-
+  
   read_unlock(&interceptor->ipm.lock);
   local_bh_enable();
 
@@ -472,7 +472,7 @@ interceptor_ipm_proc_entry_fop_open(struct inode *inode,
       write_unlock(&ssh_interceptor_context->ipm_proc_entry.lock);
       SSH_LINUX_PROCFS_DEBUG("interceptor_ipm_proc_entry_fop_open: -EBUSY\n");
       return -EBUSY;
-    }
+    }    
 
   /* Increment module ref to prohibit module unloading. */
   if (!ssh_linux_module_inc_use_count())
@@ -481,19 +481,19 @@ interceptor_ipm_proc_entry_fop_open(struct inode *inode,
       SSH_LINUX_PROCFS_DEBUG("interceptor_ipm_proc_entry_fop_open: -EBUSY\n");
       return -EBUSY;
     }
-
+  
   file->private_data = ssh_interceptor_context;
 
   ssh_interceptor_context->ipm_proc_entry.open = TRUE;
 
   /* Clear receive buffer. */
   ssh_interceptor_context->ipm_proc_entry.recv_len = 0;
-
+  
   write_unlock(&ssh_interceptor_context->ipm_proc_entry.lock);
-
+  
   interceptor_ipm_open(ssh_interceptor_context);
   ssh_interceptor_notify_ipm_open(ssh_interceptor_context);
-
+ 
   return 0;
 }
 
@@ -504,16 +504,16 @@ interceptor_ipm_proc_entry_fop_release(struct inode *inode,
   SshInterceptor interceptor = file->private_data;
   SshInterceptorIpmMsg msg;
 
-  ssh_interceptor_notify_ipm_close(interceptor);
+  ssh_interceptor_notify_ipm_close(interceptor); 
   interceptor_ipm_close(interceptor);
-
+  
   write_lock(&interceptor->ipm_proc_entry.lock);
 
   interceptor->ipm_proc_entry.open = FALSE;
-
+  
   /* Release the module reference. */
   ssh_linux_module_dec_use_count();
-
+  
   /* Clear receive buffer. */
   interceptor->ipm_proc_entry.recv_len = 0;
 
@@ -524,8 +524,8 @@ interceptor_ipm_proc_entry_fop_release(struct inode *inode,
   write_unlock(&interceptor->ipm_proc_entry.lock);
 
   if (msg)
-    interceptor_ipm_message_free(interceptor, msg);
-
+    interceptor_ipm_message_free(interceptor, msg);  
+  
   return 0;
 }
 
@@ -551,11 +551,11 @@ interceptor_ipm_proc_entry_init(SshInterceptor interceptor)
   write_lock(&interceptor->ipm_proc_entry.lock);
   interceptor->ipm_proc_entry.open = TRUE;
   interceptor->ipm_proc_entry.write_active = TRUE;
-  interceptor->ipm_proc_entry.read_active = TRUE;
+  interceptor->ipm_proc_entry.read_active = TRUE;  
   write_unlock(&interceptor->ipm_proc_entry.lock);
 
   interceptor->ipm_proc_entry.recv_buf_size = SSH_LINUX_IPM_RECV_BUFFER_SIZE;
-  interceptor->ipm_proc_entry.recv_buf =
+  interceptor->ipm_proc_entry.recv_buf = 
     ssh_malloc(interceptor->ipm_proc_entry.recv_buf_size);
   if (interceptor->ipm_proc_entry.recv_buf == NULL)
     return FALSE;
@@ -596,7 +596,7 @@ interceptor_ipm_proc_entry_uninit(SshInterceptor interceptor)
   interceptor->ipm_proc_entry.recv_buf = NULL;
 
   /* This should be safe to do without locking as interceptor code
-     does not refer `interceptor->ipm_proc_entry.entry' except in
+     does not refer `interceptor->ipm_proc_entry.entry' except in 
      init/uninit. */
   if (interceptor->ipm_proc_entry.entry != NULL)
     remove_proc_entry(interceptor->ipm_proc_entry.entry->name,
@@ -633,7 +633,7 @@ interceptor_version_proc_entry_fop_read(struct file *file,
 		 "VPNClient built on " __DATE__ " " __TIME__ "\n");
       interceptor->version_proc_entry.buf_len = version_len;
     }
-
+  
   else if (*pos >= interceptor->version_proc_entry.buf_len)
     {
       interceptor->version_proc_entry.buf_len = 0;
@@ -649,7 +649,7 @@ interceptor_version_proc_entry_fop_read(struct file *file,
   if (len < version_len)
     version_len = len;
 
-  if (copy_to_user(buf, interceptor->version_proc_entry.buf + *pos,
+  if (copy_to_user(buf, interceptor->version_proc_entry.buf + *pos, 
 		   version_len))
     {
       interceptor->version_proc_entry.buf_len = 0;
@@ -696,7 +696,7 @@ interceptor_version_proc_entry_init(SshInterceptor interceptor)
 {
   /* Assert that parent dir exists. */
   SSH_ASSERT(interceptor->proc_dir != NULL);
-
+  
   /* Initialize proc entry structure. */
   rwlock_init(&interceptor->version_proc_entry.lock);
   interceptor->version_proc_entry.buf_len = 0;
@@ -709,13 +709,13 @@ interceptor_version_proc_entry_init(SshInterceptor interceptor)
   write_unlock(&interceptor->version_proc_entry.lock);
 
   /* Create entry to procfs. */
-  interceptor->version_proc_entry.entry =
-    create_proc_entry(SSH_PROC_VERSION, S_IFREG | S_IRUSR,
+  interceptor->version_proc_entry.entry = 
+    create_proc_entry(SSH_PROC_VERSION, S_IFREG | S_IRUSR, 
 		      interceptor->proc_dir);
-
+  
   if (interceptor->version_proc_entry.entry == NULL)
     return FALSE;
-
+  
 #ifdef LINUX_HAS_PROC_DIR_ENTRY_OWNER
   interceptor->version_proc_entry.entry->owner = THIS_MODULE;
 #endif
@@ -743,7 +743,7 @@ interceptor_version_proc_entry_uninit(SshInterceptor interceptor)
 
   /* This should be safe to do without locking as interceptor code
      does not refer `interceptor->version_proc_entry.entry' except in
-     init/uninit. */
+     init/uninit. */  
   remove_proc_entry(interceptor->version_proc_entry.entry->name,
 		    interceptor->proc_dir);
   interceptor->version_proc_entry.entry = NULL;
@@ -760,7 +760,7 @@ Boolean ssh_interceptor_proc_init(SshInterceptor interceptor)
   snprintf(name, sizeof(name), "%s%s", SSH_PROC_ROOT, ssh_device_suffix);
 
   interceptor->proc_dir = create_proc_entry(name, S_IFDIR, NULL);
-
+  
   if (interceptor->proc_dir == NULL)
     goto error;
 

@@ -479,6 +479,7 @@ static struct android_usb_function ptp_function = {
 	.init		= ptp_function_init,
 	.cleanup	= ptp_function_cleanup,
 	.bind_config	= ptp_function_bind_config,
+	.ctrlrequest    = mtp_function_ctrlrequest,
 };
 
 
@@ -724,6 +725,7 @@ static int mass_storage_function_init(struct android_usb_function *f,
 			config->fsg.luns[i].cdrom = 1;
 			config->fsg.luns[i].removable = 1;
 			config->fsg.luns[i].nofua = 1;
+			config->fsg.luns[i].ro=0;  // Read /Write
 		}
 
 		common = fsg_common_init(NULL, cdev, &config->fsg);
@@ -888,6 +890,41 @@ static ssize_t mass_storage_product_store(struct device *dev,
 static DEVICE_ATTR(product_string, S_IRUGO | S_IWUSR,
 					mass_storage_product_show,
 					mass_storage_product_store);
+
+static ssize_t sua_version_info_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct android_usb_function *f = dev_get_drvdata(dev);
+	struct mass_storage_function_config *config = f->config;
+	int ret;
+
+	ret = sprintf(buf, "%s\r\n",config->common->version_string);
+	printk(KERN_DEBUG "usb: %s version %s\n", __func__, buf);
+	return ret;
+}
+
+/*
+ /sys/class/android_usb/android0/f_mass_storage/sua_version_info
+*/
+static ssize_t sua_version_info_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct android_usb_function *f = dev_get_drvdata(dev);
+	struct mass_storage_function_config *config = f->config;
+	int len = 0;
+
+	if (size < sizeof(config->common->version_string))
+		memcpy(config->common->version_string, buf, size);
+	else
+	{
+		len = sizeof(config->common->version_string);
+		memcpy(config->common->version_string, buf, len-1);
+	}
+	return size;
+}
+
+static DEVICE_ATTR(sua_version_info,  S_IRUGO | S_IWUSR,
+		sua_version_info_show, sua_version_info_store);
 #endif
 
 static struct device_attribute *mass_storage_function_attributes[] = {
@@ -895,6 +932,7 @@ static struct device_attribute *mass_storage_function_attributes[] = {
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	&dev_attr_vendor_string,
 	&dev_attr_product_string,
+	&dev_attr_sua_version_info,
 #endif
 	NULL
 };

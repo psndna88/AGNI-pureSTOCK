@@ -8,17 +8,48 @@
 
 /* charger cable state */
 extern bool is_cable_attached;
+#ifdef CONFIG_MACH_GC1
+extern bool is_jig_attached;
+#endif
+
+#ifdef CONFIG_MACH_GD2
+static void camera_ic_poweroff(void)
+{
+        if (system_rev < 5) {
+		gpio_direction_output(D4_COLD, GPIO_LEVEL_HIGH);
+		msleep(100);
+		gpio_direction_output(D4_COLD, GPIO_LEVEL_LOW);
+        } else {
+		gpio_direction_output(D4_COLD, GPIO_LEVEL_LOW);
+		msleep(100);
+		gpio_direction_output(D4_COLD, GPIO_LEVEL_HIGH);
+        }
+	pr_info("%s wait for 260ms", __func__);
+	mdelay(260);
+}
+#endif
+
 static void sec_power_off(void)
 {
 	int poweroff_try = 0;
 
 	local_irq_disable();
-
+#ifdef CONFIG_MACH_GD2
+	camera_ic_poweroff();
+#endif
 	pr_emerg("%s : cable state=%d\n", __func__, is_cable_attached);
+#ifdef CONFIG_MACH_GC1
+	pr_emerg("%s : jig state=%d\n", __func__, is_jig_attached);
+#endif
 
 	while (1) {
 		/* Check reboot charging */
+#ifdef CONFIG_MACH_GC1
+		if (is_jig_attached || is_cable_attached
+			|| (poweroff_try >= 5)) {
+#else
 		if (is_cable_attached || (poweroff_try >= 5)) {
+#endif
 			pr_emerg
 			    ("%s: charger connected(%d) or power"
 			     "off failed(%d), reboot!\n",
@@ -64,6 +95,7 @@ static void sec_power_off(void)
 #define REBOOT_MODE_RECOVERY	4
 #define REBOOT_MODE_FOTA	5
 #define REBOOT_MODE_FOTA_BL	6	/* update bootloader */
+#define REBOOT_MODE_SECURE	7	/* image secure check fail */
 
 #define REBOOT_SET_PREFIX	0xabc00000
 #define REBOOT_SET_DEBUG	0x000d0000
@@ -73,7 +105,9 @@ static void sec_power_off(void)
 static void sec_reboot(char str, const char *cmd)
 {
 	local_irq_disable();
-
+#ifdef CONFIG_MACH_GD2
+	camera_ic_poweroff();
+#endif
 	pr_emerg("%s (%d, %s)\n", __func__, str, cmd ? cmd : "(null)");
 
 	writel(0x12345678, S5P_INFORM2);	/* Don't enter lpm mode */
@@ -84,7 +118,10 @@ static void sec_reboot(char str, const char *cmd)
 		unsigned long value;
 		if (!strcmp(cmd, "fota"))
 			writel(REBOOT_MODE_PREFIX | REBOOT_MODE_FOTA,
-			       S5P_INFORM3);
+					S5P_INFORM3);
+		else if (!strcmp(cmd, "arm11_fota"))
+			writel(REBOOT_MODE_PREFIX | REBOOT_MODE_FOTA,
+					S5P_INFORM3);
 		else if (!strcmp(cmd, "fota_bl"))
 			writel(REBOOT_MODE_PREFIX | REBOOT_MODE_FOTA_BL,
 			       S5P_INFORM3);
@@ -96,6 +133,9 @@ static void sec_reboot(char str, const char *cmd)
 			       S5P_INFORM3);
 		else if (!strcmp(cmd, "upload"))
 			writel(REBOOT_MODE_PREFIX | REBOOT_MODE_UPLOAD,
+			       S5P_INFORM3);
+		else if (!strcmp(cmd, "secure"))
+			writel(REBOOT_MODE_PREFIX | REBOOT_MODE_SECURE,
 			       S5P_INFORM3);
 		else if (!strncmp(cmd, "debug", 5)
 			 && !kstrtoul(cmd + 5, 0, &value))

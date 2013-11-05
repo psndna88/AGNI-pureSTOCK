@@ -41,6 +41,7 @@
 #include <linux/proc_fs.h>
 #include <linux/wakelock.h>
 #include <linux/earlysuspend.h>
+#include <linux/hrtimer.h>
 #ifdef CONFIG_EXTCON
 #include <linux/extcon.h>
 #endif
@@ -49,12 +50,17 @@
 /*/////////////////////////	definition area		//////////////////////*/
 /*////////////////////////////////////////////////////////////////////////////*/
 
-#define __CONFIG_USE_TIMER__
 #define	__CONFIG_RSEN_LOST_PATCH__
 /* #define __CONFIG_MHL_SWING_LEVEL__ */
 #define	__CONFIG_SS_FACTORY__
+#ifdef CONFIG_MACH_GC2PD /* M project */
+#	define	__CONFIG_MHL_FORCE_ON_FACTORY__
+#endif
 #define	__CONFIG_MHL_DEBUG__
-#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_M3)
+#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_M3) \
+	|| defined(CONFIG_MACH_M0_DUOSCTC) || defined(CONFIG_MACH_KONA) \
+	|| defined(CONFIG_MACH_TAB3) || defined(CONFIG_MACH_ZEST) \
+	|| defined(CONFIG_MACH_GC2PD)
 #	define __CONFIG_MHL_VER_1_2__
 #else
 #	define __CONFIG_MHL_VER_1_1__
@@ -78,7 +84,7 @@
 int mhl_dbg_flag;
 #	define pr_debug(fmt, ...) \
 	do { \
-		if (unlikely(mhl_dbg_flag == 1)) { \
+		if (likely(mhl_dbg_flag == 1)) { \
 			printk(KERN_INFO fmt, ##__VA_ARGS__); \
 		} \
 	} while (0)
@@ -130,7 +136,7 @@ static struct mutex sii9234_irq_lock;
 int en_irq;
 #	define sii9234_enable_irq() \
 	do { \
-		sii9234_mutex_lock(&sii9234_irq_lock); \
+		mutex_lock(&sii9234_irq_lock); \
 		if (atomic_read(&sii9234->is_irq_enabled) == false) { \
 			atomic_set(&sii9234->is_irq_enabled, true); \
 			enable_irq(sii9234->pdata->mhl_tx_client->irq); \
@@ -140,12 +146,12 @@ int en_irq;
 			printk(KERN_INFO"%s() : irq is already enabled(%d)\n" \
 					, __func__, en_irq); \
 		} \
-		sii9234_mutex_unlock(&sii9234_irq_lock); \
+		mutex_unlock(&sii9234_irq_lock); \
 	} while (0)
 
 #	define sii9234_disable_irq() \
 	do { \
-		sii9234_mutex_lock(&sii9234_irq_lock); \
+		mutex_lock(&sii9234_irq_lock); \
 		if (atomic_read(&sii9234->is_irq_enabled) == true) { \
 			atomic_set(&sii9234->is_irq_enabled, false); \
 			disable_irq_nosync(sii9234->pdata->mhl_tx_client->irq);\
@@ -155,27 +161,27 @@ int en_irq;
 			printk(KERN_INFO"%s() : irq is already disabled(%d)\n"\
 					, __func__, en_irq); \
 		} \
-		sii9234_mutex_unlock(&sii9234_irq_lock); \
+		mutex_unlock(&sii9234_irq_lock); \
 	} while (0)
 #else
 #	define sii9234_enable_irq() \
 	do { \
-		sii9234_mutex_lock(&sii9234_irq_lock); \
+		mutex_lock(&sii9234_irq_lock); \
 		if (atomic_read(&sii9234->is_irq_enabled) == false) { \
 			atomic_set(&sii9234->is_irq_enabled, true); \
 			enable_irq(sii9234->pdata->mhl_tx_client->irq); \
 		} \
-		sii9234_mutex_unlock(&sii9234_irq_lock); \
+		mutex_unlock(&sii9234_irq_lock); \
 	} while (0)
 
 #	define sii9234_disable_irq() \
 	do { \
-		sii9234_mutex_lock(&sii9234_irq_lock); \
+		mutex_lock(&sii9234_irq_lock); \
 		if (atomic_read(&sii9234->is_irq_enabled) == true) { \
 			atomic_set(&sii9234->is_irq_enabled, false); \
 			disable_irq_nosync(sii9234->pdata->mhl_tx_client->irq);\
 		} \
-		sii9234_mutex_unlock(&sii9234_irq_lock); \
+		mutex_unlock(&sii9234_irq_lock); \
 	} while (0)
 #endif /*__SII9234_IRQ_DEBUG__*/
 
@@ -190,9 +196,6 @@ static struct workqueue_struct *sii9234_msc_wq;
 #endif
 
 static struct cbus_packet cbus_pkt_buf[CBUS_PKT_BUF_COUNT];
-#ifdef __CONFIG_USE_TIMER__
-static int cbus_command_abort_state;
-#endif
 
 #ifdef __CONFIG_TMDS_OFFON_WORKAROUND__
 static struct workqueue_struct *sii9234_tmds_offon_wq;
@@ -290,7 +293,7 @@ static CLASS_ATTR(swing, 0666,
 		sii9234_swing_test_show, sii9234_swing_test_store);
 #endif
 
-#if defined(CONFIG_SAMSUNG_USE_11PIN_CONNECTOR) && !defined(CONFIG_MACH_P4NOTE)
+#if defined(CONFIG_SAMSUNG_USE_11PIN_CONNECTOR) && !defined(CONFIG_MACH_P4NOTE) && !defined(CONFIG_MACH_SP7160LTE)
 static int is_mhl_cable_connected(void)
 {
 #	ifdef CONFIG_SAMSUNG_SMARTDOCK
@@ -404,8 +407,16 @@ u8 mhl_onoff_ex(bool onoff)
 		goto_d3();
 		return 2;
 	} else {
+		if (sii9234->mhl_event_switch.state == 1) {
+			pr_debug("%s: MHL switch event sent : 0\n", __func__);
+			switch_set_state(&sii9234->mhl_event_switch, 0);
+		}
 		sii9234_cancel_callback();
 
+#ifdef __MHL_NEW_CBUS_MSC_CMD__
+		if (sii9234->pdata->sii9234_muic_cb)
+			sii9234->pdata->sii9234_muic_cb(false, -1);
+#endif
 		if (sii9234->pdata->hw_onoff)
 			sii9234->pdata->hw_onoff(0);
 
@@ -415,7 +426,7 @@ u8 mhl_onoff_ex(bool onoff)
 #endif
 
 #ifdef CONFIG_SAMSUNG_USE_11PIN_CONNECTOR
-#if !defined(CONFIG_MACH_P4NOTE)
+#if !defined(CONFIG_MACH_P4NOTE) && !defined(CONFIG_MACH_SP7160LTE)
 		ret = is_mhl_cable_connected();
 #endif
 		if (ret == 1) {
@@ -648,54 +659,68 @@ void sii9234_tmds_offon_work(struct work_struct *work)
 }
 #endif
 
-static int mhl_wake_toggle(struct sii9234_data *sii9234,
-			   unsigned long high_period, unsigned long low_period)
+/* pulse_timerfunc()                                                 *
+ * This function makes hrtimer be used for generating the wake pulse.*
+ * Usleep_range() cannot guarantee the exact timing.                 */
+
+static enum hrtimer_restart pulse_timerfunc(struct hrtimer *timer)
 {
 	int ret;
+	struct sii9234_data *sii9234 = dev_get_drvdata(sii9244_mhldev);
+	unsigned long width[] = { T_SRC_WAKE_PULSE_WIDTH_1,
+		T_SRC_WAKE_PULSE_WIDTH_1, T_SRC_WAKE_PULSE_WIDTH_2,
+		T_SRC_WAKE_PULSE_WIDTH_1, T_SRC_WAKE_PULSE_WIDTH_1,
+		T_SRC_WAKE_PULSE_WIDTH_1, T_SRC_WAKE_TO_DISCOVER };
 
-	/* These bits are not documented. */
+	if (unlikely(sii9234->wp_cnt >= 7)) {
+		sii9234->wp_cnt = 0;
+		sii9234->wake_pulse_completed = 1;
+		pr_info("sii9234: %s is finished!\n", __func__);
+		wake_up(&sii9234->wq_pulse);
+		return HRTIMER_NORESTART;
+	}
+
+	hrtimer_start(&sii9234->pulse_timer,
+			ktime_set(0, NSEC_PER_MSEC * width[sii9234->wp_cnt]),
+			HRTIMER_MODE_REL);
+	if (sii9234->wp_cnt % 2 == 0) {
+		ret = mhl_tx_clear_reg(sii9234, MHL_TX_DISC_CTRL7_REG,
+					(1 << 7) | (1 << 6));
+		if (ret < 0)
+			return HRTIMER_NORESTART;
+	} else {
+		ret = mhl_tx_set_reg(sii9234, MHL_TX_DISC_CTRL7_REG,
+				(1 << 7) | (1 << 6));
+		if (ret < 0)
+			return HRTIMER_NORESTART;
+	}
+	sii9234->wp_cnt++;
+	return HRTIMER_NORESTART;
+}
+static int mhl_send_wake_pulses(struct sii9234_data *sii9234)
+{
+
+	int ret;
+	sii9234->wp_cnt = 0;
+	sii9234->wake_pulse_completed = 0;
+	hrtimer_start(&sii9234->pulse_timer,
+			ktime_set(0,  NSEC_PER_MSEC * T_SRC_WAKE_PULSE_WIDTH_1),
+			HRTIMER_MODE_REL);
 	ret =
 	    mhl_tx_set_reg(sii9234, MHL_TX_DISC_CTRL7_REG, (1 << 7) | (1 << 6));
 	if (ret < 0)
 		return ret;
-
-	usleep_range(high_period * USEC_PER_MSEC, high_period * USEC_PER_MSEC);
-
-	ret =
-	    mhl_tx_clear_reg(sii9234, MHL_TX_DISC_CTRL7_REG,
-			     (1 << 7) | (1 << 6));
-	if (ret < 0)
-		return ret;
-
-	usleep_range(low_period * USEC_PER_MSEC, low_period * USEC_PER_MSEC);
-
-	return 0;
-}
-
-static int mhl_send_wake_pulses(struct sii9234_data *sii9234)
-{
-	int ret;
-
-	ret = mhl_wake_toggle(sii9234, T_SRC_WAKE_PULSE_WIDTH_1,
-			      T_SRC_WAKE_PULSE_WIDTH_1);
-	if (ret < 0)
-		return ret;
-
-	ret = mhl_wake_toggle(sii9234, T_SRC_WAKE_PULSE_WIDTH_1,
-			      T_SRC_WAKE_PULSE_WIDTH_2);
-	if (ret < 0)
-		return ret;
-
-	ret = mhl_wake_toggle(sii9234, T_SRC_WAKE_PULSE_WIDTH_1,
-			      T_SRC_WAKE_PULSE_WIDTH_1);
-	if (ret < 0)
-		return ret;
-
-	ret = mhl_wake_toggle(sii9234, T_SRC_WAKE_PULSE_WIDTH_1,
-			      T_SRC_WAKE_TO_DISCOVER);
-	if (ret < 0)
-		return ret;
-
+	ret = wait_event_timeout(sii9234->wq_pulse,
+				 sii9234->wake_pulse_completed == 1,
+				 msecs_to_jiffies(T_WAIT_TIMEOUT_WAKE_PULSE));
+	if (ret == 0) {
+		pr_err("[ERROR] %s time out!\n", __func__);
+		return -1;
+	}
+	if (sii9234->wake_pulse_completed != 1) {
+		pr_err("[ERROR] %s was not finished!\n", __func__);
+		return -1;
+	}
 	return 0;
 }
 
@@ -717,13 +742,13 @@ static int sii9234_cbus_reset(struct sii9234_data *sii9234)
 	for (idx = 0; idx < 4; idx++) {
 		/* Enable WRITE_STAT interrupt for writes to all
 		   4 MSC Status registers. */
-		ret = cbus_write_reg(sii9234, 0xE0 + idx, 0xF2);
+		ret = cbus_write_reg(sii9234, 0xE0 + idx, 0xFF);
 		if (ret < 0)
 			return ret;
 
 		/*Enable SET_INT interrupt for writes to all
 		   4 MSC Interrupt registers. */
-		ret = cbus_write_reg(sii9234, 0xF0 + idx, 0xF2);
+		ret = cbus_write_reg(sii9234, 0xF0 + idx, 0xFF);
 		if (ret < 0)
 			return ret;
 	}
@@ -1049,6 +1074,10 @@ static int is_rcp_key_code_valid(u8 key)
 
 static void cbus_process_rcp_key(struct sii9234_data *sii9234, u8 key)
 {
+	if (key == 0x7E) {
+		pr_debug("sii9234: MHL switch event sent : 1\n");
+		switch_set_state(&sii9234->mhl_event_switch, 1);
+	}
 
 	if (is_rcp_key_code_valid(key)) {
 		/* Report the key */
@@ -1231,6 +1260,8 @@ static void cbus_handle_wrt_stat_recd(struct sii9234_data *sii9234)
 		cbus_command_request(sii9234, CBUS_READ_DEVCAP,
 				     DEVCAP_DEV_FEATURE_FLAG, 0x00);
 #else
+		sii9234_enqueue_msc_work(sii9234, CBUS_READ_DEVCAP,
+					 DEVCAP_MHL_VERSION, 0x00, 0x0);
 		sii9234_enqueue_msc_work(sii9234, CBUS_READ_DEVCAP,
 					 DEVCAP_DEV_CAT, 0x00, 0x0);
 		sii9234_enqueue_msc_work(sii9234, CBUS_READ_DEVCAP,
@@ -1462,14 +1493,6 @@ static int sii9234_mhl_tx_ctl_int(struct sii9234_data *sii9234)
 static void sii9234_power_down(struct sii9234_data *sii9234)
 {
 	sii9234_disable_irq();
-
-#ifdef __MHL_NEW_CBUS_MSC_CMD__
-	if (sii9234->claimed) {
-		if (sii9234->pdata->vbus_present)
-			sii9234->pdata->vbus_present(false,
-						     sii9234->vbus_owner);
-	}
-#endif
 
 	sii9234->state = STATE_DISCONNECTED;
 	sii9234->claimed = false;
@@ -1798,6 +1821,8 @@ void sii9234_process_msc_work(struct work_struct *work)
 				pr_debug("sii9234: MHL_VERSION: %X\n", value);
 				break;
 			case DEVCAP_DEV_CAT:
+				sii9234->plim = (value >> 5) & 0x03;
+				pr_debug("sii9234: PLIM : %d\n", sii9234->plim);
 				if (value & MHL_DEV_CATEGORY_POW_BIT)
 					pr_debug("sii9234: CAT=POWERED");
 				else
@@ -2328,22 +2353,54 @@ static int sii9234_detection_callback(void)
 				 sii9234->dcap_ready_status,
 				 msecs_to_jiffies(500));
 	if (ret == 0) {
-		sii9234->vbus_owner = 0; /*UNKNOWN*/
 		pr_debug("dcap_timeout err, dcap_staus:%d\n",
 			 sii9234->dcap_ready_status);
+		pr_debug("vbus_owner = USB\n");
+		sii9234->vbus_owner = MHL_VBUS_USB;
 	} else {
-		/*SAMSUNG DEVICE_ID 0x1134:dongle, 0x1234:dock */
-		if (sii9234->devcap.device_id == SS_MHL_DONGLE_DEV_ID ||
-		    sii9234->devcap.device_id == SS_MHL_DOCK_DEV_ID)
-			sii9234->vbus_owner = sii9234->devcap.reserved_data;
-		else
-			sii9234->vbus_owner = 0;
+		switch (sii9234->devcap.mhl_ver & 0xf0) {
+		case 0x10:
+			pr_debug("%s() MHL dongle ver 1.0 ", __func__);
+			/*SAMSUNG DEVICE_ID 0x1134:dongle, 0x1234:dock */
+			if (sii9234->devcap.device_id == SS_MHL_DONGLE_DEV_ID ||
+			  sii9234->devcap.device_id == SS_MHL_DOCK_DEV_ID) {
+				switch (sii9234->devcap.reserved_data) {
+				case 0: /* UNKNOWN */
+				case 1: /* USB */
+					pr_cont("vbus_owner = USB\n");
+					sii9234->vbus_owner = MHL_VBUS_USB;
+					break;
+				case 2: /* TA */
+					pr_cont("vbus_owner = TA 900mA\n");
+					sii9234->vbus_owner = MHL_VBUS_TA_900mA;
+					break;
+				default:
+					pr_cont("vbus_owner = USB\n");
+					sii9234->vbus_owner = MHL_VBUS_USB;
+					break;
+				}
+			} else {
+				pr_cont("vbus_owner = USB\n");
+				sii9234->vbus_owner = MHL_VBUS_USB;/* UNKNOWN */
+			}
+			break;
+		case 0x20:
+			pr_debug("%s() MHL dongle ver 2.0 ", __func__);
+			pr_cont("vbus_owner = PLIM\n");
+			sii9234->vbus_owner = sii9234->plim;
+			break;
+		default:
+			pr_debug("%s() MHL dongle unknown version ", __func__);
+			pr_cont("vbus_owner = USB\n");
+			sii9234->vbus_owner = MHL_VBUS_USB; /* UNKNOWN */
+			break;
+		}
 	}
 	pr_debug("device_id:0x%4x, vbus_owner:%d\n",
 		 sii9234->devcap.device_id, sii9234->vbus_owner);
 	/*send some data for VBUS SRC such a TA or USB or UNKNOWN */
-	if (sii9234->pdata->vbus_present)
-		sii9234->pdata->vbus_present(true, sii9234->vbus_owner);
+	if (sii9234->pdata->sii9234_muic_cb)
+		sii9234->pdata->sii9234_muic_cb(false, sii9234->vbus_owner);
 #endif
 
 	return handled;
@@ -2559,7 +2616,7 @@ static int sii9234_30pin_reg_init_for_9290(struct sii9234_data *sii9234)
 	ret = mhl_tx_write_reg(sii9234, 0xA1, 0xFC);
 	if (ret < 0)
 		return ret;
-#ifdef	CONFIG_MACH_P4NOTE
+#if defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_TAB3) || defined(CONFIG_MACH_SP7160LTE)
 	ret = mhl_tx_write_reg(sii9234, 0xA3, 0xC0);	/*output swing level*/
 	if (ret < 0)
 		return ret;
@@ -2760,6 +2817,26 @@ static int sii9234_30pin_init_for_9290(struct sii9234_data *sii9234)
 	sii9234_mutex_unlock(&sii9234->lock);
 	return false;
 }
+static struct workqueue_struct *sii9234_tmds_reset_wq;
+
+void sii9234_tmds_reset()
+{
+	struct sii9234_data *sii9234 = dev_get_drvdata(sii9244_mhldev);
+	queue_work(sii9234_tmds_reset_wq, &(sii9234->tmds_reset_work));
+}
+void sii9234_tmds_reset_work(struct work_struct *work)
+{
+	/*this function is a workaround for LSI AP*/
+	struct sii9234_data *sii9234 = dev_get_drvdata(sii9244_mhldev);
+
+	msleep(80);
+	mhl_tx_write_reg(sii9234, 0x1A, 1 << 4);
+	mhl_tx_clear_reg(sii9234, 0x1A, 1 << 4);
+	pr_info("sii9234: tmds reset\n");
+
+}
+EXPORT_SYMBOL(sii9234_tmds_reset);
+
 #endif				/* CONFIG_SAMSUNG_MHL_9290 */
 
 static void save_cbus_pkt_to_buffer(struct sii9234_data *sii9234)
@@ -3454,14 +3531,6 @@ static irqreturn_t sii9234_irq_thread(int irq, void *data)
 			 *      as per Page 0,0x79 Register
 			 */
 			sii9234->mhl_status_value.sink_hpd = true;
-#ifdef __CONFIG_USE_TIMER__
-			if (cbus_command_abort_state == 1) {
-				pr_debug("cbus_command_mod_timer\n");
-				mod_timer(&sii9234->cbus_command_timer,
-					  jiffies + 2 * HZ);
-				cbus_command_abort_state = 0;
-			} else
-#endif
 #ifndef __MHL_NEW_CBUS_MSC_CMD__
 				cbus_command_request(sii9234, CBUS_WRITE_STAT,
 						CBUS_LINK_CONTROL_2_REG,
@@ -3485,6 +3554,12 @@ static irqreturn_t sii9234_irq_thread(int irq, void *data)
 		} else {
 			pr_info("sii9234: hpd low\n");
 			/*Downstream HPD Low */
+
+			if (sii9234->mhl_event_switch.state == 1) {
+				pr_debug("%s: MHL switch event sent : 0\n",
+						__func__);
+				switch_set_state(&sii9234->mhl_event_switch, 0);
+			}
 
 			/* Similar to above comments.
 			 * TODO:Do we need to override HPD OUT value
@@ -3522,9 +3597,6 @@ static irqreturn_t sii9234_irq_thread(int irq, void *data)
 			 * or MHL cable disconnection
 			 * TODO: Define the below mhl_disconnection()
 			 */
-#ifdef __CONFIG_USE_TIMER__
-			del_timer(&sii9234->cbus_command_timer);
-#endif
 			msleep(T_SRC_RXSENSE_DEGLITCH);
 			ret = mhl_tx_read_reg(sii9234, MHL_TX_SYSSTAT_REG,
 					      &value);
@@ -3560,14 +3632,7 @@ static irqreturn_t sii9234_irq_thread(int irq, void *data)
 			cbus_resp_abort_error(sii9234);
 
 		if (cbus_intr1 & MSC_REQ_ABORT) {
-#ifdef __CONFIG_USE_TIMER__
-			cbus_write_reg(sii9234, CBUS_INTR1_ENABLE_REG, 0);
 			cbus_req_abort_error(sii9234);
-			cbus_write_reg(sii9234, CBUS_INTR1_ENABLE_REG, 0xFF);
-			cbus_command_abort_state = 1;
-#else
-			cbus_req_abort_error(sii9234);
-#endif
 		}
 		if ((cbus_intr1 & CBUS_DDC_ABORT) ||
 		    (cbus_intr1 & MSC_RESP_ABORT)) {
@@ -3657,6 +3722,7 @@ static ssize_t sysfs_check_mhl_command(struct class *class,
 				       struct class_attribute *attr, char *buf)
 {
 	int size;
+	int ret;
 	u8 sii_id = 0;
 	struct sii9234_data *sii9234 = dev_get_drvdata(sii9244_mhldev);
 
@@ -3666,7 +3732,11 @@ static ssize_t sysfs_check_mhl_command(struct class *class,
 	if (sii9234->pdata->hw_reset)
 		sii9234->pdata->hw_reset();
 
-	mhl_tx_read_reg(sii9234, MHL_TX_IDH_REG, &sii_id);
+	ret = mhl_tx_read_reg(sii9234, MHL_TX_IDH_REG, &sii_id);
+	if (unlikely(ret < 0))
+		pr_err("[ERROR] %s(): Failed to read register"
+			" MHL_TX_IDH_REG!\n", __func__);
+
 	pr_info("sii9234 : sel_show sii_id: %X\n", sii_id);
 
 	if (sii9234->pdata->hw_onoff)
@@ -3703,6 +3773,30 @@ static ssize_t sysfs_check_factory_store(struct class *class,
 static CLASS_ATTR(test_result, 0664, sysfs_check_mhl_command,
 		sysfs_check_factory_store);
 #endif /*__CONFIG_SS_FACTORY__*/
+
+#ifdef __CONFIG_MHL_FORCE_ON_FACTORY__ 
+static ssize_t sysfs_mhl_on_store(struct class *class,
+		struct class_attribute *attr, const char *buf, size_t size)
+{
+	const char *p = buf;
+	if (p[0] == '1') {
+		pr_info("%s() MHL Attached !!\n", __func__);
+#ifdef CONFIG_MACH_MIDAS
+		sii9234_wake_lock();
+#endif
+		mhl_onoff_ex(1);
+	} else {
+		pr_info("%s() MHL Detached !!\n", __func__);
+		mhl_onoff_ex(false);
+#ifdef CONFIG_MACH_MIDAS
+		sii9234_wake_unlock();
+#endif
+	}
+	return size;
+}
+
+static CLASS_ATTR(mhl_on, 0660, NULL, sysfs_mhl_on_store);
+#endif /*__CONFIG_MHL_FORCE_ON_FACTORY__*/
 
 static ssize_t sysfs_mhl_read_reg_show(struct device *dev,
 				       struct device_attribute *attr, char *buf)
@@ -3989,6 +4083,9 @@ static int __devinit sii9234_mhl_tx_i2c_probe(struct i2c_client *client,
 	client->irq = gpio_to_irq(GPIO_MHL_INT);
 	sii9244_mhldev = &client->dev;
 
+	sii9234->mhl_event_switch.name = "mhl_event_switch";
+	switch_dev_register(&sii9234->mhl_event_switch);
+
 #ifdef CONFIG_MACH_MIDAS
 	wake_lock_init(&sii9234->mhl_wake_lock, WAKE_LOCK_SUSPEND,
 		       "mhl_wake_lock");
@@ -4032,7 +4129,8 @@ static int __devinit sii9234_mhl_tx_i2c_probe(struct i2c_client *client,
 	atomic_set(&sii9234->is_irq_enabled, false);
 	disable_irq(client->irq);
 
-#if defined(__CONFIG_SS_FACTORY__) || defined(__CONFIG_MHL_SWING_LEVEL__)
+#if defined(__CONFIG_SS_FACTORY__) || defined(__CONFIG_MHL_SWING_LEVEL__) \
+	|| defined(__CONFIG_MHL_FORCE_ON_FACTORY__) 
 	pr_info("sii9234 : create mhl sysfile\n");
 
 	sec_mhl = class_create(THIS_MODULE, "mhl");
@@ -4061,16 +4159,17 @@ static int __devinit sii9234_mhl_tx_i2c_probe(struct i2c_client *client,
 	}
 #endif
 
+#ifdef __CONFIG_MHL_FORCE_ON_FACTORY__
+	ret = class_create_file(sec_mhl, &class_attr_mhl_on);
+	if (ret) {
+		pr_err("[ERROR] Failed to create "
+				"device file in sysfs entries!\n");
+		goto err_exit2c;
+	}
+#endif
+
 	sii9234->cbus_pkt.command = CBUS_IDLE;
 	sii9234->cbus_pkt.offset = DEVCAP_DEV_STATE;
-#ifdef __CONFIG_USE_TIMER__
-	init_timer(&sii9234->cbus_command_timer);
-	sii9234->cbus_command_timer.function = mhl_cbus_command_timer;
-	sii9234->cbus_command_timer.data = (unsigned int)NULL;
-
-	sii9234->cbus_command_timer.expires = 0xffffffffL;
-	add_timer(&sii9234->cbus_command_timer);
-#endif
 #ifdef CONFIG_SII9234_RCP
 	/* indicate that we generate key events */
 	set_bit(EV_KEY, input->evbit);
@@ -4084,12 +4183,20 @@ static int __devinit sii9234_mhl_tx_i2c_probe(struct i2c_client *client,
 	ret = input_register_device(input);
 	if (ret < 0) {
 		dev_err(&client->dev, "fail to register input device\n");
-		goto err_exit2c;
+		goto err_exit2d;
 	}
 #endif
 #ifdef CONFIG_SAMSUNG_MHL_9290
 	sii9234->acc_con_nb.notifier_call = sii9234_30pin_callback;
 	acc_register_notifier(&sii9234->acc_con_nb);
+
+	sii9234_tmds_reset_wq =
+		create_singlethread_workqueue("sii9234_tmds_reset_wq");
+	if (!sii9234_tmds_reset_wq) {
+		printk(KERN_ERR	"[ERROR] %s() tmds_reset"
+				" workqueue create fail\n", __func__);
+	}
+	INIT_WORK(&sii9234->tmds_reset_work, sii9234_tmds_reset_work);
 #endif
 
 #ifdef CONFIG_EXTCON
@@ -4122,16 +4229,23 @@ static int __devinit sii9234_mhl_tx_i2c_probe(struct i2c_client *client,
 	!defined(CONFIG_SAMSUNG_MHL_9290)
 	atomic_set(&sched_hpd_handler_false, 0);
 #endif
+	init_waitqueue_head(&sii9234->wq_pulse);
+	hrtimer_init(&sii9234->pulse_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	sii9234->pulse_timer.function = pulse_timerfunc;
+	sii9234->wp_cnt = 0;
+	sii9234->wake_pulse_completed = 0;
+
 	return 0;
 
 #ifdef CONFIG_EXTCON
 err_extcon:
 	extcon_unregister_interest(&sii9234->extcon_dev);
 #endif
- err_exit2c:
-#ifdef __CONFIG_USE_TIMER__
-	del_timer(&sii9234->cbus_command_timer);
+ err_exit2d:
+#ifdef __CONFIG_MHL_FORCE_ON_FACTORY__
+	class_remove_file(sec_mhl, &class_attr_mhl_on);
 #endif
+ err_exit2c:
 #ifdef __CONFIG_MHL_SWING_LEVEL__
 	class_remove_file(sec_mhl, &class_attr_swing);
 #endif
@@ -4140,7 +4254,8 @@ err_extcon:
 	class_remove_file(sec_mhl, &class_attr_test_result);
 #endif
  err_exit2a:
-#if defined(__CONFIG_SS_FACTORY__) || defined(__CONFIG_MHL_SWING_LEVEL__)
+#if defined(__CONFIG_SS_FACTORY__) || defined(__CONFIG_MHL_SWING_LEVEL__) \
+	|| defined(__CONFIG_MHL_FORCE_ON_FACTORY__) 
 	class_destroy(sec_mhl);
 #endif
 err_exit_after_irq:

@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Hypervisor Support
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -46,6 +46,7 @@
 #include <linux/mm.h>
 #include <linux/vmalloc.h>
 #include <linux/sysfs.h>
+#include <linux/debugfs.h>
 #include <linux/pid.h>
 #include <linux/highmem.h>
 #include <linux/syscalls.h>
@@ -83,6 +84,17 @@
 #endif
 
 
+/*
+ * Needed to start Comm/Pvtcp parts.
+ */
+DEFINE_MUTEX(modules_lock);
+int (*pvtcpOSModStart)(void);
+int (*commOSModStart)(void);
+EXPORT_SYMBOL(modules_lock);
+EXPORT_SYMBOL(pvtcpOSModStart);
+EXPORT_SYMBOL(commOSModStart);
+
+
 /*********************************************************************
  *
  * Definition of the file operations
@@ -112,18 +124,27 @@ static void  ReleaseVM(MvpkmVM *vm);
  * it is set via an ioctl from mvpd.
  */
 uid_t Mvpkm_vmwareUid = 0;
+gid_t Mvpkm_vmwareGid = 0;
 EXPORT_SYMBOL(Mvpkm_vmwareUid);
+EXPORT_SYMBOL(Mvpkm_vmwareGid);
 
 /*
- * Minimum hidden app oom_adj, provided by mvpd, since we can't get it directly
- * from the lowmemorykiller module.
+ * Mvpd should copy the content of /sys/module/lowmemorykiller/parameters/adj
+ * here, as we don't have access to these numbers within the kernel itself.
+ * Note: Android uses 6 values, and we rely on this.
  */
-static int minHiddenAppOOMAdj;
+static int lowmemAdjSize = 0;
+static int lowmemAdj[6];
 
 /*
  * vCPU cpu affinity to let monitor/guest run on some CPUs only (when possible)
  */
 static DECLARE_BITMAP(vcpuAffinity, NR_CPUS);
+
+/*
+ * Which CPUs are running a monitor ?
+ */
+struct cpumask inMonitor;
 
 /*********************************************************************
  *
@@ -175,7 +196,9 @@ background_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 #ifndef CONFIG_ANDROID_LOW_MEMORY_KILLER
    return snprintf(buf, PAGE_SIZE, "0\n");
 #else
-   return snprintf(buf, PAGE_SIZE, "%d\n", Balloon_AndroidBackgroundPages(minHiddenAppOOMAdj));
+   /* The HIDDEN_APP_MIN_ADJ value is the 5th in a list of 6 parameters... */
+   FATAL_IF(lowmemAdjSize != 6);
+   return snprintf(buf, PAGE_SIZE, "%d\n", Balloon_AndroidBackgroundPages(lowmemAdj[4]));
 #endif
 }
 
@@ -238,6 +261,12 @@ other_file_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
     * this case.
     */
    other_file = global_page_state(NR_FREE_PAGES) + global_page_state(NR_FILE_PAGES);
+#elif LOWMEMKILLER_VARIANT == 5
+   /*
+    * other_free and other_file are modified depending on zone index or/and
+    * memory offlining and compared to "lowmem_minfree[i] - zone_adj".
+    */
+   other_file = global_page_state(NR_FILE_PAGES) - global_page_state(NR_SHMEM);
 #elif defined(NONANDROID)
    /*
     * Non-Android host platforms don't have ballooning enabled.
@@ -256,7 +285,8 @@ other_file_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
     * Fall back on default - this may bias strangely for/against the host, but
     * nothing catastrophic should result.
     */
-   other_file = global_page_state(NR_FILE_PAGES);
+   other_file = global_page_state(NR_FILE_PAGES) - global_page_state(NR_SHMEM);
+ //  other_file = global_page_state(NR_FILE_PAGES);
 #endif
 
 #define _STRINGIFY(x) #x
@@ -273,6 +303,46 @@ other_file_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 }
 
 static struct kobj_attribute otherFileAttr = __ATTR_RO(other_file);
+
+/*********************************************************************
+ *
+ * Debugfs nodes
+ *
+ *********************************************************************/
+
+static struct dentry *mvpDebugDentry = NULL;
+
+/**
+ * @brief debugfs show function for global inMonitor
+ * @param m seq_file reference
+ * @param private ignored
+ * @return 0 for success
+ */
+static int
+InMonitorShow(struct seq_file *m, void *private)
+{
+   seq_bitmap_list(m, cpumask_bits(&inMonitor), NR_CPUS);
+   seq_printf(m, "\n");
+   return 0;
+}
+
+/**
+ * @brief debugfs open function for global inMonitor
+ * @param inode inode
+ * @param file file
+ * @return result of single_open
+ */
+static int InMonitorOpen(struct inode *inode, struct file *file)
+{
+   return single_open(file, InMonitorShow, NULL);
+}
+
+static const struct file_operations inMonitorFops = {
+   .open = InMonitorOpen,
+   .read = seq_read,
+   .llseek = seq_lseek,
+   .release = single_release,
+};
 
 /*
  * kset for our sysfs representation, used for per-VM nodes.
@@ -486,7 +556,7 @@ static long MvpkmUnlockedIoctl(struct file *filep,
                                unsigned long arg);
 static int MvpkmOpen(struct inode *inode, struct file *filp);
 static int MvpkmRelease(struct inode *inode, struct file *filp);
-static int MvpkmMMap(struct file *file, struct vm_area_struct *vma);
+static int MvpkmMMap(struct file *filp, struct vm_area_struct *vma);
 
 /**
  * @brief the file_operation structure contains the callback functions
@@ -518,8 +588,13 @@ static struct miscdevice mvpkmDev = {
 };
 
 /**
- * Mvpkm is loaded by mvpd and only mvpd will be allowed to open
- * it. There is a very simple way to verify that: record the process
+ * @brief Record if some unauthorized access has been attempted
+ */
+static bool mvpkmDevPanicMode;
+
+/**
+ * Mvpkm is first opened by mvpd and only mvpd will be allowed to open
+ * it again. There is a very simple way to verify that: record the process
  * id (thread group id) at the time the module is loaded and test it
  * at the time the module is opened.
  */
@@ -552,31 +627,24 @@ MODULE_PARM_DESC(vcpuAffinity, "vCPU affinity");
 
 
 /**
- * @brief Initialize the mvpkm device, register it with the Linux kernel.
- *
- * @return A zero is returned on success and a negative errno code for failure.
- *         (Same as the return policy of misc_register(9).)
+ * @brief Full mvpkm and modules initialization
+ * @return 0 on success, else negative error code.
  */
-
-static int __init
-MvpkmInit(void)
+static int
+MvpkmStart(void)
 {
    int err = 0;
    _Bool mksckInited = false;
    _Bool cpuFreqInited = false;
 
    printk(KERN_INFO "Mvpkm: " MVP_VERSION_FORMATSTR "\n", MVP_VERSION_FORMATARGS);
-   printk(KERN_INFO "Mvpkm: loaded from process %s tgid=%d, pid=%d\n",
+   printk(KERN_INFO "Mvpkm: started from process %s tgid=%d, pid=%d\n",
           current->comm,
           task_tgid_vnr(current),
           task_pid_vnr(current));
 
    if (bitmap_empty(vcpuAffinity, NR_CPUS)) {
       bitmap_copy(vcpuAffinity, cpumask_bits(cpu_possible_mask), NR_CPUS);
-   }
-
-   if ((err = misc_register(&mvpkmDev))) {
-      return -ENOENT;
    }
 
    if ((err = Mksck_Init())) {
@@ -589,12 +657,6 @@ MvpkmInit(void)
 
    CpuFreq_Init();
    cpuFreqInited = true;
-
-   /*
-    * Reference mvpd (module loader) tgid struct, so that we can avoid
-    * attacks based on pid number wraparound.
-    */
-   initTgid = get_pid(task_tgid(current));
 
 #ifndef CONFIG_SYS_HYPERVISOR
    hypervisor_kobj = kobject_create_and_add("hypervisor", NULL);
@@ -627,7 +689,30 @@ MvpkmInit(void)
    register_shrinker(&mvpkmShrinker);
 #endif
 
-   MksckPageInfo_Init();
+   /* Create /sys/kernel/debug/mvp for debufs nodes */
+   mvpDebugDentry = debugfs_create_dir("mvp", NULL);
+   if (mvpDebugDentry) {
+      debugfs_create_file("inMonitor", S_IRUGO, mvpDebugDentry, NULL, &inMonitorFops);
+      MksckPageInfo_Init(mvpDebugDentry);
+   }
+
+   /*
+    * Comm and PVTCP initialization: On initialization, drivers set start
+    * function pointer to their startup function. This is to avoid
+    * interdependancies between drivers if they are to be built as modules
+    * (for debugging purpose).
+    *
+    * Note: A null start pointer means the driver is not loaded and does
+    * not have to be initialized. Each driver will nullify the start pointer
+    * during their initialization.
+    */
+   mutex_lock(&modules_lock);
+   if ((commOSModStart && (err = commOSModStart())) ||
+       (pvtcpOSModStart && (err = pvtcpOSModStart()))) {
+      mutex_unlock(&modules_lock);
+      goto error;
+   }
+   mutex_unlock(&modules_lock);
 
    return 0;
 
@@ -661,12 +746,20 @@ error:
       Mksck_Exit();
    }
 
-   if (initTgid) {
-      put_pid(initTgid);
-   }
-
-   misc_deregister(&mvpkmDev);
    return err;
+}
+
+/**
+ * @brief Initialize the mvpkm device, register it with the Linux kernel.
+ *
+ * @return A zero is returned on success and a negative errno code for failure.
+ *         (Same as the return policy of misc_register(9).)
+ */
+
+static int __init
+MvpkmInit(void)
+{
+   return misc_register(&mvpkmDev);
 }
 
 /**
@@ -677,27 +770,29 @@ MvpkmExit(void)
 {
    PRINTK(KERN_INFO "MvpkmExit called !\n");
 
-   MksckPageInfo_Exit();
+   if (Mvpkm_vmwareUid) {
+      if (mvpDebugDentry) {
+         debugfs_remove_recursive(mvpDebugDentry);
+      }
 
 #ifdef CONFIG_ANDROID_LOW_MEMORY_KILLER
-   unregister_shrinker(&mvpkmShrinker);
+      unregister_shrinker(&mvpkmShrinker);
 #endif
 
-   kset_unregister(mvpkmKSet);
-   kobject_del(balloonKObj);
-   kobject_put(balloonKObj);
-   kobject_del(mvpkmKObj);
-   kobject_put(mvpkmKObj);
+      kset_unregister(mvpkmKSet);
+      kobject_del(balloonKObj);
+      kobject_put(balloonKObj);
+      kobject_del(mvpkmKObj);
+      kobject_put(mvpkmKObj);
 #ifndef CONFIG_SYS_HYPERVISOR
-   kobject_del(hypervisor_kobj);
-   kobject_put(hypervisor_kobj);
+      kobject_del(hypervisor_kobj);
+      kobject_put(hypervisor_kobj);
 #endif
 
-   CpuFreq_Exit();
+      CpuFreq_Exit();
 
-   Mksck_Exit();
-
-   put_pid(initTgid);
+      Mksck_Exit();
+   }
 
    misc_deregister(&mvpkmDev);
 }
@@ -708,8 +803,8 @@ MvpkmExit(void)
 module_init(MvpkmInit);
 module_exit(MvpkmExit);
 
-module_param_named(minHiddenAppOOMAdj, minHiddenAppOOMAdj, int, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(minHiddenAppOOMAdj, "minimum hidden app oom_adj, as per lowmemorykiller");
+module_param_array_named(lowmemAdj, lowmemAdj, int, &lowmemAdjSize, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(lowmemAdj, "copy of /sys/module/lowmemorykiller/parameters/adj");
 
 #ifdef CONFIG_ANDROID_LOW_MEMORY_KILLER
 /**
@@ -724,7 +819,8 @@ WatchdogCB(unsigned long data)
 {
    MvpkmVM *vm = (MvpkmVM *)data;
 
-   printk("Balloon watchdog expired (%d s)!\n", BALLOON_WATCHDOG_TIMEOUT_SECS);
+   printk(KERN_ERR "Balloon watchdog expired (%d s)!\n", BALLOON_WATCHDOG_TIMEOUT_SECS);
+   vm->watchdogTriggered = true;
 
    Mvpkm_WakeGuest(vm, ACTION_ABORT);
 }
@@ -773,10 +869,10 @@ MvpkmShrink(struct shrinker *this, int nrToScan, gfp_t gfpMask)
           down_read_trylock(&vm->wspSem)) {
 
          if (vm->wsp) {
-            Mvpkm_WakeGuest(vm, ACTION_BALLOON);
-
             /*
              * Balloon watchdog.
+             * We start the timer before waking up the guest to avoid races
+             * in case of immediate descheduling.
              */
             if (vm->balloonWDEnabled) {
                struct timer_list *t = &vm->balloonWDTimer;
@@ -788,6 +884,8 @@ MvpkmShrink(struct shrinker *this, int nrToScan, gfp_t gfpMask)
                   add_timer(t);
                }
             }
+
+            Mvpkm_WakeGuest(vm, ACTION_BALLOON);
          }
 
          up_read(&vm->wspSem);
@@ -800,6 +898,64 @@ MvpkmShrink(struct shrinker *this, int nrToScan, gfp_t gfpMask)
 }
 #endif
 
+/**
+ * @brief Deal with early connection.
+ * @param filp file structure
+ * @return -EPERM when conditions are not met
+ *         -EBUSY if process is not current owner
+ *         0 on success (with private_data set to NULL)
+ */
+static int
+MvpkmEarly(struct file *filp)
+{
+   int suid = current_suid();
+   int sgid = current_sgid();
+   int err;
+
+   /* Check if there is already a mvpkm owner */
+   if (initTgid != NULL) {
+      mvpkmDevPanicMode = true;
+      return -EBUSY;
+   }
+
+   /* Check that saved uid is not zero */
+   if (suid == 0) {
+      mvpkmDevPanicMode = true;
+      return -EPERM;
+   }
+
+   /* Check that process name is mvpd */
+   if (strcmp(current->comm, "mvpd") != 0) {
+      mvpkmDevPanicMode = true;
+      return -EPERM;
+   }
+
+   if (Mvpkm_vmwareUid == 0) {
+      /* First connection ever: initialize full mvpkm and other modules */
+      err = MvpkmStart();
+      if (err) {
+         printk(KERN_ERR "%s: MVPKM initialization failed.\n", __func__);
+         return err;
+      }
+   } else if (Mvpkm_vmwareUid != suid) {
+      /* Saved uid does not match recorded one */
+      mvpkmDevPanicMode = true;
+      return -EBUSY;
+   }
+
+   /* Record vmware uid */
+   Mvpkm_vmwareUid = suid;
+   Mvpkm_vmwareGid = sgid;
+
+   /*
+    * Reference mvpd tgid struct, so that we can avoid
+    * attacks based on pid number wraparound.
+    */
+   initTgid = get_pid(task_tgid(current));
+   filp->private_data = NULL;
+
+   return 0;
+}
 
 /**
  * @brief The open file operation. Initializes the vm specific structure.
@@ -809,11 +965,27 @@ MvpkmOpen(struct inode *inode, struct file *filp)
 {
    MvpkmVM *vm;
 
-   if (initTgid != task_tgid(current)) {
-      printk(KERN_ERR "%s: MVPKM can be opened only from MVPD (process %d).\n",
-             __FUNCTION__, pid_vnr(initTgid));
-      return -EPERM;
+   /* If something bad happened */
+   if (mvpkmDevPanicMode) {
+      return -EBUSY;
    }
+
+   /* Root connection */
+   if (current_uid() == 0) {
+      return MvpkmEarly(filp);
+   }
+
+   if (initTgid != task_tgid(current)) {
+      /*
+       * Only mvpkm owner can have access.
+       */
+      printk(KERN_ERR "%s: MVPKM cannot be opened from this process (%s:%d).\n",
+             __func__,
+             current->comm,
+             current->pid);
+      return -EACCES;
+   }
+
    printk(KERN_DEBUG "%s: Allocating an MvpkmVM structure from process %s tgid=%d, pid=%d\n",
           __FUNCTION__,
           current->comm,
@@ -836,10 +1008,6 @@ MvpkmOpen(struct inode *inode, struct file *filp)
 
    filp->private_data = vm;
 
-   if (!Mvpkm_vmwareUid) {
-      Mvpkm_vmwareUid = current_euid();
-   }
-
    return 0;
 }
 
@@ -850,17 +1018,24 @@ MvpkmOpen(struct inode *inode, struct file *filp)
 static void
 ReleaseVM(MvpkmVM *vm)
 {
+   /*
+    * Delete balloon watchdog timer. We are already out of VM kset, so there
+    * is no race with shrink callback.
+    */
    del_timer_sync(&vm->balloonWDTimer);
 
    down_write(&vm->wspSem);
 
    if (vm->isMonitorInited) {
       MonitorTimer_Request(&vm->monTimer, 0);
-#ifdef CONFIG_HAS_WAKELOCK
-      wake_lock_destroy(&vm->wakeLock);
-#endif
       Mksck_WspRelease(vm->wsp);
       vm->wsp = NULL;
+#ifdef CONFIG_HAS_WAKELOCK
+      /*
+       * Destroy wakelock after WSP is released (and MksckPage detached).
+       */
+      wake_lock_destroy(&vm->wakeLock);
+#endif
    }
 
    up_write(&vm->wspSem);
@@ -890,6 +1065,12 @@ int
 MvpkmRelease(struct inode *inode, struct file *filp)
 {
    MvpkmVM *vm = filp->private_data;
+
+   if (vm == NULL) {
+      put_pid(initTgid);
+      initTgid = NULL;
+      return 0;
+   }
 
    /*
     * Tear down any queue pairs associated with this VM
@@ -1050,14 +1231,18 @@ MvpkmAttrStore(struct kobject *kobj,
 /**
  * @brief Map machine address space region into host process.
  *
- * @param file file reference (ignored).
+ * @param filp file reference (ignored).
  * @param vma Linux virtual memory area defining the region.
  *
  * @return 0 on success, otherwise error code.
  */
 static int
-MvpkmMMap(struct file *file, struct vm_area_struct *vma)
+MvpkmMMap(struct file *filp, struct vm_area_struct *vma)
 {
+   if (filp->private_data == NULL) {
+      return -EINVAL;
+   }
+
    vma->vm_ops = &mvpkmVMOps;
 
    return 0;
@@ -1338,6 +1523,10 @@ MvpkmUnlockedIoctl(struct file  *filp,
    MvpkmVM *vm = filp->private_data;
    int retval = 0;
 
+   if (vm == NULL) {
+      return -EINVAL;
+   }
+
    switch (cmd) {
 
 
@@ -1439,6 +1628,7 @@ MvpkmUnlockedIoctl(struct file  *filp,
 
          ASSERT(vm->wsp != NULL);
 
+         printk(KERN_ERR "MvpkmIoctl: Aborting monitor.\n");
          Mvpkm_WakeGuest(vm, ACTION_ABORT);
          break;
       }
@@ -1774,38 +1964,48 @@ AllocZeroedFreePages(MvpkmVM *vm,
    }
 
    /*
-    * Get some pages for the requested range.  They will be physically
-    * contiguous and have the requested alignment.  They will also
-    * have a kernel virtual mapping if !highmem.
+    * System RAM bank in 0x00000000 workaround. Should only happens once
+    * in host lifetime as memory page is leaked forever. Also leak the
+    * MVP's INVALID_MPN page if it appears.
     *
-    * We allocate out of ZONE_MOVABLE even though we can't just pick up our
-    * bags. We do this to support platforms that explicitly configure
-    * ZONE_MOVABLE, such as the Qualcomm MSM8960, to enable deep power down of
-    * memory banks. When the kernel attempts to take a memory bank offline, it
-    * will try and place the pages on the isolate LRU - only pages already on an
-    * LRU, such as anon/file, can get there, so it will not be able to
-    * migrate/move our pages (and hence the bank will not be offlined). The
-    * other alternative is to live withing ZONE_NORMAL, and only have available
-    * a small fraction of system memory. Long term we plan on hooking the
-    * offlining callback in mvpkm and perform our own migration with the
-    * cooperation of the monitor, but we don't have dev board to support this
-    * today.
-    *
-    * @knownjira{MVP-3477}
+    * @knownjira{MVP-4855}
     */
-   page = alloc_pages(GFP_USER | __GFP_COMP | __GFP_ZERO |
-                      (highmem ? __GFP_HIGHMEM | __GFP_MOVABLE : 0),
-                      order);
+   do {
 
-   if (page == NULL) {
-      return 0;
-   }
+      /*
+       * Get some pages for the requested range.  They will be physically
+       * contiguous and have the requested alignment.  They will also
+       * have a kernel virtual mapping if !highmem.
+       *
+       * We allocate out of ZONE_MOVABLE even though we can't just pick up our
+       * bags. We do this to support platforms that explicitly configure
+       * ZONE_MOVABLE, such as the Qualcomm MSM8960, to enable deep power down of
+       * memory banks. When the kernel attempts to take a memory bank offline, it
+       * will try and place the pages on the isolate LRU - only pages already on an
+       * LRU, such as anon/file, can get there, so it will not be able to
+       * migrate/move our pages (and hence the bank will not be offlined). The
+       * other alternative is to live withing ZONE_NORMAL, and only have available
+       * a small fraction of system memory. Long term we plan on hooking the
+       * offlining callback in mvpkm and perform our own migration with the
+       * cooperation of the monitor, but we don't have dev board to support this
+       * today.
+       *
+       * @knownjira{MVP-3477}
+       */
+      page = alloc_pages(GFP_USER | __GFP_COMP | __GFP_ZERO |
+                         (highmem ? __GFP_HIGHMEM | __GFP_MOVABLE : 0),
+                         order);
 
-   /*
-    * Return the corresponding page number.
-    */
-   mpn = page_to_pfn(page);
-   ASSERT(mpn != 0);
+      if (page == NULL) {
+         return 0;
+      }
+
+      /*
+       * Return the corresponding page number.
+       */
+      mpn = page_to_pfn(page);
+
+   } while (mpn == 0 || mpn == INVALID_MPN);
 
    /*
     * Remember to unlock the pages when the FD is closed.
@@ -1940,7 +2140,7 @@ err:
    }
 
    free_vm_area(vm->wspHkvaArea);
-   vm->wspHkvaArea = (HKVA)NULL;
+   vm->wspHkvaArea = (struct vm_struct*)NULL;
 
    return 0;
 }
@@ -2018,6 +2218,16 @@ SetupMonitor(MvpkmVM *vm)
 {
    int retval;
    WorldSwitchPage *wsp = vm->wsp;
+
+#if defined(__GNUC__) && \
+        defined(__GNUC_MINOR__) && \
+        defined(__GNUC_PATCHLEVEL__) && \
+        ((__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)) \
+                > 40501
+#define USE_ARCH_EXTENSION_SEC 1
+#else
+#define USE_ARCH_EXTENSION_SEC 0
+#endif
 
    if (!wsp ||
        wsp->wspHKVA != (HKVA)wsp) {
@@ -2108,6 +2318,9 @@ SetupMonitor(MvpkmVM *vm)
       register uint32 r4 asm("r4") = hsctlr;
 
       asm volatile (
+#if USE_ARCH_EXTENSION_SEC
+         ".arch_extension sec\n\t"
+#endif
          "smc 0"
          :
          : "r" (r0), "r" (r1), "r" (r2), "r" (r3), "r" (r4)
@@ -2165,6 +2378,7 @@ RunMonitor(MvpkmVM *vm)
    unsigned long flags;
    WorldSwitchPage *wsp = vm->wsp;
    int retval = 0;
+   unsigned int freq = -1;
 
    ASSERT(wsp);
 
@@ -2197,6 +2411,9 @@ RunMonitor(MvpkmVM *vm)
    while (wsp->critSecCount > 0 ||
           (!signal_pending(current) &&
            !(ATOMIC_GETO(wsp->hostActions) & ACTION_ABORT))) {
+
+      cpumask_set_cpu(smp_processor_id(), &inMonitor);
+
       /*
        * ARMv7 Performance counters are per CPU core and might be disabled over
        * CPU core sleep if there is nothing else in the system to re-enable
@@ -2228,9 +2445,11 @@ RunMonitor(MvpkmVM *vm)
        * Update TSC to RATE64 ratio
        */
       {
-         struct TscToRate64Cb *ttr = &__get_cpu_var(tscToRate64);
-         wsp->tscToRate64Mult = ttr->mult;
-         wsp->tscToRate64Shift = ttr->shift;
+         struct TscToRate64Cb ttr;
+         if (CpuFreqUpdate(&freq, &ttr)) {
+            wsp->tscToRate64Mult = ttr.mult;
+            wsp->tscToRate64Shift = ttr.shift;
+         }
       }
 
       /*
@@ -2287,6 +2506,8 @@ RunMonitor(MvpkmVM *vm)
        */
       SWITCH_VFP_TO_HOST;
 
+      cpumask_clear_cpu(smp_processor_id(), &inMonitor);
+
       /*
        * Re-enable local interrupts now that we are back in the host world
        */
@@ -2318,7 +2539,7 @@ RunMonitor(MvpkmVM *vm)
                                               WSP_Params(wsp)->pages.forRegion,
                                               NULL);
                if (mpn == 0) {
-                  printk(KERN_WARNING "WSCALL_ACQUIRE_PAGE: no order %u pages available\n",
+                  printk(KERN_ERR "WSCALL_ACQUIRE_PAGE: no order %u pages available\n",
                         WSP_Params(wsp)->pages.order);
                   WSP_Params(wsp)->pages.pages = i;
                   break;
@@ -2587,6 +2808,9 @@ monitorExit:
    if (ATOMIC_GETO(wsp->hostActions) & ACTION_ABORT) {
       PRINTK(KERN_INFO "Monitor has ABORT flag set.\n");
       retval = ExitStatusHostRequest;
+   }
+   if (retval == ExitStatusHostRequest && vm->watchdogTriggered) {
+      retval = ExitStatusVMMFatalKnown;
    }
 
 #ifdef CONFIG_HAS_WAKELOCK

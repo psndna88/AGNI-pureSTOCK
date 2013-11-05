@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Guest Communications
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -752,6 +752,25 @@ Comm_GetState(CommChannel channel)
 
 
 /**
+ * @brief Copies from channel into caller-supplied buffer.
+ * @param channel CommChannel structure.
+ * @param dest destination buffer.
+ * @param size bytes to copy.
+ * @param kern != 0 if destination buffer is in kernel space.
+ * @return number of bytes copied or negative error.
+ */
+
+static int
+CopyFromChannel(CommChannel channel,
+                void *dest,
+                unsigned int size,
+                int kern)
+{
+   return CommTransp_DequeueSegment(channel->transp, dest, size, kern);
+}
+
+
+/**
  * @brief Main input processing function operating on a given channel.
  * @param channel CommChannel structure to process.
  * @return number of processed channels (0 or 1), or -1 if channel closed.
@@ -805,7 +824,7 @@ Comm_Dispatch(CommChannel channel)
          /* Read header. */
 
          rc = CommTransp_DequeueSegment(channel->transp,
-                                        &packet, sizeof packet);
+                                        &packet, sizeof packet, 1);
          if (rc <= 0) {
             /* No packet (header). */
 
@@ -862,28 +881,12 @@ Comm_Dispatch(CommChannel channel)
             goto dequeueCommit;
          }
 
-         /* The packet has a payload (dataLen > 0). */
+         /* The packet has a payload (dataLen > 0). Allocate and read it. */
 
-         if (!(vec[vecLen].iov_base = channel->impl->dataAlloc(dataLen))) {
-            /*
-             * We treat out-of-(net?-)memory errors as "nothing to read".
-             * Memory pressure may either subside, in which case a future
-             * read may be successful, or be severe enough for the kernel
-             * to oops, anyway. Leave packet uncommitted.
-             */
-
-            CommOS_Debug(("%s: COULD NOT ALLOC PAYLOAD BYTES!\n",
-                          __FUNCTION__));
-            rc = vecLen == 0 ? 0 : 1;
-            break;
-         }
-
-         /* Read payload and commit (packet and payload). */
-
-         rc = CommTransp_DequeueSegment(channel->transp,
-                                        vec[vecLen].iov_base, dataLen);
-         if (rc != dataLen) {
-            channel->impl->dataFree(vec[vecLen].iov_base);
+         vec[vecLen].iov_base =
+            channel->impl->dataAlloc(dataLen, channel,
+                                     &packet, CopyFromChannel);
+         if (!vec[vecLen].iov_base) {
             CommOS_Log(("%s: BOOG -- COULD NOT DEQUEUE PAYLOAD! [%d != %u]",
                         __FUNCTION__, rc, dataLen));
             rc = -1; /* Fatal protocol error, close down comm. */
@@ -925,6 +928,7 @@ dequeueCommit:
             rc = 1;
          }
          goto outUnlockAndFreeIovec;
+
       }
 
 #if defined(COMM_DISPATCH_EXTRA_WRITER_WAKEUP)
@@ -1016,9 +1020,11 @@ dequeueCommit:
              * to ACTIVE.
              */
 
-            rc = CommTransp_EnqueueAtomic(channel->transp,
-                                          &packet, sizeof packet);
-            if (rc == sizeof packet) {
+            CommTransp_EnqueueReset(channel->transp);
+            rc = CommTransp_EnqueueSegment(channel->transp,
+                                           &packet, sizeof packet, 1);
+            if ((rc == sizeof packet) &&
+                !CommTransp_EnqueueCommit(channel->transp)) {
                /* Guard against potentially concurrent zombify. */
 
                CommGlobalLockBH();
@@ -1039,9 +1045,10 @@ dequeueCommit:
        * or check whether the channel timed out in OPENED.
        */
 
-      rc = CommTransp_DequeueAtomic(channel->transp,
-                                    &packet, sizeof packet);
-      if (rc == sizeof packet) {
+      rc = CommTransp_DequeueSegment(channel->transp,
+                                     &packet, sizeof packet, 1);
+      if ((rc == sizeof packet) &&
+          !CommTransp_DequeueCommit(channel->transp)) {
          void (*activateNtf)(void *activateNtfData, CommChannel) = NULL;
          void *activateNtfData = NULL;
 
@@ -1078,6 +1085,7 @@ dequeueCommit:
       }
       rc = 1;
    }
+
    DispatchUnlock(channel);
 
 out:
@@ -1124,10 +1132,11 @@ Comm_DispatchAll(void)
 /**
  * @brief Writes a fully formatted packet (containing payload data, if
  *    applicable) to the specified channel.
- *
+ *    Note: This function requires the packet header and inlined payload,
+ *    if any, to be in kernel memory.
  *    The operation may block until enough write space is available, but no
- *    more than the specified interval.  The operation either writes the full
- *    amount of bytes, or it fails.  Warning: callers must _not_ use the
+ *    more than the specified interval. The operation either writes the full
+ *    amount of bytes, or it fails. Warning: callers must _not_ use the
  *    _Lock/_Unlock functions to bracket calls to this function.
  * @param[in,out] channel channel to write to.
  * @param packet packet to write.
@@ -1167,8 +1176,9 @@ Comm_Write(CommChannel channel,
       zombify = 0;
    }
    if (rc == 1) { /* Enough write space, enqueue the packet. */
-      rc = CommTransp_EnqueueAtomic(channel->transp, packet, packet->len);
-      if (rc != packet->len) {
+      rc = CommTransp_EnqueueSegment(channel->transp, packet, packet->len, 1);
+      if ((rc != packet->len) ||
+          CommTransp_EnqueueCommit(channel->transp)) {
          zombify = 1;
          rc = -1; /* Fatal protocol error. */
       }
@@ -1185,6 +1195,8 @@ out:
 
 /**
  * @brief Writes a packet and associated payload data to the specified channel.
+ *     Note: This function requires the packet header to be in kernel memory;
+ *     payloads may be in either kernel or user memory.
  *     The operation may block until enough write space is available, but
  *     not more than the specified interval.
  *     The operation either writes the full amount of bytes, or it fails.
@@ -1202,7 +1214,8 @@ out:
  * @param[in,out] vecLen length of kvec.
  * @param[in,out] timeoutMillis interval in milliseconds to wait.
  * @param[in,out] iovOffset must be set to 0 before first call (internal cookie)
- * @return number of bytes written, 0 if it timed out, -1 error.
+ * @param kern != 0 if payloads are in kernel memory
+ * @return number of bytes written, 0 if it timed out, < 0 error
  * @sideeffects data may be written to the channel.
  */
 
@@ -1212,7 +1225,8 @@ Comm_WriteVec(CommChannel channel,
               struct kvec **vec,
               unsigned int *vecLen,
               unsigned long long *timeoutMillis,
-              unsigned int *iovOffset)
+              unsigned int *iovOffset,
+              int kern)
 {
    int rc;
    int zombify;
@@ -1249,7 +1263,8 @@ Comm_WriteVec(CommChannel channel,
    }
    if (rc == 1) { /* Enough write space, enqueue the packet. */
       iovLen = 0;
-      rc = CommTransp_EnqueueSegment(channel->transp, packet, sizeof *packet);
+      rc = CommTransp_EnqueueSegment(channel->transp,
+                                     packet, sizeof *packet, 1);
       if (rc != sizeof *packet) {
          zombify = 1;
          rc = -1; /* Fatal protocol error. */
@@ -1276,10 +1291,19 @@ Comm_WriteVec(CommChannel channel,
                done = 1;
             }
 
-            rc = CommTransp_EnqueueSegment(channel->transp, iovBase, iovLen);
+            rc = CommTransp_EnqueueSegment(channel->transp,
+                                           iovBase, iovLen, kern);
             if (rc != iovLen) {
-               zombify = 1;
-               rc = -1; /* Fatal protocol error, close down comm. */
+               if (kern) {
+                  /* Fatal protocol error, close down comm. */
+
+                  zombify = 1;
+                  rc = -1;
+               } else {
+                  /* Bad passed user address. */
+
+                  rc = -EFAULT;
+               }
                goto out;
             }
 
@@ -1316,7 +1340,7 @@ Comm_WriteVec(CommChannel channel,
                }
                vecDataLen += toSend;
 
-               rc = CommTransp_EnqueueSegment(channel->transp, pad, toSend);
+               rc = CommTransp_EnqueueSegment(channel->transp, pad, toSend, 1);
                if (rc != toSend) {
                   zombify = 1;
                   rc = -1; /* Fatal protocol error, close down comm. */
@@ -1455,3 +1479,4 @@ Comm_ReleaseInlineEvents(CommChannel channel)
       return (unsigned int)-1;
    }
 }
+

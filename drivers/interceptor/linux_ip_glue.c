@@ -6,7 +6,7 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
- */
+ */ 
 
 /*
  * linux_ip_glue.c
@@ -77,7 +77,7 @@ struct SshLinuxHooksRec
 {
   const char *name;        /* Name of hook */
   Boolean is_registered;   /* Has this hook been registered? */
-  Boolean is_mandatory;    /* If the registration fails,
+  Boolean is_mandatory;    /* If the registration fails, 
 			      abort initialization? */
   int pf;                  /* Protocol family */
   int hooknum;             /* Hook id */
@@ -90,8 +90,8 @@ struct SshLinuxHooksRec
                          const struct net_device *out,
                          int (*okfn)(struct sk_buff *));
 
-  struct nf_hook_ops *ops; /* Pointer to storage for nf_hook_ops
-			      to store the netfilter hook configuration
+  struct nf_hook_ops *ops; /* Pointer to storage for nf_hook_ops 
+			      to store the netfilter hook configuration 
 			      and state */
 };
 
@@ -246,17 +246,17 @@ static struct ethhdr *ssh_get_eth_hdr(const struct sk_buff *skb)
 
 
 /* Common code for ssh_interceptor_packet_in_finish_ipv4()
-   and ssh_interceptor_packet_in_finish_ipv6().
+   and ssh_interceptor_packet_in_finish_ipv6(). 
 
    If SSH_LINUX_NF_PRE_ROUTING_BEFORE_ENGINE is set, then
    this function is called as the okfn() from the netfilter
-   infrastructure after inbound netfilter hook iteration.
-   Otherwise this function is called directly from the inbound
+   infrastructure after inbound netfilter hook iteration. 
+   Otherwise this function is called directly from the inbound 
    netfilter hookfn().
 */
 
 static inline int
-ssh_interceptor_packet_in_finish(struct sk_buff *skbp,
+ssh_interceptor_packet_in_finish(struct sk_buff *skbp, 
 				 SshInterceptorProtocol protocol)
 {
   SshInterceptorInternalPacket packet;
@@ -271,7 +271,7 @@ ssh_interceptor_packet_in_finish(struct sk_buff *skbp,
   SSH_DEBUG(SSH_D_HIGHSTART,
             ("incoming packet 0x%p, len %d proto 0x%x [%s] iface %d [%s]",
              skbp, skbp->len, ntohs(skbp->protocol),
-             (protocol == SSH_PROTOCOL_IP4 ? "ipv4" :
+             (protocol == SSH_PROTOCOL_IP4 ? "ipv4" : 
 	      (protocol == SSH_PROTOCOL_IP6 ? "ipv6" :
 	       (protocol == SSH_PROTOCOL_ETHERNET ? "ethernet" : "unknown"))),
              ifnum_in, skbp->dev->name));
@@ -310,7 +310,7 @@ ssh_interceptor_packet_in_finish(struct sk_buff *skbp,
       SSH_LINUX_STATISTICS(interceptor, { interceptor->stats.num_errors++; });
       return -EPERM;
     }
-
+  
 #ifdef DEBUG_LIGHT
   packet->skb->dev = NULL;
 #endif /* DEBUG_LIGHT */
@@ -318,12 +318,12 @@ ssh_interceptor_packet_in_finish(struct sk_buff *skbp,
   SSH_DEBUG_HEXDUMP(SSH_D_PCKDMP,
                     ("incoming packet, len=%d flags=0x%08lx%s",
                      packet->skb->len,
-		     (unsigned long) packet->packet.flags,
-		     ((packet->packet.flags & SSH_PACKET_HWCKSUM) ?
+		     (unsigned long) packet->packet.flags, 
+		     ((packet->packet.flags & SSH_PACKET_HWCKSUM) ? 
 		      " [hwcsum]" : "")),
                     packet->skb->data, packet->skb->len);
 
-  SSH_LINUX_STATISTICS(interceptor,
+  SSH_LINUX_STATISTICS(interceptor, 
   {
     interceptor->stats.num_fastpath_bytes_in += (SshUInt64) packet->skb->len;
     interceptor->stats.num_fastpath_packets_in++;
@@ -358,7 +358,7 @@ ssh_interceptor_packet_in_finish_ipv6(struct sk_buff *skbp)
 #endif /* SSH_LINUX_NF_PRE_ROUTING_BEFORE_ENGINE */
 
 
-/* ssh_interceptor_packet_in() is the common code for
+/* ssh_interceptor_packet_in() is the common code for 
    inbound netfilter hooks ssh_interceptor_packet_in_ipv4(),
    ssh_interceptor_packet_in_ipv6(), and ssh_interceptor_packet_in_arp().
 
@@ -380,7 +380,7 @@ ssh_interceptor_packet_in(int pf,
   struct iphdr *iph = (struct iphdr *) SSH_SKB_GET_NETHDR(skbp);
 #endif /* DEBUG_LIGHT */
 
-  SSH_DEBUG(SSH_D_PCKDMP,
+  SSH_DEBUG(SSH_D_PCKDMP, 
 	    ("IN 0x%04x/0x%x (%s[%d]->%s[%d]) len %d "
 	     "type=0x%08x %08x -> %08x dst 0x%p dev (%s[%d])",
 	     htons(skbp->protocol),
@@ -401,13 +401,13 @@ ssh_interceptor_packet_in(int pf,
 
   if (interceptor->enable_interception == FALSE)
     {
-      SSH_LINUX_STATISTICS(interceptor,
+      SSH_LINUX_STATISTICS(interceptor, 
       { interceptor->stats.num_passthrough++; });
       SSH_DEBUG(11, ("packet passed through"));
       return NF_ACCEPT;
     }
 
-  SSH_LINUX_STATISTICS(interceptor,
+  SSH_LINUX_STATISTICS(interceptor, 
   {
     interceptor->stats.num_bytes_in += (SshUInt64) skbp->len;
     interceptor->stats.num_packets_in++;
@@ -416,7 +416,7 @@ ssh_interceptor_packet_in(int pf,
   /* If the device is to loopback, pass the packet through. */
   if (in->flags & IFF_LOOPBACK)
     {
-      SSH_LINUX_STATISTICS(interceptor,
+      SSH_LINUX_STATISTICS(interceptor, 
       { interceptor->stats.num_passthrough++; });
       return NF_ACCEPT;
     }
@@ -424,11 +424,11 @@ ssh_interceptor_packet_in(int pf,
   /* The linux stack makes a copy of each locally generated
      broadcast / multicast packet. The original packet will
      be sent to network as any packet. The copy will be marked
-     as PACKET_LOOPBACK and looped back to local stack.
+     as PACKET_LOOPBACK and looped back to local stack. 
      So we let the copy continue back to local stack. */
   if (skbp->pkt_type == PACKET_LOOPBACK)
     {
-      SSH_LINUX_STATISTICS(interceptor,
+      SSH_LINUX_STATISTICS(interceptor, 
       { interceptor->stats.num_passthrough++; });
       return NF_ACCEPT;
     }
@@ -466,20 +466,20 @@ ssh_interceptor_packet_in(int pf,
 		     ssh_nf_in6.priority + 1);
       return NF_STOLEN;
 #endif /* SSH_LINUX_INTERCEPTOR_IPV6 */
-
+      
 #ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR
     case SSH_NFPROTO_ARP:
-      /* There is no point in looping ARP packets,
+      /* There is no point in looping ARP packets, 
 	 just continue packet processing, and return NF_STOLEN. */
       ssh_interceptor_packet_in_finish(skbp, SSH_PROTOCOL_ETHERNET);
       return NF_STOLEN;
 #endif /* !SSH_IPSEC_IP_ONLY_INTERCEPTOR */
-
+      
     default:
       SSH_NOTREACHED;
       return NF_DROP;
     }
-
+  
 #else /* SSH_LINUX_NF_PRE_ROUTING_BEFORE_ENGINE */
 
   /* Continue packet processing ssh_interceptor_packet_in_finish() */
@@ -488,7 +488,7 @@ ssh_interceptor_packet_in(int pf,
     case PF_INET:
       ssh_interceptor_packet_in_finish(skbp, SSH_PROTOCOL_IP4);
       return NF_STOLEN;
-
+      
 #ifdef SSH_LINUX_INTERCEPTOR_IPV6
     case PF_INET6:
       ssh_interceptor_packet_in_finish(skbp, SSH_PROTOCOL_IP6);
@@ -500,11 +500,11 @@ ssh_interceptor_packet_in(int pf,
       ssh_interceptor_packet_in_finish(skbp, SSH_PROTOCOL_ETHERNET);
       return NF_STOLEN;
 #endif /* !SSH_IPSEC_IP_ONLY_INTERCEPTOR */
-
+      
     default:
       break;
     }
-
+  
 #endif /* SSH_LINUX_NF_PRE_ROUTING_BEFORE_ENGINE */
 
   SSH_NOTREACHED;
@@ -544,7 +544,7 @@ ssh_interceptor_packet_in_arp(unsigned int hooknum,
 			      const struct net_device *out,
 			      int (*okfn) (struct sk_buff *))
 {
-  return ssh_interceptor_packet_in(SSH_NFPROTO_ARP, hooknum, skb,
+  return ssh_interceptor_packet_in(SSH_NFPROTO_ARP, hooknum, skb, 
 				   in, out, okfn);
 }
 #endif /* !SSH_IPSEC_IP_ONLY_INTERCEPTOR */
@@ -555,11 +555,11 @@ ssh_interceptor_packet_in_arp(unsigned int hooknum,
 
 /* Common code for ssh_interceptor_packet_out_finish_ipv4()
    and ssh_interceptor_packet_out_finish_ipv6().
-
+   
    If SSH_LINUX_NF_POST_ROUTING_BEFORE_ENGINE is set, then
    this function is called as the okfn() function from the
    netfilter infrastructure after the outbound hook iteration.
-   Otherwise, this function is called directly from the outbound
+   Otherwise, this function is called directly from the outbound 
    netfilter hookfn().
 
    This function must only be called from softirq context or
@@ -581,14 +581,14 @@ ssh_interceptor_packet_out_finish(struct sk_buff *skbp,
 
   interceptor = ssh_interceptor_context;
 
-  SSH_DEBUG(SSH_D_HIGHSTART,
+  SSH_DEBUG(SSH_D_HIGHSTART, 
 	    ("outgoing packet 0x%p, len %d proto 0x%x [%s] iface %d [%s]",
 	     skbp, skbp->len, ntohs(skbp->protocol),
-             (protocol == SSH_PROTOCOL_IP4 ? "ipv4" :
+             (protocol == SSH_PROTOCOL_IP4 ? "ipv4" : 
 	      (protocol == SSH_PROTOCOL_IP6 ? "ipv6" :
 	       (protocol == SSH_PROTOCOL_ETHERNET ? "ethernet" : "unknown"))),
 	     ifnum_in, skbp->dev->name));
-
+  
   local_bh_disable();
 
   flags = SSH_PACKET_FROMPROTOCOL;
@@ -634,12 +634,12 @@ ssh_interceptor_packet_out_finish(struct sk_buff *skbp,
   packet->skb->dev = NULL;
 #endif /* DEBUG_LIGHT */
 
-  SSH_DEBUG_HEXDUMP(SSH_D_PCKDMP,
-		    ("outgoing packet, len=%d flags=0x%08lx%s",
+  SSH_DEBUG_HEXDUMP(SSH_D_PCKDMP, 
+		    ("outgoing packet, len=%d flags=0x%08lx%s", 
 		     packet->skb->len,
 		     (unsigned long) packet->packet.flags,
-		     ((packet->packet.flags & SSH_PACKET_HWCKSUM) ?
-		      " [hwcsum]" : "")),
+		     ((packet->packet.flags & SSH_PACKET_HWCKSUM) ? 
+		      " [hwcsum]" : "")),		    
                     packet->skb->data, packet->skb->len);
 
   SSH_LINUX_STATISTICS(interceptor,
@@ -647,11 +647,11 @@ ssh_interceptor_packet_out_finish(struct sk_buff *skbp,
     interceptor->stats.num_fastpath_bytes_out += (SshUInt64) packet->skb->len;
     interceptor->stats.num_fastpath_packets_out++;
   });
-
+  
   /* Pass the packet to engine. */
   SSH_LINUX_INTERCEPTOR_PACKET_CALLBACK(interceptor,
 					(SshInterceptorPacket) packet);
-
+  
   local_bh_enable();
 
   /* Return ok */
@@ -682,13 +682,13 @@ ssh_interceptor_packet_out_finish_ipv6(struct sk_buff *skbp)
    Netfilter does not provide a clean way of intercepting ALL packets
    being sent via an output chain after all other filters are processed.
    Therefore this hook is registered first, and then if
-   SSH_LINUX_NF_POST_ROUTING_BEFORE_ENGINE is set the packet is
+   SSH_LINUX_NF_POST_ROUTING_BEFORE_ENGINE is set the packet is 
    sent back to SSH_NF_IP_POST_ROUTING hook with (*okfn)()
-   pointing to the actual interception function. If
+   pointing to the actual interception function. If 
    SSH_LINUX_NF_POST_ROUTING_BEFORE_ENGINE is not set, then
    all following netfilter hook functions in SSH_NF_IP_POST_ROUTING hook
    are skipped.
-
+   
    This function must only be called from softirq context or
    from an exception. It will disable softirqs for the engine
    processing. This function MUST NOT be called
@@ -709,11 +709,11 @@ ssh_interceptor_packet_out(int pf,
   struct iphdr *iph = (struct iphdr *) SSH_SKB_GET_NETHDR(skbp);
 #endif /* DEBUG_LIGHT */
 
-  SSH_DEBUG(SSH_D_PCKDMP,
+  SSH_DEBUG(SSH_D_PCKDMP, 
 	    ("OUT 0x%04x/0x%x (%s[%d]->%s[%d]) len %d "
 	     "type=0x%08x %08x -> %08x dst 0x%p dev (%s[%d])",
 	     htons(skbp->protocol),
-	     pf,
+	     pf,		
 	     (in ? in->name : "<none>"),
 	     (in ? in->ifindex : -1),
 	     (out ? out->name : "<none>"),
@@ -725,19 +725,19 @@ ssh_interceptor_packet_out(int pf,
 	     (skbp->dev ? skbp->dev->name : "<none>"),
 	     (skbp->dev ? skbp->dev->ifindex : -1)
 	     ));
-
+  
   interceptor = ssh_interceptor_context;
 
   if (interceptor->enable_interception == FALSE)
     {
-      SSH_LINUX_STATISTICS(interceptor,
+      SSH_LINUX_STATISTICS(interceptor, 
       { interceptor->stats.num_passthrough++; });
       SSH_DEBUG(11, ("packet passed through"));
       return NF_ACCEPT;
     }
 
   SSH_LINUX_STATISTICS(interceptor,
-  {
+  { 
     interceptor->stats.num_packets_out++;
     interceptor->stats.num_bytes_out += (SshUInt64) skbp->len;
   });
@@ -748,7 +748,7 @@ ssh_interceptor_packet_out(int pf,
       SSH_DEBUG(SSH_D_NICETOKNOW, ("loopback packet passed through"));
       SSH_DEBUG_HEXDUMP(SSH_D_PCKDMP, ("len=%d", skbp->len),
 			skbp->data, skbp->len);
-      SSH_LINUX_STATISTICS(interceptor,
+      SSH_LINUX_STATISTICS(interceptor, 
       { interceptor->stats.num_passthrough++; });
       return NF_ACCEPT;
     }
@@ -756,16 +756,16 @@ ssh_interceptor_packet_out(int pf,
   /* Linux network stack creates a copy of locally generated broadcast
      and multicast packets, and sends the copies to local stack using
      'ip_dev_loopback_xmit' or 'ip6_dev_loopback_xmit' as the NFHOOK
-     okfn. Intercept the original packets and let the local copies go
-     through. */
+     okfn. Intercept the original packets and let the local copies go 
+     through. */ 
   if (pf == PF_INET &&
       okfn != interceptor->linux_fn.ip_finish_output)
     {
-      SSH_DEBUG(SSH_D_NICETOKNOW,
+      SSH_DEBUG(SSH_D_NICETOKNOW, 
 		("local IPv4 broadcast loopback packet passed through"));
       SSH_DEBUG_HEXDUMP(SSH_D_PCKDMP, ("len=%d", skbp->len),
 			skbp->data, skbp->len);
-      SSH_LINUX_STATISTICS(interceptor,
+      SSH_LINUX_STATISTICS(interceptor, 
       { interceptor->stats.num_passthrough++; });
       return NF_ACCEPT;
     }
@@ -773,11 +773,11 @@ ssh_interceptor_packet_out(int pf,
   if (pf == PF_INET6 &&
       okfn != interceptor->linux_fn.ip6_output_finish)
     {
-      SSH_DEBUG(SSH_D_NICETOKNOW,
+      SSH_DEBUG(SSH_D_NICETOKNOW, 
 		("local IPv6 broadcast loopback packet passed through"));
       SSH_DEBUG_HEXDUMP(SSH_D_PCKDMP, ("len=%d", skbp->len),
 			skbp->data, skbp->len);
-      SSH_LINUX_STATISTICS(interceptor,
+      SSH_LINUX_STATISTICS(interceptor, 
       { interceptor->stats.num_passthrough++; });
       return NF_ACCEPT;
     }
@@ -787,13 +787,13 @@ ssh_interceptor_packet_out(int pf,
   if (pf == PF_INET6 &&
       skbp->sk == dev_net(skbp->dev)->ipv6.ndisc_sk)
     {
-      SSH_DEBUG(SSH_D_NICETOKNOW,
+      SSH_DEBUG(SSH_D_NICETOKNOW, 
 		("Neighbour discovery packet passed through"));
       SSH_DEBUG_HEXDUMP(SSH_D_PCKDMP,
 			("length %d dumping %d bytes",
 			 (int) skbp->len, (int) skb_headlen(skbp)),
 			skbp->data, skb_headlen(skbp));
-      SSH_LINUX_STATISTICS(interceptor,
+      SSH_LINUX_STATISTICS(interceptor, 
       { interceptor->stats.num_passthrough++; });
       return NF_ACCEPT;
     }
@@ -802,7 +802,7 @@ ssh_interceptor_packet_out(int pf,
 
 #endif /* SSH_LINUX_INTERCEPTOR_IPV6 */
 
-  /* Assert that we are about to intercept the packet from
+  /* Assert that we are about to intercept the packet from 
      the correct netfilter hook on the correct path. */
 #ifdef SSH_LINUX_INTERCEPTOR_IPV6
   SSH_ASSERT(okfn == interceptor->linux_fn.ip_finish_output ||
@@ -813,7 +813,7 @@ ssh_interceptor_packet_out(int pf,
 
 #ifdef SSH_LINUX_NF_POST_ROUTING_BEFORE_ENGINE
 
-  /* Traverse lower priority netfilter hooks. */
+  /* Traverse lower priority netfilter hooks. */  
   switch (pf)
     {
     case PF_INET:
@@ -823,7 +823,7 @@ ssh_interceptor_packet_out(int pf,
 		     ssh_interceptor_packet_out_finish_ipv4,
 		     ssh_nf_out4.priority + 1);
       return NF_STOLEN;
-
+      
 #ifdef SSH_LINUX_INTERCEPTOR_IPV6
     case PF_INET6:
       SSH_ASSERT(hooknum == SSH_NF_IP6_POST_ROUTING);
@@ -836,11 +836,11 @@ ssh_interceptor_packet_out(int pf,
 
     default:
       SSH_NOTREACHED;
-      return NF_DROP;
+      return NF_DROP;      
     }
 
 #else /* SSH_LINUX_NF_POST_ROUTING_BEFORE_ENGINE */
-
+  
   /* Continue packet processing in ssh_interceptor_packet_out_finish() */
   switch (pf)
     {
@@ -903,34 +903,34 @@ static inline int
 ssh_interceptor_send_to_network(int pf, struct sk_buff *skbp)
 {
   skbp->pkt_type = PACKET_OUTGOING;
-
+  
 #ifdef CONFIG_NETFILTER_DEBUG
 #ifdef LINUX_HAS_SKB_NFDEBUG
   if (pf == PF_INET)
     {
       /* Mark SSH_NF_IP_LOCAL_OUT chains visited */
-      if (skbp->sk)
-	skbp->nf_debug = ((1 << SSH_NF_IP_LOCAL_OUT)
+      if (skbp->sk)    
+	skbp->nf_debug = ((1 << SSH_NF_IP_LOCAL_OUT) 
 			  | (1 << SSH_NF_IP_POST_ROUTING));
-
+      
       /* skbp is unowned, netfilter thinks this is a forwarded skb.
-	 Mark SSH_NF_IP_PRE_ROUTING, SSH_NF_IP_FORWARD,
+	 Mark SSH_NF_IP_PRE_ROUTING, SSH_NF_IP_FORWARD, 
 	 and SSH_NF_IP_POST_ROUTING
 	 chains visited */
       else
-	skbp->nf_debug = ((1 << SSH_NF_IP_PRE_ROUTING)
+	skbp->nf_debug = ((1 << SSH_NF_IP_PRE_ROUTING) 
 			  | (1 << SSH_NF_IP_FORWARD)
 			  | (1 << SSH_NF_IP_POST_ROUTING));
     }
 #endif /* LINUX_HAS_SKB_NFDEBUG */
 #endif /* CONFIG_NETFILTER_DEBUG */
-
-  SSH_LINUX_STATISTICS(ssh_interceptor_context,
+      
+  SSH_LINUX_STATISTICS(ssh_interceptor_context, 
   {
     ssh_interceptor_context->stats.num_packets_sent++;
     ssh_interceptor_context->stats.num_bytes_sent += (SshUInt64) skbp->len;
   });
-
+  
 #ifdef SSH_LINUX_NF_POST_ROUTING_AFTER_ENGINE
   /* Traverse lower priority netfilter hooks. */
   switch (pf)
@@ -949,24 +949,24 @@ ssh_interceptor_send_to_network(int pf, struct sk_buff *skbp)
 			    ssh_interceptor_context->
 			    linux_fn.ip6_output_finish,
 			    ssh_nf_out6.priority + 1);
-#endif /* SSH_LINUX_INTERCEPTOR_IPV6 */
+#endif /* SSH_LINUX_INTERCEPTOR_IPV6 */     
 
     default:
       break;
     }
 
-#else /* SSH_LINUX_NF_POST_ROUTING_AFTER_ENGINE */
+#else /* SSH_LINUX_NF_POST_ROUTING_AFTER_ENGINE */  
   /* Pass packet to output path. */
   switch (pf)
     {
     case PF_INET:
       return (*ssh_interceptor_context->linux_fn.ip_finish_output)(skbp);
-
+      
 #ifdef SSH_LINUX_INTERCEPTOR_IPV6
     case PF_INET6:
       return (*ssh_interceptor_context->linux_fn.ip6_output_finish)(skbp);
-#endif /* SSH_LINUX_INTERCEPTOR_IPV6 */
-
+#endif /* SSH_LINUX_INTERCEPTOR_IPV6 */      
+      
     default:
       break;
     }
@@ -995,7 +995,7 @@ ssh_interceptor_send_to_network_ipv6(struct sk_buff *skbp)
    protocol stacks.  This will eventually free the packet by calling
    ssh_interceptor_packet_free.  The packet header should not be
    touched once this function has been called.
-
+   
    ssh_interceptor_send() function for both media level and IP level
    interceptor. This grabs a packet with media layer headers attached
    and sends it to the interface defined by 'pp->ifnum_out'. */
@@ -1020,21 +1020,21 @@ ssh_interceptor_send(SshInterceptor interceptor,
   SSH_DEBUG(SSH_D_HIGHSTART,
 	    ("sending packet to %s, "
 	     "len=%d flags=0x%08lx ifnum_out=%lu protocol=%s[0x%x]",
-	     ((pp->flags & SSH_PACKET_FROMPROTOCOL) ? "network" :
+	     ((pp->flags & SSH_PACKET_FROMPROTOCOL) ? "network" : 
 	      ((pp->flags & SSH_PACKET_FROMADAPTER) ? "stack" :
 	       "nowhere")),
 	     ipp->skb->len, (unsigned long) pp->flags,
-	     (unsigned long) pp->ifnum_out,
+	     (unsigned long) pp->ifnum_out, 
 	     (pp->protocol == SSH_PROTOCOL_IP4 ? "ipv4" :
 	      (pp->protocol == SSH_PROTOCOL_IP6 ? "ipv6" :
-	       (pp->protocol == SSH_PROTOCOL_ARP ? "arp" :
-		(pp->protocol == SSH_PROTOCOL_ETHERNET ? "ethernet" :
+	       (pp->protocol == SSH_PROTOCOL_ARP ? "arp" : 
+		(pp->protocol == SSH_PROTOCOL_ETHERNET ? "ethernet" : 
 		 "unknown")))),
 	     pp->protocol));
-
-  SSH_DEBUG_HEXDUMP(SSH_D_PCKDMP, ("packet, len %d", ipp->skb->len),
+  
+  SSH_DEBUG_HEXDUMP(SSH_D_PCKDMP, ("packet, len %d", ipp->skb->len), 
 		    ipp->skb->data, ipp->skb->len);
-
+  
   /* Require that any references to previous devices
      were released by the entrypoint hooks. */
   SSH_ASSERT(ipp->skb->dev == NULL);
@@ -1044,8 +1044,8 @@ ssh_interceptor_send(SshInterceptor interceptor,
   dev = ssh_interceptor_ifnum_to_netdev(interceptor, pp->ifnum_out);
   if (dev == NULL)
     {
-      SSH_DEBUG(SSH_D_UNCOMMON,
-		("Interface %lu has disappeared, dropping packet 0x%p",
+      SSH_DEBUG(SSH_D_UNCOMMON, 
+		("Interface %lu has disappeared, dropping packet 0x%p", 
 		 (unsigned long) pp->ifnum_out, ipp->skb));
       goto error;
     }
@@ -1056,8 +1056,8 @@ ssh_interceptor_send(SshInterceptor interceptor,
     ssh_interceptor_packet_verify_headroom(ipp->skb, media_header_len);
   if (ipp->skb == NULL)
     {
-      SSH_DEBUG(SSH_D_UNCOMMON,
-		("Could not add headroom to skbp, dropping packet 0x%p",
+      SSH_DEBUG(SSH_D_UNCOMMON, 
+		("Could not add headroom to skbp, dropping packet 0x%p", 
 		 ipp->skb));
       goto error;
     }
@@ -1082,7 +1082,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
   /* Check if the engine has cleared the SSH_PACKET_HWCKSUM flag. */
   if ((pp->flags & SSH_PACKET_HWCKSUM) == 0)
     ipp->skb->ip_summed = CHECKSUM_NONE;
-
+  
   /* Clear control buffer, as packet contents might have changed. */
   if ((pp->flags & SSH_PACKET_UNMODIFIED) == 0)
     memset(ipp->skb->cb, 0, sizeof(ipp->skb->cb));
@@ -1093,15 +1093,15 @@ ssh_interceptor_send(SshInterceptor interceptor,
       /* Network header pointer is required by tcpdump. */
       SSH_SKB_SET_NETHDR(ipp->skb, ipp->skb->data + media_header_len);
 
-      /* Let unmodified packets pass on as if they were never intercepted.
+      /* Let unmodified packets pass on as if they were never intercepted. 
 	 Note that this expects that skb->dst has not been cleared or modified
 	 during Engine processing. */
       if (pp->flags & SSH_PACKET_UNMODIFIED)
 	{
 	  SSH_DEBUG(SSH_D_HIGHOK, ("Passing unmodified packet to network"));
 
-#ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR
-	  /* Remove the media header that was prepended to the packet
+#ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR	  
+	  /* Remove the media header that was prepended to the packet 
 	     in the inbound netfilter hook. Update skb->protocol and
 	     pp->protocol. */
 	  if (media_header_len > 0)
@@ -1127,40 +1127,58 @@ ssh_interceptor_send(SshInterceptor interceptor,
 		}
 	    }
 #endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
-
+	  
 	  if (SSH_SKB_DST(ipp->skb) == NULL)
 	    {
 	      SSH_DEBUG(SSH_D_FAIL, ("Invalid skb->dst, dropping packet"));
 	      goto error;
 	    }
-
+	  
+	  /* Send packet to network. Note that this may cause recursive
+             calls to the outbound netfilter hooks because the packet
+             may trigger IPv6 neighbour discovery. */
 	  switch (pp->protocol)
 	    {
 	    case SSH_PROTOCOL_IP4:
-	      SSH_LINUX_STATISTICS(interceptor,
+	      SSH_LINUX_STATISTICS(interceptor, 
 				   { interceptor->stats.num_passthrough++; });
 	      ssh_interceptor_send_to_network_ipv4(ipp->skb);
 	      break;
-
+	      
 #ifdef SSH_LINUX_INTERCEPTOR_IPV6
 	    case SSH_PROTOCOL_IP6:
-	      SSH_LINUX_STATISTICS(interceptor,
+	      SSH_LINUX_STATISTICS(interceptor, 
 				   { interceptor->stats.num_passthrough++; });
 	      ssh_interceptor_send_to_network_ipv6(ipp->skb);
 	      break;
 #endif /* SSH_LINUX_INTERCEPTOR_IPV6 */
-
+	      
 	    default:
-	      SSH_DEBUG(SSH_D_ERROR,
-			("pp->protocol 0x%x ipp->skb->protocol 0x%x",
+	      SSH_DEBUG(SSH_D_ERROR, 
+			("pp->protocol 0x%x ipp->skb->protocol 0x%x", 
 			 pp->protocol, ipp->skb->protocol));
 	      SSH_NOTREACHED;
 	      goto error;
 	    }
-
-	  /* All done. */
+	  
+	  /* All done for unmodified packet */
 	  goto sent;
 	}
+
+      /* Clear local_df */
+      ipp->skb->local_df = 0;
+
+      /* Clear rxhash, it used also for tx hashing */
+#ifdef LINUX_HAS_SKB_RXHASH
+      ipp->skb->rxhash = 0;
+#endif /* LINUX_HAS_SKB_RXHASH */
+#ifdef LINUX_HAS_SKB_L4_RXHASH
+      ipp->skb->l4_rxhash = 0;
+#endif /* LINUX_HAS_SKB_L4_RXHASH */
+
+      /* Mac header pointer is required by iptables */
+      SSH_ASSERT(media_header_len <= ipp->skb->len);
+      SSH_SKB_SET_MACHDR(ipp->skb, ipp->skb->data);
 
 #ifdef DEBUG_LIGHT
       if (
@@ -1179,17 +1197,13 @@ ssh_interceptor_send(SshInterceptor interceptor,
 
 #ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR
 
-      /* Media level */
-      SSH_ASSERT(media_header_len <= ipp->skb->len);
-      SSH_SKB_SET_MACHDR(ipp->skb, ipp->skb->data);
-
       /* Set ipp->skb->protocol */
       SSH_ASSERT(skb_headlen(ipp->skb) >= media_header_len);
       ipp->skb->protocol = ssh_ethertype_to_skb_proto(pp->protocol,
 						      media_header_len,
 						      ipp->skb->data);
-
-      SSH_LINUX_STATISTICS(interceptor,
+      
+      SSH_LINUX_STATISTICS(interceptor, 
       {
 	interceptor->stats.num_packets_sent++;
 	interceptor->stats.num_bytes_sent += (SshUInt64) ipp->skb->len;
@@ -1210,13 +1224,13 @@ ssh_interceptor_send(SshInterceptor interceptor,
 
 #ifdef SSH_LINUX_NF_FORWARD_AFTER_ENGINE
 
-      /* Prepare to pass forwarded packets through
+      /* Prepare to pass forwarded packets through 
 	 SSH_NF_IP_FORWARD netfilter hook. */
       if (pp->flags & SSH_PACKET_FORWARDED)
 	{
 	  /* Map 'pp->ifnum_in' to a net_device. */
 	  in_dev = ssh_interceptor_ifnum_to_netdev(interceptor, pp->ifnum_in);
-
+	  
 	  SSH_DEBUG(SSH_D_PCKDMP,
 		    ("FWD 0x%04x/%d (%s[%d]->%s[%d]) len %d "
 		     "type=0x%08x dst 0x%08x",
@@ -1226,24 +1240,24 @@ ssh_interceptor_send(SshInterceptor interceptor,
 		     (ipp->skb->dev ? ipp->skb->dev->name : "<none>"),
 		     (ipp->skb->dev ? ipp->skb->dev->ifindex : -1),
 		     ipp->skb->len, ipp->skb->pkt_type, SSH_SKB_DST(ipp->skb)));
-
+	  
 	  SSH_DEBUG(SSH_D_HIGHSTART,
 		    ("forwarding packet 0x%08x, len %d proto 0x%x [%s]",
 		     ipp->skb, ipp->skb->len, ntohs(ipp->skb->protocol),
 		     (pp->protocol == SSH_PROTOCOL_IP4 ? "ipv4" :
 		      (pp->protocol == SSH_PROTOCOL_IP6 ? "ipv6" :
-		       (pp->protocol == SSH_PROTOCOL_ARP ? "arp" :
+		       (pp->protocol == SSH_PROTOCOL_ARP ? "arp" : 
 			"unknown")))));
-
-	  /* Change pkt_type to PACKET_HOST, which is expected
-	     in the SSH_NF_IP_FORWARD hook. It is set to PACKET_OUTGOING
+      
+	  /* Change pkt_type to PACKET_HOST, which is expected 
+	     in the SSH_NF_IP_FORWARD hook. It is set to PACKET_OUTGOING 
 	     in ssh_interceptor_send_to_network_*() */
 	  ipp->skb->pkt_type = PACKET_HOST;
 	}
 #endif /* SSH_LINUX_NF_FORWARD_AFTER_ENGINE */
 
       SSH_ASSERT(media_header_len == 0);
-
+      
       switch (pp->protocol)
 	{
 	case SSH_PROTOCOL_IP4:
@@ -1301,8 +1315,8 @@ ssh_interceptor_send(SshInterceptor interceptor,
 #endif /* SSH_LINUX_INTERCEPTOR_IPV6 */
 
 	default:
-	  SSH_DEBUG(SSH_D_ERROR,
-		    ("pp->protocol 0x%x ipp->skb->protocol 0x%x",
+	  SSH_DEBUG(SSH_D_ERROR, 
+		    ("pp->protocol 0x%x ipp->skb->protocol 0x%x", 
 		     pp->protocol, ipp->skb->protocol));
 	  SSH_NOTREACHED;
 	  goto error;
@@ -1310,15 +1324,15 @@ ssh_interceptor_send(SshInterceptor interceptor,
 
       /* All done. */
       goto sent;
-
-#endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
+      
+#endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */     
     }
 
   /* Send to stack */
   else if (pp->flags & SSH_PACKET_FROMADAPTER)
     {
 #ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR
-      SshUInt32 pkt_len4;
+      SshUInt32 pkt_len4;      
 #endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
 #ifdef SSH_LINUX_INTERCEPTOR_IPV6
       SshUInt32 pkt_len6;
@@ -1326,7 +1340,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
 
       /* Network header pointer is required by tcpdump. */
       SSH_SKB_SET_NETHDR(ipp->skb, ipp->skb->data + media_header_len);
-
+      
       /* Let unmodified packets pass on as if they were never intercepted.
 	 Note that this expects that SSH_PACKET_UNMODIFIED packets are either
 	 IPv4 or IPv6. Currently there is no handling for ARP, as the Engine
@@ -1334,9 +1348,9 @@ ssh_interceptor_send(SshInterceptor interceptor,
       if (pp->flags & SSH_PACKET_UNMODIFIED)
 	{
 	  SSH_DEBUG(SSH_D_HIGHOK, ("Passing unmodified packet to stack"));
-
-#ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR
-	  /* Remove the media header that was prepended to the packet
+	  
+#ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR	  
+	  /* Remove the media header that was prepended to the packet 
 	     in the inbound netfilter hook. Update skb->protocol and
 	     pp->protocol. */
 	  if (media_header_len > 0)
@@ -1366,12 +1380,12 @@ ssh_interceptor_send(SshInterceptor interceptor,
 	  switch (pp->protocol)
 	    {
 	    case SSH_PROTOCOL_IP4:
-	      SSH_LINUX_STATISTICS(interceptor,
+	      SSH_LINUX_STATISTICS(interceptor, 
 				   { interceptor->stats.num_passthrough++; });
 #ifdef SSH_LINUX_NF_PRE_ROUTING_AFTER_ENGINE
 	      SSH_DEBUG(SSH_D_LOWOK, ("Passing skb 0x%p to NF_IP_PRE_ROUTING",
 				      ipp->skb));
-	      NF_HOOK_THRESH(PF_INET, SSH_NF_IP_PRE_ROUTING,
+	      NF_HOOK_THRESH(PF_INET, SSH_NF_IP_PRE_ROUTING, 
 			     ipp->skb, ipp->skb->dev, NULL,
 			     interceptor->nf->linux_fn.ip_rcv_finish,
 			     ssh_nf_in4.priority + 1);
@@ -1382,15 +1396,15 @@ ssh_interceptor_send(SshInterceptor interceptor,
 	      (*interceptor->linux_fn.ip_rcv_finish)(ipp->skb);
 #endif /* SSH_LINUX_NF_PRE_ROUTING_AFTER_ENGINE */
 	      break;
-
+	      
 #ifdef SSH_LINUX_INTERCEPTOR_IPV6
 	    case SSH_PROTOCOL_IP6:
-	      SSH_LINUX_STATISTICS(interceptor,
+	      SSH_LINUX_STATISTICS(interceptor, 
 				   { interceptor->stats.num_passthrough++; });
 #ifdef SSH_LINUX_NF_PRE_ROUTING_AFTER_ENGINE
 	      SSH_DEBUG(SSH_D_LOWOK, ("Passing skb 0x%p to NF_IP6_PRE_ROUTING",
 				      ipp->skb));
-	      NF_HOOK_THRESH(PF_INET6, SSH_NF_IP6_PRE_ROUTING, ipp->skb,
+	      NF_HOOK_THRESH(PF_INET6, SSH_NF_IP6_PRE_ROUTING, ipp->skb, 
 			     ipp->skb->dev, NULL,
 			     interceptor->nf->linux_fn.ip6_rcv_finish,
 			     ssh_nf_out6.priority + 1);
@@ -1402,16 +1416,16 @@ ssh_interceptor_send(SshInterceptor interceptor,
 #endif /* SSH_LINUX_NF_PRE_ROUTING_AFTER_ENGINE */
 	      break;
 #endif /* SSH_LINUX_INTERCEPTOR_IPV6 */
-
+	      
 	    default:
-	      SSH_DEBUG(SSH_D_ERROR,
-			("pp->protocol 0x%x ipp->skb->protocol 0x%x",
+	      SSH_DEBUG(SSH_D_ERROR, 
+			("pp->protocol 0x%x ipp->skb->protocol 0x%x", 
 			 pp->protocol, ipp->skb->protocol));
 	      SSH_NOTREACHED;
 	      goto error;
 	    }
-
-	  /* All done. */
+	  
+	  /* All done for unmodified packet. */
 	  goto sent;
 	}
 
@@ -1421,12 +1435,11 @@ ssh_interceptor_send(SshInterceptor interceptor,
 	     || ipp->skb->pkt_type == PACKET_BROADCAST)
             && (pp->flags & SSH_PACKET_MEDIABCAST) != 0))
         ipp->skb->pkt_type = PACKET_HOST;
-
+      
       /* Clear old routing decision */
       if (SSH_SKB_DST(ipp->skb))
         {
-          dst_release(SSH_SKB_DST(ipp->skb));
-          SSH_SKB_DST_SET(ipp->skb, NULL);
+          SSH_SKB_DST_DROP(ipp->skb);
         }
 
       /* If the packet has an associated SKB and that SKB is associated
@@ -1435,12 +1448,25 @@ ssh_interceptor_send(SshInterceptor interceptor,
 	 the packet has been turned around by the engine. */
       skb_orphan(ipp->skb);
 
-#ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR
+      /* Reset rxhash */      
+#ifdef LINUX_HAS_SKB_L4_RXHASH
+      ipp->skb->l4_rxhash = 0;
+#endif /* LINUX_HAS_SKB_L4_RXHASH */
+#ifdef LINUX_HAS_SKB_RXHASH
+      /* Clear rxhash */
+      ipp->skb->rxhash = 0;
+#ifdef LINUX_HAS_SKB_GET_RXHASH
+      /* and recalculate it. */
+      skb_get_rxhash(ipp->skb);
+#endif /* LINUX_HAS_SKB_GET_RXHASH */
+#endif /* LINUX_HAS_SKB_RXHASH */
+
+#ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR 
 
       /* Media level */
 
-      /* If the packet does not include a media level header (for
-	 example in case of pppoe), calling eth_type_trans() will
+      /* If the packet does not include a media level header (for 
+	 example in case of pppoe), calling eth_type_trans() will 
 	 corrupt the beginning of packet. Instead skb->protocol must
 	 be set from pp->protocol. */
       if (media_header_len == 0)
@@ -1463,7 +1489,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
 	      ipp->skb->protocol = ethernet->h_proto;
 	      skb_pull(ipp->skb, media_header_len);
 	    }
-
+	  
 	  /* For all other packets, call eth_type_trans() to
 	     set the protocol and the skb pointers. */
 	  else
@@ -1496,7 +1522,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
 				SSH_SKB_CSUM(ipp->skb)));
       /* ip_summed is CHECKSUM_PARTIAL, this should never happen. */
       else
-	SSH_DEBUG(SSH_D_ERROR, ("Invalid HW checksum flag %d",
+	SSH_DEBUG(SSH_D_ERROR, ("Invalid HW checksum flag %d", 
 				ipp->skb->ip_summed));
 #endif /* DEBUG_LIGHT */
 
@@ -1512,7 +1538,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
 	      goto error;
 	    }
           SSH_SKB_SET_TRHDR(ipp->skb, neth + SSH_IPH4_HLEN(neth) * 4);
-
+	  
 #ifdef CONFIG_NETFILTER_DEBUG
 #ifdef LINUX_HAS_SKB_NFDEBUG
 	  /* Mark SSH_NF_IP_PRE_ROUTING visited */
@@ -1520,7 +1546,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
 #endif /* LINUX_HAS_SKB_NFDEBUG */
 #endif /* CONFIG_NETFILTER_DEBUG */
 
-#ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR
+#ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR 
 	  /* Remove padding from packet. */
 	  pkt_len4 = SSH_IPH4_LEN(neth);
 	  SSH_ASSERT(pkt_len4 >= SSH_IPH4_HDRLEN && pkt_len4 <= 0xffff);
@@ -1532,15 +1558,15 @@ ssh_interceptor_send(SshInterceptor interceptor,
 	      skb_trim(ipp->skb, pkt_len4);
 	    }
 #endif /* !SSH_IPSEC_IP_ONLY_INTERCEPTOR */
-
-	  SSH_LINUX_STATISTICS(interceptor,
+	  
+	  SSH_LINUX_STATISTICS(interceptor, 
 	  {
 	    interceptor->stats.num_packets_sent++;
 	    interceptor->stats.num_bytes_sent += (SshUInt64) ipp->skb->len;
 	  });
-
+	  
 #ifdef SSH_LINUX_NF_PRE_ROUTING_AFTER_ENGINE
-	  NF_HOOK_THRESH(PF_INET, SSH_NF_IP_PRE_ROUTING,
+	  NF_HOOK_THRESH(PF_INET, SSH_NF_IP_PRE_ROUTING, 
 			 ipp->skb, ipp->skb->dev, NULL,
 			 interceptor->linux_fn.ip_rcv_finish,
 			 ssh_nf_in4.priority + 1);
@@ -1561,7 +1587,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
 
 	  ipproto = SSH_IPH6_NH(neth);
           pkt_len6 = SSH_IPH6_LEN(neth) + SSH_IPH6_HDRLEN;
-
+	  
 	  /* Parse hop-by-hop options and update IPv6 control buffer. */
 	  SSH_LINUX_IP6CB(ipp->skb)->iif = ipp->skb->dev->ifindex;
 	  SSH_LINUX_IP6CB(ipp->skb)->hop = 0;
@@ -1576,10 +1602,10 @@ ssh_interceptor_send(SshInterceptor interceptor,
 	    {
 	      unsigned char *opt_ptr = neth + offset + 2;
 	      int opt_len;
-
-	      ipproto = SSH_IP6_EXT_COMMON_NH(neth + offset);
+	      
+	      ipproto = SSH_IP6_EXT_COMMON_NH(neth + offset);	      
 	      offset += SSH_IP6_EXT_COMMON_LENB(neth + offset);
-
+	      
 	      while (opt_ptr < neth + offset)
 		{
 		  opt_len = opt_ptr[1] + 2;
@@ -1589,18 +1615,18 @@ ssh_interceptor_send(SshInterceptor interceptor,
 		    case 0:
 		      opt_len = 1;
 		      break;
-
+		      
 		      /* PADN */
 		    case 1:
 		      break;
-
+		      
 		      /* Jumbogram */
 		    case 194:
 		      /* Take packet len from option (skb->len is zero). */
 		      pkt_len6 = SSH_GET_32BIT(&opt_ptr[2])
 			+ sizeof(struct ipv6hdr);
 		      break;
-
+		      
 		      /* Router alert */
 		    case 5:
                       SSH_LINUX_IP6CB(ipp->skb)->ra = opt_ptr - neth;
@@ -1614,31 +1640,31 @@ ssh_interceptor_send(SshInterceptor interceptor,
 		  opt_ptr += opt_len;
 		}
 	      SSH_LINUX_IP6CB(ipp->skb)->hop = sizeof(struct ipv6hdr);
-
+	      
 #ifdef LINUX_HAS_IP6CB_NHOFF
 	      SSH_LINUX_IP6CB(ipp->skb)->nhoff = sizeof(struct ipv6hdr);
 #endif /* LINUX_HAS_IP6CB_NHOFF */
 	    }
 	  SSH_SKB_SET_TRHDR(ipp->skb, neth + offset);
-
+	  
 	  /* Remove padding from packet. */
 	  SSH_ASSERT(pkt_len6 >= sizeof(struct ipv6hdr));
 	  if (pkt_len6 != ipp->skb->len)
 	    {
-	      SSH_DEBUG(SSH_D_NICETOKNOW, ("Trimming skb down from %d to %lu",
+	      SSH_DEBUG(SSH_D_NICETOKNOW, ("Trimming skb down from %d to %lu", 
 					   ipp->skb->len,
 					   (unsigned long) pkt_len6));
 	      skb_trim(ipp->skb, pkt_len6);
 	    }
 
-	  SSH_LINUX_STATISTICS(interceptor,
+	  SSH_LINUX_STATISTICS(interceptor, 
 	  {
 	    interceptor->stats.num_packets_sent++;
 	    interceptor->stats.num_bytes_sent += (SshUInt64) ipp->skb->len;
 	  });
 
 #ifdef SSH_LINUX_NF_PRE_ROUTING_AFTER_ENGINE
-	  NF_HOOK_THRESH(PF_INET6, SSH_NF_IP6_PRE_ROUTING, ipp->skb,
+	  NF_HOOK_THRESH(PF_INET6, SSH_NF_IP6_PRE_ROUTING, ipp->skb, 
 			 ipp->skb->dev, NULL,
 			 interceptor->linux_fn.ip6_rcv_finish,
 			 ssh_nf_out6.priority + 1);
@@ -1651,7 +1677,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
 
 #ifndef SSH_IPSEC_IP_ONLY_INTERCEPTOR
 	case ETH_P_ARP:
-	  SSH_LINUX_STATISTICS(interceptor,
+	  SSH_LINUX_STATISTICS(interceptor, 
 	  {
 	    interceptor->stats.num_packets_sent++;
 	    interceptor->stats.num_bytes_sent += (SshUInt64) ipp->skb->len;
@@ -1669,7 +1695,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
 #endif /* !SSH_IPSEC_IP_ONLY_INTERCEPTOR */
 
 	default:
-	  SSH_DEBUG(SSH_D_ERROR,
+	  SSH_DEBUG(SSH_D_ERROR, 
 		    ("skb->protocol 0x%x", htons(ipp->skb->protocol)));
 	  SSH_NOTREACHED;
 	  goto error;
@@ -1678,7 +1704,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
       /* All done. */
       goto sent;
     } /* SSH_PACKET_FROMADAPTER */
-
+  
   else
     {
       /* Not SSH_PACKET_FROMPROTOCOL or SSH_PACKET_FROMADAPTER. */
@@ -1689,7 +1715,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
 
  sent:
   ipp->skb = NULL;
-
+  
  out:
 #ifdef INTERCEPTOR_IP_ALIGNS_PACKETS
   /* pp can go NULL only with packet aligning. */
@@ -1697,20 +1723,20 @@ ssh_interceptor_send(SshInterceptor interceptor,
   if (pp)
 #endif /* INTERCEPTOR_IP_ALIGNS_PACKETS */
     ssh_interceptor_packet_free(pp);
-
+  
   /* Release net_device */
   if (dev)
     ssh_interceptor_release_netdev(dev);
 
 #ifdef SSH_IPSEC_IP_ONLY_INTERCEPTOR
 #ifdef SSH_LINUX_NF_FORWARD_AFTER_ENGINE
-  /* Release inbound net_device that was used for
+  /* Release inbound net_device that was used for 
      FORWARD NF_HOOK traversal. */
   if (in_dev)
     ssh_interceptor_release_netdev(in_dev);
 #endif /* SSH_LINUX_NF_FORWARD_AFTER_ENGINE */
 #endif /* SSH_IPSEC_IP_ONLY_INTERCEPTOR */
-
+      
   return;
 
  error:
@@ -1724,7 +1750,7 @@ ssh_interceptor_send(SshInterceptor interceptor,
 void ssh_interceptor_enable_interception(SshInterceptor interceptor,
 					 Boolean enable)
 {
-
+  
   SSH_DEBUG(SSH_D_LOWOK, ("%s packet interception",
 			  (enable ? "Enabling" : "Disabling")));
   interceptor->enable_interception = enable;

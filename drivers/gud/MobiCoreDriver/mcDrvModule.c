@@ -248,6 +248,7 @@ static void mobicore_read_log(
 	uint32_t write_pos;
 	char *buff, *last_char;
 
+	uint32_t loop = 0;
 	if (mcLogBuf == NULL)
 		return;
 
@@ -262,8 +263,12 @@ static void mobicore_read_log(
 	while( buff != last_char) {
 		printk("%c", *(buff++));
 		/* Wrap around */
-		if(buff >= (char*)mcLogBuf + PAGE_SIZE)
+		if(buff >= (char*)mcLogBuf + PAGE_SIZE) {
 			buff = mcLogBuf->buff;
+			loop++;
+		}
+		if (loop > 2)
+			break;
 	}
 	mcLogPos = write_pos;
 	mutex_unlock(&log_mutex);

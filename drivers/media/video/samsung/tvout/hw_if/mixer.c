@@ -483,6 +483,7 @@ int s5p_mixer_init_display_mode(enum s5p_tvout_disp_mode mode,
 
 #ifdef CONFIG_HDMI_14A_3D
 	case TVOUT_720P_60_SBS_HALF:
+	case TVOUT_720P_60_TB:
 	case TVOUT_720P_59_SBS_HALF:
 	case TVOUT_720P_50_TB:
 		temp_reg |= S5P_MXR_CFG_HD;
@@ -509,7 +510,10 @@ int s5p_mixer_init_display_mode(enum s5p_tvout_disp_mode mode,
 		break;
 
 #ifdef CONFIG_HDMI_14A_3D
+	case TVOUT_1080P_60_SBS_HALF:
+	case TVOUT_1080P_60_TB:
 	case TVOUT_1080P_24_TB:
+	case TVOUT_1080P_24_SBS_HALF:
 	case TVOUT_1080P_23_TB:
 		temp_reg |= S5P_MXR_CFG_HD;
 		temp_reg |= S5P_MXR_CFG_HD_1080P;

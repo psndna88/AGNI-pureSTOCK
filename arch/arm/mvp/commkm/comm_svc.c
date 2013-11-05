@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Guest Communications
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -54,11 +54,16 @@ Init(void *argsIn)
 {
    int rc = -1;
    unsigned int maxChannels = 8;
+
    /*
-    * Infinite timeout, 1 polling cycle
+    * On the host side, infinite timeout. 1 polling cycle.
     * see kernel/time.c: msecs_to_jiffies()
     */
+#if defined(COMM_BUILDING_SERVER)
    unsigned int pollingMillis = (unsigned int)-1;
+#else
+   unsigned int pollingMillis = 2000;
+#endif
    unsigned int pollingCycles = 1;
    const char *args = argsIn;
 
@@ -245,7 +250,8 @@ CommSvc_GetState(CommChannel channel)
 /**
  * @brief Writes a fully formatted packet (containing payload data, if
  *    applicable) to the specified channel.
- *
+ *    Note: This function requires the packet header and inlined payload,
+ *    if any, to be in kernel memory.
  *    The operation may block until enough write space is available, but no
  *    more than the specified interval.  The operation either writes the full
  *    amount of bytes, or it fails.  Warning: callers must _not_ use the
@@ -268,7 +274,8 @@ CommSvc_Write(CommChannel channel,
 
 /**
  * @brief Writes a packet and associated payload data to the specified channel.
- *
+ *     Note: This function requires the packet header to be in kernel memory;
+ *     payloads may be in either kernel or user memory.
  *     The operation may block until enough write space is available, but not
  *     more than the specified interval.  The operation either writes the full
  *     amount of bytes, or it fails.  Users may call this function successively
@@ -282,7 +289,8 @@ CommSvc_Write(CommChannel channel,
  * @param[in,out] vecLen length of kvec
  * @param[in,out] timeoutMillis interval in milliseconds to wait
  * @param[in,out] iovOffset must be set to 0 before first call (internal cookie)
- * @return number of bytes written, 0 if it timed out, -1 error
+ * @param kern != 0 if payloads are in kernel memory
+ * @return number of bytes written, 0 if it timed out, < 0 error
  * @sideeffects data may be written to the channel
  */
 
@@ -292,9 +300,11 @@ CommSvc_WriteVec(CommChannel channel,
                  struct kvec **vec,
                  unsigned int *vecLen,
                  unsigned long long *timeoutMillis,
-                 unsigned int *iovOffset)
+                 unsigned int *iovOffset,
+                 int kern)
 {
-   return Comm_WriteVec(channel, packet, vec, vecLen, timeoutMillis, iovOffset);
+   return Comm_WriteVec(channel, packet, vec, vecLen,
+                        timeoutMillis, iovOffset, kern);
 }
 
 
@@ -419,3 +429,4 @@ EXPORT_SYMBOL(CommSvc_ScheduleAIOWork);
 EXPORT_SYMBOL(CommSvc_RequestInlineEvents);
 EXPORT_SYMBOL(CommSvc_ReleaseInlineEvents);
 #endif // defined(__linux__)
+

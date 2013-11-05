@@ -11,6 +11,17 @@ config LEDS_SPFCW043
 	help
 	  This option enables support for the LEDs on the SPFCW043.
 
+config LEDS_IR
+	bool "LED support for the IR_FILTER"
+	default n
+	help
+	  This option enables support for the LEDs on the IR.
+
+config LEDS_IR_PWM
+	bool "LED support for the IR_FILTER"
+	default n
+	help
+	  This option enables support for the LEDs on the IR.
 
 menuconfig NEW_LEDS
 	bool "LED Support"

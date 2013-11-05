@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Guest Communications
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -270,42 +270,14 @@ int32 QP_Notify(QPInitArgs *args);
  * Common implementation, see qp_common.c
  */
 int32 QP_EnqueueSpace(QPHandle *qp);
-int32 QP_EnqueueSegment(QPHandle *qp, const void *buf, size_t length);
+int32 QP_EnqueueSegment(QPHandle *qp, const void *buf, size_t length, int kern);
 int32 QP_EnqueueCommit(QPHandle *qp);
 int32 QP_EnqueueReset(QPHandle *qp);
 
-static inline int32
-QP_EnqueueAtomic(QPHandle *qp, const void *buf, size_t length)
-{
-   int32 rc;
-   QP_EnqueueReset(qp);
-   rc = QP_EnqueueSegment(qp, buf, length);
-   if (rc < 0) {
-      return rc;
-   } else {
-      QP_EnqueueCommit(qp);
-   }
-   return rc;
-}
-
 int32 QP_DequeueSpace(QPHandle *qp);
-int32 QP_DequeueSegment(QPHandle *qp, const void *buf, size_t length);
+int32 QP_DequeueSegment(QPHandle *qp, void *buf, size_t length, int kern);
 int32 QP_DequeueReset(QPHandle *qp);
 int32 QP_DequeueCommit(QPHandle *qp);
-
-static inline int32
-QP_DequeueAtomic(QPHandle *qp, const void *buf, size_t length)
-{
-   int32 rc;
-   QP_DequeueReset(qp);
-   rc = QP_DequeueSegment(qp, buf, length);
-   if (rc < 0) {
-      return rc;
-   } else {
-      QP_DequeueCommit(qp);
-   }
-   return rc;
-}
 
 /*
  * HVC methods and signatures
@@ -330,3 +302,4 @@ QP_DequeueAtomic(QPHandle *qp, const void *buf, size_t length)
 #endif
 
 #endif
+

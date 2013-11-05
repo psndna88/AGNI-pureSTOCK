@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Guest Communications
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -35,6 +35,9 @@
 static char modParams[256];
 module_param_string(COMM_OS_MOD_SHORT_NAME, modParams, sizeof modParams, 0644);
 
+extern struct mutex modules_lock;
+extern int (*commOSModStart)(void);
+
 
 /**
  *  @brief Module initialization entry point. Calls the commOSModInit
@@ -42,10 +45,13 @@ module_param_string(COMM_OS_MOD_SHORT_NAME, modParams, sizeof modParams, 0644);
  *  @return zero if successful, non-zero otherwise.
  */
 
-static int __init
-ModInit(void)
+static int
+CommOSModStart(void)
 {
    int rc;
+
+   /* Comm is initialized. Called with modules_lock taken. */
+   commOSModStart = NULL;
 
    if (!commOSModInit) {
       CommOS_Log(("%s: Can't find \'init\' function for module \'" \
@@ -69,6 +75,21 @@ ModInit(void)
 
 
 /**
+ * @brief Called at initialization time.
+ * @return zero
+ */
+static int __init
+ModInit(void)
+{
+   /* Comm will remain dormant until mvpkm is activated */
+   mutex_lock(&modules_lock);
+   commOSModStart = CommOSModStart;
+   mutex_unlock(&modules_lock);
+   return 0;
+}
+
+
+/**
  *  @brief Module exit function. Calls the commOSModExit function pointer
  *      to perform upper layer cleanup.
  */
@@ -76,6 +97,14 @@ ModInit(void)
 static void __exit
 ModExit(void)
 {
+   mutex_lock(&modules_lock);
+   if (commOSModStart) {
+      commOSModStart = NULL;
+      mutex_unlock(&modules_lock);
+      return;
+   }
+   mutex_unlock(&modules_lock);
+
    if (!commOSModExit) {
       CommOS_Log(("%s: Can't find \'fini\' function for module \'" \
                   COMM_OS_MOD_SHORT_NAME_STRING "\'.\n", __FUNCTION__));
@@ -103,3 +132,4 @@ MODULE_LICENSE("GPL v2");
  * by default (i.e., neither mkinitrd nor modprobe will accept it).
  */
 MODULE_INFO(supported, "external");
+

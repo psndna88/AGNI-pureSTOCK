@@ -157,8 +157,6 @@ extern void midas_config_sleep_gpio_table(void);
 #define GPIO_PWM2		EXYNOS4_GPD0(2)
 #define GPIO_PWM3		EXYNOS4_GPD0(3)
 
-#define GPIO_VIBTONE_EN		EXYNOS4212_GPJ0(6)
-
 #define GPIO_WLAN_EN		EXYNOS4212_GPJ0(0)
 #define GPIO_WLAN_EN_AF		1
 #define GPIO_WLAN_HOST_WAKE	EXYNOS4_GPX2(5)
@@ -203,10 +201,14 @@ extern void midas_config_sleep_gpio_table(void);
 #define GPIO_FUEL_SDA		EXYNOS4_GPF1(5)
 
 #define GPIO_MLCD_RST		EXYNOS4_GPF2(1)
+
 #define GPIO_UART_SEL		EXYNOS4_GPF2(3)
-#if defined(CONFIG_MACH_C1_KOR_LGT)
+#if defined(CONFIG_LTE_VIA_SWITCH)
 #define GPIO_LTE_VIA_UART_SEL	EXYNOS4212_GPJ0(6)
+#else
+#define GPIO_VIBTONE_EN         EXYNOS4212_GPJ0(6)
 #endif
+
 #define GPIO_S_LED_I2C_SCL	EXYNOS4_GPF2(6)
 #define GPIO_S_LED_I2C_SDA	EXYNOS4_GPF2(7)
 #define GPIO_OLED_DET		EXYNOS4_GPF3(0)
@@ -301,6 +303,7 @@ extern void midas_config_sleep_gpio_table(void);
 #define GPIO_ACTIVE_STATE	EXYNOS4_GPF1(1)
 #define GPIO_IPC_SLAVE_WAKEUP	EXYNOS4_GPX1(0)
 #define GPIO_IPC_HOST_WAKEUP	EXYNOS4_GPX1(1)
+#define GPIO_IPC_HUB_SUSPEND	EXYNOS4212_GPM2(4)
 
 #define GPIO_AP2CMC_INT2	EXYNOS4_GPX1(2)
 

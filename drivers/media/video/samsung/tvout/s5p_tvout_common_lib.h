@@ -58,10 +58,8 @@ do {								\
 #define to_tvout_plat(d) (to_platform_device(d)->dev.platform_data)
 
 #define HDMI_START_NUM 0x1000
-
-#ifdef CONFIG_CPU_EXYNOS4210
-#define CLOCK_GATING_ON_EARLY_SUSPEND
-#endif
+#define HDMI_I2C_PHY_WAIT_COUNT 500
+#define HDMI_I2C_PHY_WAIT_DELAY_COUNT 2000
 
 enum s5p_tvout_disp_mode {
 	TVOUT_NTSC_M = 0,
@@ -92,8 +90,12 @@ enum s5p_tvout_disp_mode {
 	TVOUT_1080I_50,
 	TVOUT_1080I_59,
 #ifdef CONFIG_HDMI_14A_3D
+	TVOUT_1080P_60_SBS_HALF,
 	TVOUT_720P_60_SBS_HALF,
 	TVOUT_720P_59_SBS_HALF,
+	TVOUT_1080P_24_SBS_HALF,
+	TVOUT_1080P_60_TB,
+	TVOUT_720P_60_TB,
 	TVOUT_720P_50_TB,
 	TVOUT_1080P_24_TB,
 	TVOUT_1080P_23_TB,

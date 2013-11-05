@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Hypervisor Support
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -27,6 +27,7 @@
  *  implementations.
  */
 
+#include <asm/uaccess.h>
 #include <linux/module.h>
 
 #include "mvp_types.h"
@@ -82,12 +83,16 @@ QP_EnqueueSpace(QPHandle *qp)
  *  @param qp handle to the queue pair
  *  @param buf data to enqueue
  *  @param bufSize size in bytes to enqueue
+ *  @param kern != 0 if copying from kernel memory
  *  @return number of bytes enqueued on success, appropriate error
  *      code otherwise
  *  @sideeffects May move phantom tail pointer
  */
 int32
-QP_EnqueueSegment(QPHandle *qp, const void *buf, size_t bufSize)
+QP_EnqueueSegment(QPHandle *qp,
+                  const void *buf,
+                  size_t bufSize,
+                  int kern)
 {
    int32 freeSpace;
    uint32 head;
@@ -103,8 +108,8 @@ QP_EnqueueSegment(QPHandle *qp, const void *buf, size_t bufSize)
    /*
     * This check must go after the assignment above,
     * otherwise a malicious guest could write bogus
-    * offsets to the queue and cause the memcpy to
-    * copy into unpleasant places.
+    * offsets to the queue and cause copying to write
+    * into unpleasant places.
     */
    if (head    >= qp->queueSize ||
        phantom >= qp->queueSize) {
@@ -115,12 +120,32 @@ QP_EnqueueSegment(QPHandle *qp, const void *buf, size_t bufSize)
 
    if (bufSize <= freeSpace) {
       if (bufSize + phantom < qp->queueSize) {
-         memcpy(qp->produceQ->data + phantom, buf, bufSize);
+         if (kern) {
+            memcpy(qp->produceQ->data + phantom, buf, bufSize);
+         } else {
+            if (copy_from_user(qp->produceQ->data + phantom,
+                               buf, bufSize)) {
+               return QP_ERROR_INVALID_ARGS;
+            }
+         }
          phantom += bufSize;
       } else {
          uint32 written = qp->queueSize - phantom;
-         memcpy(qp->produceQ->data + phantom, buf, written);
-         memcpy(qp->produceQ->data, (uint8*)buf + written, bufSize - written);
+
+         if (kern) {
+            memcpy(qp->produceQ->data + phantom, buf, written);
+            memcpy(qp->produceQ->data,
+                   (uint8 *)buf + written, bufSize - written);
+         } else {
+            if (copy_from_user(qp->produceQ->data + phantom,
+                               buf, written)) {
+               return QP_ERROR_INVALID_ARGS;
+            }
+            if (copy_from_user(qp->produceQ->data,
+                               (uint8 *)buf + written, bufSize - written)) {
+               return QP_ERROR_INVALID_ARGS;
+            }
+         }
          phantom = bufSize - written;
       }
    } else {
@@ -197,12 +222,16 @@ QP_DequeueSpace(QPHandle *qp)
  *  @param qp handle to the queue pair
  *  @param[out] buf buffer to copy to
  *  @param bytesDesired number of bytes to dequeue
+ *  @param kern != 0 if copying to kernel memory
  *  @return number of bytes dequeued on success, appropriate error
  *      code otherwise
  *  @sideeffects May move phantom head pointer
  */
 int32
-QP_DequeueSegment(QPHandle *qp, const void *buf, size_t bytesDesired)
+QP_DequeueSegment(QPHandle *qp,
+                  void *buf,
+                  size_t bytesDesired,
+                  int kern)
 {
    uint32 tail;
    uint32 phantom;
@@ -218,8 +247,8 @@ QP_DequeueSegment(QPHandle *qp, const void *buf, size_t bytesDesired)
    /*
     * This check must go after the assignment above,
     * otherwise a malicious guest could write bogus
-    * offsets to the queue and cause the memcpy to
-    * copy into unpleasant places.
+    * offsets to the queue and cause copying to write
+    * into unpleasant places.
     */
    if (tail    >= qp->queueSize  ||
        phantom >= qp->queueSize) {
@@ -233,12 +262,30 @@ QP_DequeueSegment(QPHandle *qp, const void *buf, size_t bytesDesired)
 
    if (bytesDesired <= bytesAvailable) {
       if (bytesDesired + phantom < qp->queueSize) {
-         memcpy((void*)buf, qp->consumeQ->data + phantom, bytesDesired);
+         if (kern) {
+            memcpy(buf, qp->consumeQ->data + phantom, bytesDesired);
+         } else {
+            if (copy_to_user(buf, qp->consumeQ->data + phantom, bytesDesired)) {
+               return QP_ERROR_INVALID_ARGS;
+            }
+         }
          phantom += bytesDesired;
       } else {
          uint32 written = qp->queueSize - phantom;
-         memcpy((void*)buf, qp->consumeQ->data + phantom, written);
-         memcpy((uint8*)buf + written, qp->consumeQ->data, bytesDesired - written);
+
+         if (kern) {
+            memcpy(buf, qp->consumeQ->data + phantom, written);
+            memcpy((uint8 *)buf + written,
+                   qp->consumeQ->data, bytesDesired - written);
+         } else {
+            if (copy_to_user(buf, qp->consumeQ->data + phantom, written)) {
+               return QP_ERROR_INVALID_ARGS;
+            }
+            if (copy_to_user((uint8 *)buf + written,
+                             qp->consumeQ->data, bytesDesired - written)) {
+               return QP_ERROR_INVALID_ARGS;
+            }
+         }
          phantom = bytesDesired - written;
       }
    } else {
@@ -335,3 +382,4 @@ EXPORT_SYMBOL(QP_DequeueSegment);
 EXPORT_SYMBOL(QP_DequeueCommit);
 EXPORT_SYMBOL(QP_EnqueueReset);
 EXPORT_SYMBOL(QP_DequeueReset);
+

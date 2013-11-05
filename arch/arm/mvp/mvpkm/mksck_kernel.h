@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Hypervisor Support
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -42,8 +42,7 @@ void       Mksck_WakeBlockedSockets(MksckPage *mksckPage);
 MksckPage *MksckPage_GetFromTgidIncRefc(void);
 MksckPage *MksckPage_GetFromVmIdIncRefc(Mksck_VmId vmId);
 MksckPage *MksckPage_GetFromIdx(uint32 idx);
-void       MksckPageInfo_Init(void);
-void       MksckPageInfo_Exit(void);
+void       MksckPageInfo_Init(struct dentry *parent);
 int        Mksck_WspInitialize(MvpkmVM *vm);
 void       Mksck_WspRelease(WorldSwitchPage *wsp);
 int        MksckPage_LookupAndInsertPage(struct vm_area_struct *vma,

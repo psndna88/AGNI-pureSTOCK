@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP PVTCP Server
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -393,10 +393,6 @@ PvtcpStateRemoveSocket(CommChannel channel,
    }
 
    CommOS_ListDel(&sock->ifLink);
-   sock->channel = NULL;
-   sock->state = NULL;
-   sock->netif = NULL;
-
    CommSvc_Unlock(channel);
    return 0;
 }
@@ -585,3 +581,4 @@ PvtcpSockInit(PvtcpSock *pvsk,
    }
    return rc;
 }
+

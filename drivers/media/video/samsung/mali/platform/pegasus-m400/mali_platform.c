@@ -114,6 +114,10 @@ extern struct platform_device exynos4_device_pd[];
 #endif
 #endif
 
+/*This code for reference value of GPU activation*/
+int activity_index = -1;
+EXPORT_SYMBOL(activity_index);
+
 mali_io_address clk_register_map=0;
 
 _mali_osk_lock_t *mali_dvfs_lock = 0;
@@ -533,7 +537,7 @@ static _mali_osk_errcode_t enable_mali_clocks(void)
 	/* lock/unlock CPU freq by Mali */
 	if (mali_gpu_clk >= 533)
 		err = cpufreq_lock_by_mali(1400);
-	else if (mali_gpu_clk == 440)
+	else if (mali_gpu_clk >= 440)
 		err = cpufreq_lock_by_mali(1200);
 #else
 	mali_regulator_set_voltage(mali_runtime_resume.vol, mali_runtime_resume.vol);
@@ -696,8 +700,12 @@ _mali_osk_errcode_t mali_platform_powerup(u32 cores)
 	MALI_SUCCESS;
 }
 
+/*This code for reference value of GPU activation*/
 void mali_gpu_utilization_handler(u32 utilization)
 {
+	/*printk("[TEST] GPU_UTILIZATION:%d per 1sec.", utilization);*/
+	activity_index = utilization;
+
 	if (bPoweroff==0)
 	{
 #if MALI_DVFS_ENABLED

@@ -27,12 +27,15 @@
 
 #include "modem_link_pm_usb.h"
 
+int during_hub_resume;
+
 static inline void start_hub_work(struct link_pm_data *pm_data, int delay)
 {
 	if (pm_data->hub_work_running == false) {
 		pm_data->hub_work_running = true;
 		wake_lock(&pm_data->hub_lock);
 		mif_debug("link_pm_hub_work is started\n");
+		during_hub_resume = 1;
 	}
 
 	schedule_delayed_work(&pm_data->link_pm_hub, msecs_to_jiffies(delay));
@@ -81,12 +84,14 @@ void link_pm_preactive(struct link_pm_data *pm_data)
 
 static void link_pm_hub_work(struct work_struct *work)
 {
-	int err;
+	int err, cnt;
 	struct link_pm_data *pm_data =
 		container_of(work, struct link_pm_data, link_pm_hub.work);
+	struct usb_link_device *usb_ld = pm_data->usb_ld;
 
 	if (pm_data->hub_status == HUB_STATE_ACTIVE) {
 		end_hub_work(pm_data);
+		during_hub_resume = 0;
 		return;
 	}
 
@@ -109,9 +114,30 @@ static void link_pm_hub_work(struct work_struct *work)
 		mif_trace("hub off->on\n");
 
 		/* skip 1st time before first probe */
-		if (pm_data->root_hub)
-			pm_runtime_get_sync(pm_data->root_hub);
-		err = pm_data->port_enable(2, 1);
+		if (pm_data->root_hub) {
+			for (cnt=0;cnt<5;cnt++) {
+				err = pm_runtime_get_sync(pm_data->root_hub);
+				if (err >= 0) {
+					mif_err("pm_runtime_get_sync success\n");
+					break;
+				}
+				mif_err("pm_runtime_get_sync fail %d th\n", cnt);
+				msleep(100);
+			}
+		} else {
+			mif_info("root_hub not defined !!!\n");
+		}
+		mif_info("check done pm_runtime_get_sync\n");
+
+		for (cnt=0;cnt<5;cnt++) {
+			err = pm_data->port_enable(2, 1);
+			if (err >= 0) {
+				mif_err("hub on success\n");
+				break;
+			}
+			mif_err("hub on fail %d th\n", cnt);
+			msleep(100);
+		}
 		if (err < 0) {
 			mif_err("hub on fail err=%d\n", err);
 			err = pm_data->port_enable(2, 0);
@@ -132,10 +158,18 @@ static void link_pm_hub_work(struct work_struct *work)
 			pm_data->hub_status = HUB_STATE_OFF;
 			if (pm_data->root_hub)
 				pm_runtime_put_sync(pm_data->root_hub);
+
+			mif_err("USB Hub resume fail !!!\n");
+			//panic("MIF: USB Hub resume fail !!!");
+
 			end_hub_work(pm_data);
 		} else {
 			mif_info("hub resumming: %d\n",
 					pm_data->hub_on_retry_cnt);
+			if (pm_data->hub_on_retry_cnt && ((pm_data->hub_on_retry_cnt%20) == 0)) {
+				mif_info("hub resume retry !!!\n");
+				pm_data->port_enable(2, 1);
+			}
 			start_hub_work(pm_data, 200);
 		}
 		break;
@@ -155,6 +189,14 @@ static int link_pm_hub_standby(void *args)
 		return -ENODEV;
 	}
 
+	if (wake_lock_active(&usb_ld->gpiolock) && during_hub_resume) {
+		mif_err("Skip hub off !!!\n");
+		return -ENODEV;
+	}
+
+	mif_err("set hub_suspend gpio !!!\n");
+	gpio_set_value(pm_data->gpio_hub_suspend, 1);
+	
 	err = pm_data->port_enable(2, 0);
 	if (err < 0)
 		mif_err("hub off fail err=%d\n", err);
@@ -166,6 +208,9 @@ static int link_pm_hub_standby(void *args)
 	 */
 	if (pm_data->usb_ld->if_usb_connected)
 		schedule_work(&usb_ld->disconnect_work);
+
+	mif_err("unset hub_suspend gpio !!!\n");
+	gpio_set_value(pm_data->gpio_hub_suspend, 0);
 
 	return err;
 }
@@ -210,6 +255,7 @@ static long link_pm_ioctl(struct file *file, unsigned int cmd,
 							sizeof(int)))
 			return -EFAULT;
 		gpio_set_value(pm_data->gpio_link_active, value);
+		mif_info("> H-ACT %d\n", value);
 		break;
 	case IOCTL_LINK_GET_HOSTWAKE:
 		return !gpio_get_value(pm_data->gpio_link_hostwake);
@@ -233,7 +279,7 @@ static long link_pm_ioctl(struct file *file, unsigned int cmd,
 	case IOCTL_LINK_PORT_OFF:
 		err = link_pm_hub_standby(pm_data);
 		if (err < 0) {
-			mif_err("usb3503 active fail\n");
+			mif_err("usb3503 standby fail\n");
 			goto exit;
 		}
 		pm_data->hub_init_lock = 1;
@@ -349,6 +395,7 @@ int link_pm_init(struct usb_link_device *usb_ld, void *data)
 	pm_data->gpio_link_active = pm_pdata->gpio_link_active;
 	pm_data->gpio_link_hostwake = pm_pdata->gpio_link_hostwake;
 	pm_data->gpio_link_slavewake = pm_pdata->gpio_link_slavewake;
+	pm_data->gpio_hub_suspend = pm_pdata->gpio_hub_suspend;
 	pm_data->link_reconnect = pm_pdata->link_reconnect;
 	pm_data->port_enable = pm_pdata->port_enable;
 	pm_data->freq_lock = pm_pdata->freq_lock;
@@ -362,6 +409,8 @@ int link_pm_init(struct usb_link_device *usb_ld, void *data)
 	pm_data->miscdev.minor = MISC_DYNAMIC_MINOR;
 	pm_data->miscdev.name = "link_pm";
 	pm_data->miscdev.fops = &link_pm_fops;
+
+	during_hub_resume = 0;
 
 	err = misc_register(&pm_data->miscdev);
 	if (err < 0) {

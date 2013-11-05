@@ -6,7 +6,7 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
- */
+ */ 
 
 /*
  * sshdebug.h
@@ -25,7 +25,7 @@ extern unsigned int ssh_debug_level;
 
 #define SSH_FATAL(_fmt...) panic(_fmt)
 
-#define SSH_NOTREACHED							   \
+#define SSH_NOTREACHED         						   \
   panic("%s:%d: Unreachable code reached!", __FILE__, __LINE__)
 
 #define SSH_DEBUG(level, varcall)					   \

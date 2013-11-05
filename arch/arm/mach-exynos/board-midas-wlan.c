@@ -196,8 +196,13 @@ static int brcm_wlan_set_carddetect(int onoff)
 
 	udelay(200);
 
+#ifdef CONFIG_MACH_KONA 
+	mmc_force_presence_change_onoff(&s3c_device_hsmmc3, onoff);
+	/*temporal code for Kona-Wi-Fi*/
+#else
 	mmc_force_presence_change(&s3c_device_hsmmc3);
 	/* msleep(500);  wait for carddetect */
+#endif
 	return 0;
 }
 
@@ -282,7 +287,11 @@ static struct resource brcm_wlan_resources[] = {
 		.start	= IRQ_EINT(21),
 		.end	= IRQ_EINT(21),
 //chanyun 12.21		.flags	= IORESOURCE_IRQ | IORESOURCE_IRQ_LOWEDGE,
+#ifdef CONFIG_MACH_TAB3
+		.flags = IORESOURCE_IRQ | IORESOURCE_IRQ_LOWEDGE | IORESOURCE_IRQ_SHAREABLE,
+#else
 		.flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE,
+#endif
 	},
 };
 

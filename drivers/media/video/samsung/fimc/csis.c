@@ -320,13 +320,15 @@ static irqreturn_t s3c_csis_irq(int irq, void *dev_id)
 		err("csis error interrupt occured : %#x\n", cfg);
 	}
 
+
+#if !defined(CONFIG_MACH_U1) && !defined(CONFIG_MACH_PX) && !defined(CONFIG_MACH_ZEST)
 	/* Error Handling. If there is an error, we will reset camera sensor as if electric shock comes to the sensor,*/
 	if (unlikely(cfg & S3C_CSIS_INTSRC_ERR_LOST_FS) ||
 		unlikely(cfg & S3C_CSIS_INTSRC_ERR_LOST_FE)) {
 		err("csis error interrupt occured FS | FE = 0x%x\n", cfg);
 		s3c_csis_stop(pdev->id);
 	}
-
+#endif
 	if(s3c_csis[pdev->id]->pktdata_enable) {
 		if (unlikely(cfg & S3C_CSIS_INTSRC_NON_IMAGE_DATA)) {
 			if (cfg & S3C_CSIS_INTSRC_EVEN_BEFORE) {

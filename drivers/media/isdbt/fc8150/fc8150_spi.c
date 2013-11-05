@@ -291,4 +291,3 @@ int fc8150_spi_deinit(HANDLE hDevice)
 {
 	return BBM_OK;
 }
-

@@ -13,6 +13,7 @@ struct mmc_ioc_cmd {
 	unsigned int flags;
 	unsigned int blksz;
 	unsigned int blocks;
+	unsigned int ext_flags; /* for special behavior  */
 
 	/*
 	 * Sleep at least postsleep_min_us useconds, and at most
@@ -51,4 +52,5 @@ struct mmc_ioc_cmd {
  * block device operations.
  */
 #define MMC_IOC_MAX_BYTES  (512L * 512)
+#define MMC_IOC_EXT_SET_CLOCK 1
 #endif  /* LINUX_MMC_IOCTL_H */

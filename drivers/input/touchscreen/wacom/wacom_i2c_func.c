@@ -18,7 +18,8 @@
  */
 
 #include <linux/wacom_i2c.h>
-#include "wacom_i2c_flash.h"
+#include "wacom_i2c_func.h"
+#include "wacom_i2c_firm.h"
 
 #ifdef WACOM_IMPORT_FW_ALGO
 #include "wacom_i2c_coord_table.h"
@@ -35,7 +36,7 @@
 
 /* block wacom coordinate print */
 #ifdef CONFIG_SEC_TOUCHSCREEN_DVFS_LOCK
-#if defined(CONFIG_MACH_P4NOTE)
+#if defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE)
 void free_dvfs_lock(struct work_struct *work)
 {
 	struct wacom_i2c *wac_i2c =
@@ -102,7 +103,7 @@ static void set_dvfs_lock(struct wacom_i2c *wac_i2c, bool on)
 void forced_release(struct wacom_i2c *wac_i2c)
 {
 #if defined(CONFIG_SAMSUNG_KERNEL_DEBUG_USER)
-	printk(KERN_DEBUG "[E-PEN] %s\n", __func__);
+	printk(KERN_DEBUG "epen:%s\n", __func__);
 #endif
 	input_report_abs(wac_i2c->input_dev, ABS_X, wac_i2c->last_x);
 	input_report_abs(wac_i2c->input_dev, ABS_Y, wac_i2c->last_y);
@@ -136,12 +137,12 @@ void forced_hover(struct wacom_i2c *wac_i2c)
 {
 	/* To distinguish hover and pdct area, release */
 	if (wac_i2c->last_x != 0 || wac_i2c->last_y != 0) {
-		printk(KERN_DEBUG "[E-PEN] release hover\n");
+		printk(KERN_DEBUG "epen:release hover\n");
 		forced_release(wac_i2c);
 	}
 	wac_i2c->rdy_pdct = true;
 #if defined(CONFIG_SAMSUNG_KERNEL_DEBUG_USER)
-	printk(KERN_DEBUG "[E-PEN] %s\n", __func__);
+	printk(KERN_DEBUG "epen:%s\n", __func__);
 #endif
 	input_report_key(wac_i2c->input_dev, KEY_PEN_PDCT, 1);
 	input_sync(wac_i2c->input_dev);
@@ -158,10 +159,14 @@ void wacom_i2c_pendct_work(struct work_struct *work)
 	struct wacom_i2c *wac_i2c =
 	    container_of(work, struct wacom_i2c, pendct_dwork.work);
 
-	printk(KERN_DEBUG "[E-PEN] %s , %d\n",
+	printk(KERN_DEBUG "epen:%s , %d\n",
 	       __func__, gpio_get_value(wac_i2c->wac_pdata->gpio_pendct));
 
 	if (gpio_get_value(wac_i2c->wac_pdata->gpio_pendct))
+#ifdef WACOM_DISCARD_EVENT_ON_EDGE
+		if (wac_i2c->pen_pressed || wac_i2c->side_pressed
+				|| wac_i2c->pen_prox)
+#endif
 		forced_release(wac_i2c);
 }
 #endif
@@ -174,7 +179,7 @@ int wacom_i2c_send(struct wacom_i2c *wac_i2c,
 
 	if (wac_i2c->boot_mode && !mode) {
 		printk(KERN_DEBUG
-			"[E-PEN] failed to send\n");
+			"epen:failed to send\n");
 		return 0;
 	}
 
@@ -189,7 +194,7 @@ int wacom_i2c_recv(struct wacom_i2c *wac_i2c,
 
 	if (wac_i2c->boot_mode && !mode) {
 		printk(KERN_DEBUG
-			"[E-PEN] failed to send\n");
+			"epen:failed to send\n");
 		return 0;
 	}
 
@@ -204,18 +209,18 @@ int wacom_i2c_test(struct wacom_i2c *wac_i2c)
 
 	ret = wacom_i2c_send(wac_i2c, &buf, sizeof(buf), false);
 	if (ret > 0)
-		printk(KERN_INFO "[E-PEN] buf:%d, sent:%d\n", buf, ret);
+		printk(KERN_INFO "epen:buf:%d, sent:%d\n", buf, ret);
 	else {
-		printk(KERN_ERR "[E-PEN] Digitizer is not active\n");
+		printk(KERN_ERR "epen:Digitizer is not active\n");
 		return -1;
 	}
 
 	ret = wacom_i2c_recv(wac_i2c, test, sizeof(test), false);
 	if (ret >= 0) {
 		for (i = 0; i < 8; i++)
-			printk(KERN_INFO "[E-PEN] %d\n", test[i]);
+			printk(KERN_INFO "epen:%d\n", test[i]);
 	} else {
-		printk(KERN_ERR "[E-PEN] Digitizer does not reply\n");
+		printk(KERN_ERR "epen:Digitizer does not reply\n");
 		return -1;
 	}
 
@@ -232,14 +237,14 @@ static void wacom_open_test(struct wacom_i2c *wac_i2c)
 	cmd = WACOM_I2C_STOP;
 	ret = wacom_i2c_send(wac_i2c, &cmd, 1, false);
 	if (ret <= 0) {
-		printk(KERN_ERR "[E-PEN] failed to send stop command\n");
+		printk(KERN_ERR "epen:failed to send stop command\n");
 		return ;
 	}
 
 	cmd = WACOM_I2C_GRID_CHECK;
 	ret = wacom_i2c_send(wac_i2c, &cmd, 1, false);
 	if (ret <= 0) {
-		printk(KERN_ERR "[E-PEN] failed to send stop command\n");
+		printk(KERN_ERR "epen:failed to send stop command\n");
 		goto grid_check_error;
 	}
 
@@ -272,7 +277,7 @@ static void wacom_open_test(struct wacom_i2c *wac_i2c)
 
 	wac_i2c->connection_check = (1 == buf[0]);
 	printk(KERN_DEBUG
-	       "[E-PEN] epen_connection : %s %d\n",
+	       "epen:epen_connection : %s %d\n",
 	       (1 == buf[0]) ? "Pass" : "Fail", buf[1]);
 
 grid_check_error:
@@ -297,7 +302,7 @@ int wacom_checksum(struct wacom_i2c *wac_i2c)
 		ret = wacom_i2c_send(wac_i2c, &buf[0], 1, false);
 		if (ret < 0) {
 			printk(KERN_DEBUG
-			       "[E-PEN] i2c fail, retry, %d\n",
+			       "epen:i2c fail, retry, %d\n",
 			       __LINE__);
 			continue;
 		}
@@ -306,24 +311,24 @@ int wacom_checksum(struct wacom_i2c *wac_i2c)
 		ret = wacom_i2c_recv(wac_i2c, buf, 5, false);
 		if (ret < 0) {
 			printk(KERN_DEBUG
-			       "[E-PEN] i2c fail, retry, %d\n",
+			       "epen:i2c fail, retry, %d\n",
 			       __LINE__);
 			continue;
 		} else if (buf[0] == 0x1f)
 			break;
-		printk(KERN_DEBUG "[E-PEN] checksum retry\n");
+		printk(KERN_DEBUG "epen:checksum retry\n");
 	}
 
 	if (ret >= 0) {
 		printk(KERN_DEBUG
-		       "[E-PEN] received checksum %x, %x, %x, %x, %x\n",
+		       "epen:received checksum %x, %x, %x, %x, %x\n",
 		       buf[0], buf[1], buf[2], buf[3], buf[4]);
 	}
 
 	for (i = 0; i < 5; ++i) {
 		if (buf[i] != Firmware_checksum[i]) {
 			printk(KERN_DEBUG
-			       "[E-PEN] checksum fail %dth %x %x\n", i,
+			       "epen:checksum fail %dth %x %x\n", i,
 			       buf[i], Firmware_checksum[i]);
 			break;
 		}
@@ -353,16 +358,16 @@ int wacom_i2c_query(struct wacom_i2c *wac_i2c)
 	for (i = 0; i < query_limit; i++) {
 		ret = wacom_i2c_send(wac_i2c, &buf, 1, false);
 		if (ret < 0) {
-			printk(KERN_ERR"[E-PEN] I2C send failed(%d)\n", ret);
+			printk(KERN_ERR"epen:I2C send failed(%d)\n", ret);
 			continue;
 		}
 		msleep(100);
 		ret = wacom_i2c_recv(wac_i2c, data, COM_QUERY_NUM, false);
 		if (ret < 0) {
-			printk(KERN_ERR"[E-PEN] I2C recv failed(%d)\n", ret);
+			printk(KERN_ERR"epen:I2C recv failed(%d)\n", ret);
 			continue;
 		}
-		printk(KERN_INFO "[E-PEN] %s: %dth ret of wacom query=%d\n",
+		printk(KERN_INFO "epen:%s: %dth ret of wacom query=%d\n",
 		       __func__, i, ret);
 		if (COM_QUERY_NUM == ret) {
 			if (0x0f == data[0]) {
@@ -371,7 +376,7 @@ int wacom_i2c_query(struct wacom_i2c *wac_i2c)
 				break;
 			} else {
 				printk(KERN_NOTICE
-				       "[E-PEN] %X, %X, %X, %X, %X, %X, %X, fw=0x%x\n",
+				       "epen:%X, %X, %X, %X, %X, %X, %X, fw=0x%x\n",
 				       data[0], data[1], data[2], data[3],
 				       data[4], data[5], data[6],
 				       wac_feature->fw_version);
@@ -381,7 +386,9 @@ int wacom_i2c_query(struct wacom_i2c *wac_i2c)
 
 #if defined(CONFIG_MACH_Q1_BD)\
 	|| defined(CONFIG_MACH_P4NOTE)\
-	|| defined(CONFIG_MACH_T0)
+	|| defined(CONFIG_MACH_T0) \
+	|| defined(CONFIG_MACH_SP7160LTE)	\
+	|| defined(CONFIG_MACH_KONA)
 	wac_feature->x_max = (u16) WACOM_MAX_COORD_X;
 	wac_feature->y_max = (u16) WACOM_MAX_COORD_Y;
 #else
@@ -392,40 +399,40 @@ int wacom_i2c_query(struct wacom_i2c *wac_i2c)
 
 #if defined(COOR_WORK_AROUND)
 	if (i == 10 || ret < 0) {
-		printk(KERN_NOTICE "[E-PEN] COOR_WORK_AROUND is applied\n");
+		printk(KERN_NOTICE "epen:COOR_WORK_AROUND is applied\n");
 		printk(KERN_NOTICE
-		       "[E-PEN] %X, %X, %X, %X, %X, %X, %X, %X, %X\n", data[0],
+		       "epen:%X, %X, %X, %X, %X, %X, %X, %X, %X\n", data[0],
 		       data[1], data[2], data[3], data[4], data[5], data[6],
 		       data[7], data[8]);
 		wac_feature->x_max = (u16) WACOM_MAX_COORD_X;
 		wac_feature->y_max = (u16) WACOM_MAX_COORD_Y;
 		wac_feature->pressure_max = (u16) WACOM_MAX_PRESSURE;
-#ifdef CONFIG_MACH_T0
-		wac_feature->fw_version = 0;
-#else
+#ifdef CONFIG_MACH_Q1_BD
 		wac_feature->fw_version = 0xFF;
+#else
+		wac_feature->fw_version = 0;
 #endif
 	}
 #endif
 
-	printk(KERN_NOTICE "[E-PEN] x_max=0x%X\n", wac_feature->x_max);
-	printk(KERN_NOTICE "[E-PEN] y_max=0x%X\n", wac_feature->y_max);
-	printk(KERN_NOTICE "[E-PEN] pressure_max=0x%X\n",
+	printk(KERN_NOTICE "epen:x_max=0x%X\n", wac_feature->x_max);
+	printk(KERN_NOTICE "epen:y_max=0x%X\n", wac_feature->y_max);
+	printk(KERN_NOTICE "epen:pressure_max=0x%X\n",
 	       wac_feature->pressure_max);
-	printk(KERN_NOTICE "[E-PEN] fw_version=0x%X (d7:0x%X,d8:0x%X)\n",
+	printk(KERN_NOTICE "epen:fw_version=0x%X (d7:0x%X,d8:0x%X)\n",
 	       wac_feature->fw_version, data[7], data[8]);
-	printk(KERN_NOTICE "[E-PEN] %X, %X, %X, %X, %X, %X, %X, %X, %X\n",
+	printk(KERN_NOTICE "epen:%X, %X, %X, %X, %X, %X, %X, %X, %X\n",
 	       data[0], data[1], data[2], data[3], data[4], data[5], data[6],
 	       data[7], data[8]);
 
 	if ((i == 10) && (ret < 0)) {
-		printk(KERN_DEBUG"[E-PEN] %s, failed\n", __func__);
+		printk(KERN_DEBUG"epen:%s, failed\n", __func__);
 		wac_i2c->query_status = false;
 		return ret;
 	}
 	wac_i2c->query_status = true;
 
-#if defined(CONFIG_MACH_P4NOTE)
+#if defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) || defined(CONFIG_MACH_KONA)
 	wacom_checksum(wac_i2c);
 #endif
 
@@ -498,71 +505,182 @@ void wacom_i2c_coord_offset(u16 *coordX, u16 *coordY)
 #endif
 
 #ifdef WACOM_USE_AVERAGING
-void wacom_i2c_coord_average(unsigned short *CoordX, unsigned short *CoordY,
-			     int bFirstLscan)
+#define STEP 32
+void wacom_i2c_coord_average(short *CoordX, short *CoordY,
+			     int bFirstLscan, int aveStrength)
 {
 	unsigned char i;
 	unsigned int work;
 	unsigned char ave_step = 4, ave_shift = 2;
-	static unsigned short Sum_X, Sum_Y;
-	static unsigned short AveBuffX[4], AveBuffY[4];
+	static int Sum_X, Sum_Y;
+	static int AveBuffX[STEP], AveBuffY[STEP];
 	static unsigned char AvePtr;
 	static unsigned char bResetted;
-
-	if (bFirstLscan == 0)
+#ifdef WACOM_USE_AVE_TRANSITION
+	static int tmpBuffX[STEP], tmpBuffY[STEP];
+	static unsigned char last_step, last_shift;
+	static bool transition;
+	static int tras_counter;
+#endif
+	if (bFirstLscan == 0) {
 		bResetted = 0;
-	else {
-		if (bFirstLscan && (bResetted == 0)) {
-			AvePtr = 0;
+#ifdef WACOM_USE_AVE_TRANSITION
+		transition = false;
+		tras_counter = 0;
+		last_step = 4;
+		last_shift = 2;
+#endif
+		return ;
+	}
+#ifdef WACOM_USE_AVE_TRANSITION
+	if (bResetted) {
+		if (transition) {
+			ave_step = last_step;
+			ave_shift = last_shift;
+		} else {
+			ave_step = 2 << (aveStrength-1);
+			ave_shift = aveStrength;
+		}
 
-			ave_step = 4;
-			ave_shift = 2;
+		if (!transition && ave_step != 0 && last_step != 0) {
+			if (ave_step > last_step) {
+				transition = true;
+				tras_counter = ave_step;
+				/*printk(KERN_DEBUG
+					"epen:Trans %d to %d\n",
+					last_step, ave_step);*/
 
-			for (i = 0; i < ave_step; i++) {
-				AveBuffX[i] = *CoordX;
-				AveBuffY[i] = *CoordY;
-			}
-			Sum_X = (unsigned short)*CoordX << ave_shift;
-			Sum_Y = (unsigned short)*CoordY << ave_shift;
-			bResetted = 1;
-		} else if (bFirstLscan) {
-			Sum_X = Sum_X - AveBuffX[AvePtr] + (*CoordX);
-			AveBuffX[AvePtr] = *CoordX;
-			work = Sum_X >> ave_shift;
-			*CoordX = (unsigned int)work;
-
-			Sum_Y = Sum_Y - AveBuffY[AvePtr] + (*CoordY);
-			AveBuffY[AvePtr] = (*CoordY);
-			work = Sum_Y >> ave_shift;
-			*CoordY = (unsigned int)work;
-
-			if (++AvePtr >= ave_step)
+				memcpy(tmpBuffX, AveBuffX,
+					sizeof(unsigned int) * last_step);
+				memcpy(tmpBuffY, AveBuffY,
+					sizeof(unsigned int) * last_step);
+				for (i = 0 ; i < last_step; ++i) {
+					AveBuffX[i] = tmpBuffX[AvePtr];
+					AveBuffY[i] = tmpBuffY[AvePtr];
+					if (++AvePtr >= last_step)
+						AvePtr = 0;
+				}
+				for ( ; i < ave_step; ++i) {
+					AveBuffX[i] = *CoordX;
+					AveBuffY[i] = *CoordY;
+					Sum_X += *CoordX;
+					Sum_Y += *CoordY;
+				}
 				AvePtr = 0;
+
+				*CoordX = Sum_X >> ave_shift;
+				*CoordY = Sum_Y >> ave_shift;
+
+				bResetted = 1;
+
+				last_step = ave_step;
+				last_shift = ave_shift;
+				return ;
+			} else if (ave_step < last_step) {
+				transition = true;
+				tras_counter = ave_step;
+				/*printk(KERN_DEBUG
+					"epen:Trans %d to %d\n",
+					last_step, ave_step);*/
+
+				memcpy(tmpBuffX, AveBuffX,
+					sizeof(unsigned int) * last_step);
+				memcpy(tmpBuffY, AveBuffY,
+					sizeof(unsigned int) * last_step);
+				Sum_X = 0;
+				Sum_Y = 0;
+				for (i = 1 ; i <= ave_step; ++i) {
+					if (AvePtr == 0)
+						AvePtr = last_step - 1;
+					else
+						--AvePtr;
+					AveBuffX[ave_step-i] = tmpBuffX[AvePtr];
+					Sum_X = Sum_X + tmpBuffX[AvePtr];
+
+					AveBuffY[ave_step-i] = tmpBuffY[AvePtr];
+					Sum_Y = Sum_Y + tmpBuffY[AvePtr];
+
+				}
+				AvePtr = 0;
+				bResetted = 1;
+				*CoordX = Sum_X >> ave_shift;
+				*CoordY = Sum_Y >> ave_shift;
+
+				bResetted = 1;
+
+				last_step = ave_step;
+				last_shift = ave_shift;
+				return ;
+			}
+		}
+
+		if (!transition && (last_step != ave_step)) {
+			last_step = ave_step;
+			last_shift = ave_shift;
 		}
 	}
+#endif
+	if (bFirstLscan && (bResetted == 0)) {
+		AvePtr = 0;
+		ave_step = 4;
+		ave_shift = 2;
+#if defined(WACOM_USE_AVE_TRANSITION)
+		tras_counter = ave_step;
+#endif
+		for (i = 0; i < ave_step; i++) {
+			AveBuffX[i] = *CoordX;
+			AveBuffY[i] = *CoordY;
+		}
+		Sum_X = (unsigned int)*CoordX << ave_shift;
+		Sum_Y = (unsigned int)*CoordY << ave_shift;
+		bResetted = 1;
+	} else if (bFirstLscan) {
+		Sum_X = Sum_X - AveBuffX[AvePtr] + (*CoordX);
+		AveBuffX[AvePtr] = *CoordX;
+		work = Sum_X >> ave_shift;
+		*CoordX = (unsigned int)work;
 
+		Sum_Y = Sum_Y - AveBuffY[AvePtr] + (*CoordY);
+		AveBuffY[AvePtr] = (*CoordY);
+		work = Sum_Y >> ave_shift;
+		*CoordY = (unsigned int)work;
+
+		if (++AvePtr >= ave_step)
+			AvePtr = 0;
+	}
+#ifdef WACOM_USE_AVE_TRANSITION
+	if (transition) {
+		--tras_counter;
+		if (tras_counter < 0)
+			transition = false;
+	}
+#endif
 }
 #endif
 
-#if defined(WACOM_USE_BOXFILTER)
-/*Center*/
-int g_boxThreshold_C[] = {0, 0, 0, };
-int g_boxThreshold_X[] = {30, 20, 20, };
-int g_boxThreshold_Y[] = {50, 20, 20, };
-/*Transition*/
-int g_boxThreshold_Trs[] = {130, 20, 20, };
+#if defined(WACOM_USE_HEIGHT)
+u8 wacom_i2c_coord_level(u16 gain)
+{
+	if (gain >= 0 && gain <= 14)
+		return 0;
+	else if (gain > 14 && gain <= 24)
+		return 1;
+	else
+		return 2;
+}
+#endif
 
-void boxfilt(unsigned short *CoordX, unsigned short *CoordY,
+#ifdef WACOM_USE_BOX_FILTER
+void boxfilt(short *CoordX, short *CoordY,
 			int height, int bFirstLscan)
 {
 	bool isMoved = false;
 	static bool bFirst = true;
-	static unsigned short lastX_loc, lastY_loc;
+	static short lastX_loc, lastY_loc;
 	static unsigned char bResetted;
 	int threshold = 0;
 	int distance = 0;
-	bool transition = false;
-	bool isXMoved = false;
+	static short bounce;
 
 	/*Reset filter*/
 	if (bFirstLscan == 0) {
@@ -583,48 +701,14 @@ void boxfilt(unsigned short *CoordX, unsigned short *CoordY,
 	}
 
 	/*Start Filtering*/
-	threshold = g_boxThreshold_C[height];
-
-	if (*CoordX > X_INC_E1)
-		threshold = g_boxThreshold_X[height];
-	else if (*CoordX < X_INC_S1)
-		threshold = g_boxThreshold_X[height];
-
-	/*Right*/
-	if (*CoordY > Y_INC_E1) {
-		/*Transition*/
-		if (*CoordY < Y_INC_E2 && *CoordY > Y_INC_E3) {
-			transition = true;
-			threshold += g_boxThreshold_Trs[height];
-		} else
-			threshold += g_boxThreshold_Y[height];
-	}
-	/*Left*/
-	else if (*CoordY < Y_INC_S1) {
-		/*Transition*/
-		if (*CoordY > Y_INC_S2 && *CoordY < Y_INC_S3) {
-			transition = true;
-			threshold += g_boxThreshold_Trs[height];
-		} else {
-			threshold += g_boxThreshold_Y[height];
-		}
-	}
-
-	/*Check Stop condition*/
-	if (threshold == 0)
-		return ;
+	threshold = 30;
 
 	/*X*/
 	distance = abs(*CoordX - lastX_loc);
-	if (transition) {
-		if (distance >= 70) {
-			isMoved = true;
-			isXMoved = true;
-		}
-	} else if (distance >= threshold)
+
+	if (distance >= threshold)
 		isMoved = true;
 
-	/*Y*/
 	if (isMoved == false) {
 		distance = abs(*CoordY - lastY_loc);
 		if (distance >= threshold)
@@ -633,32 +717,120 @@ void boxfilt(unsigned short *CoordX, unsigned short *CoordY,
 
 	/*Update position*/
 	if (isMoved) {
-		if (isXMoved)
-			lastX_loc = *CoordX;
-		else {
-			lastX_loc = *CoordX;
-			lastY_loc = *CoordY;
-		}
+		lastX_loc = *CoordX;
+		lastY_loc = *CoordY;
 	} else {
-		*CoordX = lastX_loc;
+		*CoordX = lastX_loc + bounce;
 		*CoordY = lastY_loc;
+		if (bounce)
+			bounce = 0;
+		else
+			bounce += 5;
 	}
 }
 #endif
 
+#if defined(WACOM_USE_AVE_TRANSITION)
+int g_aveLevel_C[] = {2, 2, 4, };
+int g_aveLevel_X[] = {3, 3, 4, };
+int g_aveLevel_Y[] = {3, 3, 4, };
+int g_aveLevel_Trs[] = {3, 4, 4, };
+int g_aveLevel_Cor[] = {4, 4, 4, };
+
+void ave_level(short CoordX, short CoordY,
+			int height, int *aveStrength)
+{
+	bool transition = false;
+	bool edgeY = false, edgeX = false;
+	bool cY = false, cX = false;
+
+	if (CoordY > (WACOM_MAX_COORD_Y - 800))
+		cY = true;
+	else if (CoordY < 800)
+		cY = true;
+
+	if (CoordX > (WACOM_MAX_COORD_X - 800))
+		cX = true;
+	else if (CoordX < 800)
+		cX = true;
+
+	if (cX && cY) {
+		*aveStrength = g_aveLevel_Cor[height];
+		return ;
+	}
+
+	/*Start Filtering*/
+	if (CoordX > X_INC_E1)
+		edgeX = true;
+	else if (CoordX < X_INC_S1)
+		edgeX = true;
+
+	/*Right*/
+	if (CoordY > Y_INC_E1) {
+		/*Transition*/
+		if (CoordY < Y_INC_E3)
+			transition = true;
+		else
+			edgeY = true;
+	}
+	/*Left*/
+	else if (CoordY < Y_INC_S1) {
+		/*Transition*/
+		if (CoordY > Y_INC_S3)
+			transition = true;
+		else
+			edgeY = true;
+	}
+
+	if (transition)
+		*aveStrength = g_aveLevel_Trs[height];
+	else if (edgeX)
+		*aveStrength = g_aveLevel_X[height];
+	else if (edgeY)
+		*aveStrength = g_aveLevel_Y[height];
+	else
+		*aveStrength = g_aveLevel_C[height];
+}
+#endif
 #endif /*WACOM_IMPORT_FW_ALGO*/
 
-static bool wacom_i2c_coord_range(u16 *x, u16 *y)
+static bool wacom_i2c_coord_range(s16 *x, s16 *y)
 {
 #if defined(CONFIG_MACH_P4NOTE)
 	if ((*x <= WACOM_POSX_OFFSET) || (*y <= WACOM_POSY_OFFSET))
 		return false;
-#endif
+#elif defined(CONFIG_MACH_T0)
+	if ((*x >= 0) && (*y >= 0) &&
+		(*x <= WACOM_POSX_MAX) && (*y <= WACOM_POSY_MAX - 50))
+#elif defined(CONFIG_MACH_KONA)
+	if ((*x <= WACOM_POSY_MAX) && (*y <= WACOM_POSX_MAX))
+#else
 	if ((*x <= WACOM_POSX_MAX) && (*y <= WACOM_POSY_MAX))
+#endif
 		return true;
 
 	return false;
 }
+
+#ifdef WACOM_USE_SOFTKEY
+static int keycode[] = {
+	KEY_MENU, KEY_BACK,
+};
+void wacom_i2c_softkey(struct wacom_i2c *wac_i2c, s16 key, s16 pressed)
+{
+		input_report_key(wac_i2c->input_dev,
+			keycode[key], pressed);
+		input_sync(wac_i2c->input_dev);
+
+#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
+		printk(KERN_DEBUG "epen:keycode:%d pressed:%d\n",
+			keycode[key], pressed);
+#else
+		printk(KERN_DEBUG "epen:pressed:%d\n",
+			pressed);
+#endif
+}
+#endif
 
 int wacom_i2c_coord(struct wacom_i2c *wac_i2c)
 {
@@ -666,9 +838,20 @@ int wacom_i2c_coord(struct wacom_i2c *wac_i2c)
 	int ret = 0;
 	u8 *data;
 	int rubber, stylus;
-	static u16 x, y, pressure;
-	static u16 tmp;
+	static s16 x, y, pressure;
+	static s16 tmp;
 	int rdy = 0;
+
+#if defined(WACOM_USE_HEIGHT)
+	u8 gain = 0;
+	u8 height = 0;
+#endif
+#ifdef WACOM_USE_AVE_TRANSITION
+	int aveStrength = 2;
+#endif
+#ifdef WACOM_USE_SOFTKEY
+	static s16 softkey, pressed, keycode;
+#endif
 
 #ifdef WACOM_IRQ_WORK_AROUND
 	cancel_delayed_work(&wac_i2c->pendct_dwork);
@@ -678,17 +861,17 @@ int wacom_i2c_coord(struct wacom_i2c *wac_i2c)
 	ret = wacom_i2c_recv(wac_i2c, data, COM_COORD_NUM, false);
 
 	if (ret < 0) {
-		printk(KERN_ERR "[E-PEN] %s failed to read i2c.L%d\n", __func__,
+		printk(KERN_ERR "epen:%s failed to read i2c.L%d\n", __func__,
 		       __LINE__);
 		return -1;
 	}
 #if defined(CONFIG_SAMSUNG_KERNEL_DEBUG_USER)
 #if defined(CONFIG_MACH_T0)
-	/*printk(KERN_DEBUG"[E-PEN] %x, %x, %x, %x, %x, %x, %x %x\n",
-		data[0], data[1], data[2], data[3],
-		data[4], data[5], data[6], data[7]);*/
+	/*printk(KERN_DEBUG"epen:%x, %x, %x, %x, %x, %x, %x %x\n",
+	data[0], data[1], data[2], data[3],
+	data[4], data[5], data[6], data[7]);*/
 #else
-	pr_debug("[E-PEN] %x, %x, %x, %x, %x, %x, %x\n",
+	pr_debug("epen:%x, %x, %x, %x, %x, %x, %x\n",
 		data[0], data[1], data[2], data[3], data[4], data[5], data[6]);
 #endif
 #endif
@@ -703,9 +886,18 @@ int wacom_i2c_coord(struct wacom_i2c *wac_i2c)
 			else
 				wac_i2c->tool = BTN_TOOL_PEN;
 #if defined(CONFIG_SAMSUNG_KERNEL_DEBUG_USER)
-			pr_debug("[E-PEN] is in(%d)\n", wac_i2c->tool);
+			pr_debug("epen:is in(%d)\n", wac_i2c->tool);
 #endif
 		}
+#ifdef WACOM_USE_SOFTKEY
+		softkey = !!(data[5] & 0x80);
+		if (softkey) {
+			pressed = !!(data[5] & 0x40);
+			keycode = (data[5] & 0x30) >> 4;
+			wacom_i2c_softkey(wac_i2c, keycode, pressed);
+			return 0;
+		}
+#endif
 
 		prox = !!(data[0] & 0x10);
 		stylus = !!(data[0] & 0x20);
@@ -715,30 +907,51 @@ int wacom_i2c_coord(struct wacom_i2c *wac_i2c)
 		x = ((u16) data[1] << 8) + (u16) data[2];
 		y = ((u16) data[3] << 8) + (u16) data[4];
 		pressure = ((u16) data[5] << 8) + (u16) data[6];
+#if defined(WACOM_USE_HEIGHT)
+		gain = data[7];
+#endif
 
 #ifdef WACOM_IMPORT_FW_ALGO
+#if defined(CONFIG_MACH_T0)
+		x = x - origin_offset[0];
+		y = y - origin_offset[1];
+#else /*Q1*/
 		/* Change Position to Active Area */
-		if (x <= origin_offset[0])
+		if (x < origin_offset[0])
 			x = 0;
 		else
 			x = x - origin_offset[0];
-		if (y <= origin_offset[1])
+		if (y < origin_offset[1])
 			y = 0;
 		else
 			y = y - origin_offset[1];
-
+#endif
 #ifdef WACOM_USE_OFFSET_TABLE
-		if (wac_i2c->use_offset_table)
-			wacom_i2c_coord_offset(&x, &y);
+		if (wac_i2c->use_offset_table) {
+			if (x >= 0 && y >= 0)
+				wacom_i2c_coord_offset(&x, &y);
+		}
 #endif
+
+#ifdef CONFIG_MACH_T0
+		if (wac_i2c->use_aveTransition && pressure == 0) {
+#if defined(WACOM_USE_HEIGHT)
+			height = wacom_i2c_coord_level(gain);
+#endif
+#if defined(WACOM_USE_AVE_TRANSITION)
+			ave_level(x, y, height, &aveStrength);
+#endif
+		}
+#endif
+
 #ifdef WACOM_USE_AVERAGING
-		wacom_i2c_coord_average(&x, &y, rdy);
+		wacom_i2c_coord_average(&x, &y, rdy, aveStrength);
 #endif
-#ifdef WACOM_USE_BOXFILTER
-		if (wac_i2c->use_box_filter && pressure == 0)
-			boxfilt(&x, &y, 0, rdy);
+#ifdef WACOM_USE_BOX_FILTER
+		if (pressure == 0)
+			boxfilt(&x, &y, height, rdy);
 #endif
-#endif
+#endif /*WACOM_IMPORT_FW_ALGO*/
 		if (wac_i2c->wac_pdata->x_invert)
 			x = wac_i2c->wac_feature->x_max - x;
 		if (wac_i2c->wac_pdata->y_invert)
@@ -749,68 +962,78 @@ int wacom_i2c_coord(struct wacom_i2c *wac_i2c)
 			x = y;
 			y = tmp;
 		}
+
 #ifdef WACOM_USE_TILT_OFFSET
 		/* Add offset */
 		x = x + tilt_offsetX[user_hand][screen_rotate];
 		y = y + tilt_offsetY[user_hand][screen_rotate];
 #endif
-		if (wacom_i2c_coord_range(&x, &y)) {
-			input_report_abs(wac_i2c->input_dev, ABS_X, x);
-			input_report_abs(wac_i2c->input_dev, ABS_Y, y);
-			input_report_abs(wac_i2c->input_dev,
-					 ABS_PRESSURE, pressure);
-			input_report_key(wac_i2c->input_dev,
-					 BTN_STYLUS, stylus);
-			input_report_key(wac_i2c->input_dev, BTN_TOUCH, prox);
-			input_report_key(wac_i2c->input_dev, wac_i2c->tool, 1);
-			if (wac_i2c->rdy_pdct) {
-				wac_i2c->rdy_pdct = false;
-				input_report_key(wac_i2c->input_dev,
-					KEY_PEN_PDCT, 0);
-			}
-			input_sync(wac_i2c->input_dev);
-			wac_i2c->last_x = x;
-			wac_i2c->last_y = y;
-
-			if (prox && !wac_i2c->pen_pressed) {
-#ifdef CONFIG_SEC_TOUCHSCREEN_DVFS_LOCK
-				set_dvfs_lock(wac_i2c, true);
-#endif
+		if (false == wacom_i2c_coord_range(&x, &y)) {
 #if defined(CONFIG_SAMSUNG_KERNEL_DEBUG_USER)
-				printk(KERN_DEBUG
-				       "[E-PEN] is pressed(%d,%d,%d)(%d)\n",
-				       x, y, pressure, wac_i2c->tool);
-#else
-				printk(KERN_DEBUG "[E-PEN] pressed\n");
+			printk(KERN_DEBUG "epen:raw data x=%d, y=%d\n",
+				x, y);
 #endif
-
-			} else if (!prox && wac_i2c->pen_pressed) {
-#ifdef CONFIG_SEC_TOUCHSCREEN_DVFS_LOCK
-				set_dvfs_lock(wac_i2c, false);
+#ifdef WACOM_DISCARD_EVENT_ON_EDGE
+		/* Pen should be released in the NOT AA area even if rdy value is 1. */
+			if (wac_i2c->pen_pressed || wac_i2c->side_pressed
+					|| wac_i2c->pen_prox)
+				forced_release(wac_i2c);
 #endif
-#if defined(CONFIG_SAMSUNG_KERNEL_DEBUG_USER)
-				printk(KERN_DEBUG
-				       "[E-PEN] is released(%d,%d,%d)(%d)\n",
-				       x, y, pressure, wac_i2c->tool);
-#else
-				printk(KERN_DEBUG "[E-PEN] released\n");
-#endif
-			}
-
-			wac_i2c->pen_pressed = prox;
-
-			if (stylus && !wac_i2c->side_pressed)
-				printk(KERN_DEBUG "[E-PEN] side on\n");
-			else if (!stylus && wac_i2c->side_pressed)
-				printk(KERN_DEBUG "[E-PEN] side off\n");
-
-			wac_i2c->side_pressed = stylus;
+			return 0;
 		}
-#if defined(CONFIG_SAMSUNG_KERNEL_DEBUG_USER)
-		else
-			printk(KERN_DEBUG "[E-PEN] raw data x=0x%x, y=0x%x\n",
-			x, y);
+
+		input_report_abs(wac_i2c->input_dev, ABS_X, x);
+		input_report_abs(wac_i2c->input_dev, ABS_Y, y);
+		input_report_abs(wac_i2c->input_dev,
+			ABS_PRESSURE, pressure);
+		input_report_key(wac_i2c->input_dev,
+			BTN_STYLUS, stylus);
+		input_report_key(wac_i2c->input_dev, BTN_TOUCH, prox);
+		input_report_key(wac_i2c->input_dev, wac_i2c->tool, 1);
+#ifdef WACOM_PDCT_WORK_AROUND
+		if (wac_i2c->rdy_pdct) {
+			wac_i2c->rdy_pdct = false;
+			input_report_key(wac_i2c->input_dev,
+				KEY_PEN_PDCT, 0);
+		}
 #endif
+		input_sync(wac_i2c->input_dev);
+		wac_i2c->last_x = x;
+		wac_i2c->last_y = y;
+
+		if (prox && !wac_i2c->pen_pressed) {
+#ifdef CONFIG_SEC_TOUCHSCREEN_DVFS_LOCK
+			set_dvfs_lock(wac_i2c, true);
+#endif
+#if defined(CONFIG_SAMSUNG_KERNEL_DEBUG_USER)
+			printk(KERN_DEBUG
+				"epen:is pressed(%d,%d,%d)(%d)\n",
+				x, y, pressure, wac_i2c->tool);
+#else
+			printk(KERN_DEBUG "epen:pressed\n");
+#endif
+
+		} else if (!prox && wac_i2c->pen_pressed) {
+#ifdef CONFIG_SEC_TOUCHSCREEN_DVFS_LOCK
+			set_dvfs_lock(wac_i2c, false);
+#endif
+#if defined(CONFIG_SAMSUNG_KERNEL_DEBUG_USER)
+			printk(KERN_DEBUG
+				"epen:is released(%d,%d,%d)(%d)\n",
+				x, y, pressure, wac_i2c->tool);
+#else
+			printk(KERN_DEBUG "epen:released\n");
+#endif
+		}
+
+		wac_i2c->pen_pressed = prox;
+
+		if (stylus && !wac_i2c->side_pressed)
+			printk(KERN_DEBUG "epen:side on\n");
+		else if (!stylus && wac_i2c->side_pressed)
+			printk(KERN_DEBUG "epen:side off\n");
+
+		wac_i2c->side_pressed = stylus;
 	} else {
 
 #ifdef WACOM_IRQ_WORK_AROUND
@@ -823,26 +1046,27 @@ int wacom_i2c_coord(struct wacom_i2c *wac_i2c)
 			else
 				wac_i2c->tool = BTN_TOOL_PEN;
 
-			input_report_abs(wac_i2c->input_dev, ABS_X, x);
-			input_report_abs(wac_i2c->input_dev, ABS_Y, y);
+#if defined(CONFIG_SAMSUNG_KERNEL_DEBUG_USER)
+#if defined(CONFIG_MACH_KONA)
+			pr_debug("[E-PEN] is out(%d) \n", wac_i2c->tool);
+#endif
+#endif
 			input_report_abs(wac_i2c->input_dev, ABS_PRESSURE, 0);
 			input_report_key(wac_i2c->input_dev, BTN_STYLUS, 0);
 			input_report_key(wac_i2c->input_dev, BTN_TOUCH, 0);
-			input_report_key(wac_i2c->input_dev, wac_i2c->tool, 1);
+			input_report_key(wac_i2c->input_dev, wac_i2c->tool, 0);
 			input_sync(wac_i2c->input_dev);
 		}
-
 		schedule_delayed_work(&wac_i2c->pendct_dwork, HZ / 10);
 
 		return 0;
-#else				/* WACOM_IRQ_WORK_AROUND */
+#else	/* WACOM_IRQ_WORK_AROUND */
 #ifdef WACOM_USE_AVERAGING
 		/* enable emr device */
-		wacom_i2c_coord_average(0, 0, 0);
+		wacom_i2c_coord_average(0, 0, 0, 0);
 #endif
-#ifdef WACOM_USE_BOXFILTER
-		if (wac_i2c->use_box_filter)
-			boxfilt(0, 0, 0, 0);
+#ifdef WACOM_USE_BOX_FILTER
+		boxfilt(0, 0, 0, 0);
 #endif
 
 #ifdef WACOM_PDCT_WORK_AROUND
@@ -869,7 +1093,7 @@ int wacom_i2c_coord(struct wacom_i2c *wac_i2c)
 #endif
 			input_sync(wac_i2c->input_dev);
 
-			printk(KERN_DEBUG "[E-PEN] is out");
+			printk(KERN_DEBUG "epen:is out");
 		}
 		wac_i2c->pen_prox = 0;
 		wac_i2c->pen_pressed = 0;

@@ -15,6 +15,12 @@ config SH_MIPI_DSI
 config SH_LCD_MIPI_DSI
 	bool
 
+config MALI_VER_BEFORE_R3P2
+        bool "Mali400 Version R2P4 or R3P1"
+	default n
+	help
+          Choose this option to select DDK version.
+
 source "drivers/char/agp/Kconfig"
 
 source "drivers/gpu/vga/Kconfig"
@@ -25,6 +31,9 @@ source "drivers/gpu/stub/Kconfig"
 
 source "drivers/gpu/ion/Kconfig"
 
+if !MALI_VER_BEFORE_R3P2
+	source "drivers/gpu/mali400/Kconfig"
+endif
 
 config VGASTATE
        tristate
