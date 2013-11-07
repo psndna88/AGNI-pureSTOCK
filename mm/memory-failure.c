@@ -1469,10 +1469,10 @@ int soft_offline_page(struct page *page, int flags)
 		list_add(&page->lru, &pagelist);
 #ifndef CONFIG_DMA_CMA
 		ret = migrate_pages(&pagelist, new_page, MPOL_MF_MOVE_ALL,
-								0, true);
+								0, MIGRATE_SYNC);
 #else
 		ret = migrate_pages(&pagelist, new_page, MPOL_MF_MOVE_ALL,
-								0, true, 0);
+								0, MIGRATE_SYNC, 0);
 #endif
 		if (ret) {
 			putback_lru_pages(&pagelist);
