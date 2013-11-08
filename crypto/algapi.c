@@ -508,7 +508,7 @@ struct crypto_template *crypto_lookup_template(const char *name)
 		return -EACCES;
 	}
 #endif
-	return try_then_request_module(__crypto_lookup_template(name), name);
+	return try_then_request_module(__crypto_lookup_template(name), "%s", name);
 }
 EXPORT_SYMBOL_GPL(crypto_lookup_template);
 
@@ -814,7 +814,7 @@ struct crypto_instance *crypto_alloc_instance(const char *name,
 	struct crypto_spawn *spawn;
 	int err;
 
- #ifdef CRYPTO_FIPS
+#ifdef CRYPTO_FIPS
 	if (unlikely(in_fips_err()))
 		return ERR_PTR(-EACCES);
 #endif
