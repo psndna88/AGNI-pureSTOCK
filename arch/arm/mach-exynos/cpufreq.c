@@ -34,7 +34,9 @@
 #include <plat/cpu.h>
 
 #if defined(CONFIG_MACH_PX) || defined(CONFIG_MACH_Q1_BD) ||\
-	defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_GC1)
+	defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) ||\
+	defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_TAB3) ||\
+	defined(CONFIG_MACH_GC2PD)
 #include <mach/sec_debug.h>
 #endif
 
@@ -637,6 +639,13 @@ static int exynos_cpufreq_notifier_event(struct notifier_block *this,
 						exynos_info->pm_lock_idx);
 		if (ret < 0)
 			return NOTIFY_BAD;
+#elif defined(CONFIG_ARCH_EXYNOS4)
+		if (soc_is_exynos4212()) {
+			ret = exynos_cpufreq_upper_limit(DVFS_LOCK_ID_PM,
+					exynos_info->pm_lock_idx);
+			if (ret < 0)
+				return NOTIFY_BAD;
+		}
 #endif
 		exynos_cpufreq_disable = true;
 
@@ -660,6 +669,9 @@ static int exynos_cpufreq_notifier_event(struct notifier_block *this,
 		exynos_cpufreq_lock_free(DVFS_LOCK_ID_PM);
 #if defined(CONFIG_CPU_EXYNOS4210) || defined(CONFIG_SLP)
 		exynos_cpufreq_upper_limit_free(DVFS_LOCK_ID_PM);
+#elif defined(CONFIG_ARCH_EXYNOS4)
+		if (soc_is_exynos4212())
+			exynos_cpufreq_upper_limit_free(DVFS_LOCK_ID_PM);
 #endif
 		exynos_cpufreq_disable = false;
 		/* If current governor is userspace or performance or powersave,
@@ -710,6 +722,8 @@ static struct notifier_block exynos_cpufreq_policy_notifier = {
 
 static int exynos_cpufreq_cpu_init(struct cpufreq_policy *policy)
 {
+	int retval;
+
 	policy->cur = policy->min = policy->max = exynos_getspeed(policy->cpu);
 
 	cpufreq_frequency_table_get_attr(exynos_info->freq_table, policy->cpu);
@@ -730,17 +744,13 @@ static int exynos_cpufreq_cpu_init(struct cpufreq_policy *policy)
 		cpumask_setall(policy->cpus);
 	}
 
-	cpufreq_frequency_table_cpuinfo(policy, exynos_info->freq_table);
+	retval = cpufreq_frequency_table_cpuinfo(policy, exynos_info->freq_table);
 
-	/* Safe default startup limits */
-	if (samsung_rev() >= EXYNOS4412_REV_2_0)
-		/*policy->max = 1600000;*/
-                policy->max = 1800000;
-	else
-		policy->max = 1400000;
+	/* Keep stock frq. as default startup frq. */
+	policy->max = 1400000;
 	policy->min = 200000;
 
-	return 0;
+	return retval;
 }
 
 static int exynos_cpufreq_reboot_notifier_call(struct notifier_block *this,
