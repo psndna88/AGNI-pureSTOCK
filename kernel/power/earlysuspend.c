@@ -32,6 +32,10 @@ enum {
 	DEBUG_VERBOSE = 1U << 3,
 };
 static int debug_mask = DEBUG_USER_STATE;
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+atomic_t optimize_comp_on = ATOMIC_INIT(0);
+EXPORT_SYMBOL(optimize_comp_on);
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
 
 module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
