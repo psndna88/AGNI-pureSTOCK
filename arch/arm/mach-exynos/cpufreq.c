@@ -722,6 +722,8 @@ static struct notifier_block exynos_cpufreq_policy_notifier = {
 
 static int exynos_cpufreq_cpu_init(struct cpufreq_policy *policy)
 {
+	int retval;
+
 	policy->cur = policy->min = policy->max = exynos_getspeed(policy->cpu);
 
 	cpufreq_frequency_table_get_attr(exynos_info->freq_table, policy->cpu);
@@ -742,17 +744,13 @@ static int exynos_cpufreq_cpu_init(struct cpufreq_policy *policy)
 		cpumask_setall(policy->cpus);
 	}
 
-	cpufreq_frequency_table_cpuinfo(policy, exynos_info->freq_table);
+	retval = cpufreq_frequency_table_cpuinfo(policy, exynos_info->freq_table);
 
-	/* Safe default startup limits */
-	if (samsung_rev() >= EXYNOS4412_REV_2_0)
-		/*policy->max = 1600000;*/
-                policy->max = 1600000;
-	else
-		policy->max = 1400000;
+	/* Keep stock frq. as default startup frq. */
+	policy->max = 1400000;
 	policy->min = 200000;
 
-	return 0;
+	return retval;
 }
 
 static int exynos_cpufreq_reboot_notifier_call(struct notifier_block *this,
