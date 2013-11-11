@@ -140,3 +140,5 @@
 #endif /* !READ_MACADDR && !WRITE_MACADDR && !RDWR_KORICS_MACADDR && !RDWR_MACADDR */
 
 #endif /* _dhd_sec_feature_h_ */
+
+#define READ_MACADDR
