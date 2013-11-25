@@ -106,6 +106,14 @@ config MALI_400MP_UMP_DVFS
 	  This enables Mali driver DVFS.
 endif
 
+config GPU_CLOCK_CONTROL
+  	bool "Enable GPU clock control and voltage interface"
+  	depends on MALI_UMP_R3P1
+  	default y
+  	help
+    	  This enables a sysfs interface to control gpu clock and voltage
+    	  including auto-applied full freq. range voltage table (Yank555.lu).
+
 if CPU_EXYNOS4210 || CPU_EXYNOS4212 || CPU_EXYNOS4412
 	source "drivers/media/video/samsung/fimc/Kconfig"
 	source "drivers/media/video/samsung/tvout/Kconfig"
