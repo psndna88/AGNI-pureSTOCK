@@ -22,7 +22,6 @@
 #ifdef CONFIG_PM_RUNTIME
 #include <linux/pm_runtime.h>
 #endif
-#include <mach/dev.h>
 #include "mali_osk.h"
 #include "mali_uk_types.h"
 #include "mali_kernel_common.h"
@@ -30,6 +29,11 @@
 #include "mali_linux_pm.h"
 #include "mali_pm.h"
 #include "mali_platform.h"
+
+#ifdef CONFIG_GPU_CLOCK_CONTROL
+#include <../common/gpu_clock_control.h>
+#include <../common/gpu_voltage_control.h>
+#endif
 
 #if ! MALI_LICENSE_IS_GPL
 #undef CONFIG_PM_RUNTIME
@@ -54,11 +58,6 @@ static int mali_os_suspend(struct device *dev);
 static int mali_os_resume(struct device *dev);
 #endif
 
-struct s_g3d_devfreq {
-	struct device *dev;
-	struct device *bus_dev;
-};
-struct s_g3d_devfreq g3d_devfreq;
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29))
 static const struct dev_pm_ops mali_dev_pm_ops =
@@ -138,8 +137,6 @@ struct platform_device mali_gpu_device =
 /** This function is called when the device is probed */
 static int mali_probe(struct platform_device *pdev)
 {
-	g3d_devfreq.dev = &pdev->dev;
-	g3d_devfreq.bus_dev = dev_get("exynos-busfreq");
 	return 0;
 }
 
@@ -234,6 +231,11 @@ int _mali_dev_platform_register(void)
 	set_mali_parent_power_domain((void *)&mali_gpu_device);
 #endif
 
+#ifdef CONFIG_GPU_CLOCK_CONTROL
+  	gpu_clock_control_start();
+  	gpu_voltage_control_start();
+#endif
+
 #ifdef CONFIG_PM_RUNTIME
 	err = register_pm_notifier(&mali_pwr_notif_block);
 	if (err)
@@ -273,4 +275,3 @@ void _mali_dev_platform_unregister(void)
 	platform_device_unregister(&mali_gpu_device);
 #endif
 }
-

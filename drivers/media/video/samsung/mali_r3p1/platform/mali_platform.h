@@ -19,18 +19,13 @@
 #include "mali_osk.h"
 
 #ifdef CONFIG_CPU_EXYNOS4210
-#define MALI_DVFS_STEPS 2
+#define MALI_DVFS_STEPS 3
 #else
 #define MALI_DVFS_STEPS 5
 #endif
 
 /* @Enable or Disable Mali GPU Bottom Lock feature */
-#define MALI_GPU_BOTTOM_LOCK 1
-
-#define MALI_VOLTAGE_LOCK 1
-
-/* @Enable or Disable the CPU frequency lock when the GPU clock is 440 Mhz */
-#define CPUFREQ_LOCK_DURING_440 1
+#define MALI_GPU_BOTTOM_LOCK 0
 
 #ifdef __cplusplus
 extern "C" {
@@ -138,16 +133,14 @@ int mali_dvfs_bottom_lock_pop(void);
 #endif
 #endif
 
-int mali_dvfs_get_vol(int step);
-
-#if MALI_VOLTAGE_LOCK
-int mali_voltage_lock_push(int lock_vol);
-int mali_voltage_lock_pop(void);
-int mali_voltage_lock_init(void);
-int mali_vol_get_from_table(int vol);
-#endif
-
 #ifdef __cplusplus
 }
 #endif
+
+// Yank555.lu : Add a frequency lookup table for GPU
+#define GPU_FREQ_STEPS 20
+#define GPU_FREQ_END_OF_TABLE 0
+extern unsigned int gpu_freq_table[GPU_FREQ_STEPS+1];
+
 #endif
+
