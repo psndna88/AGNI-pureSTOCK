@@ -827,9 +827,8 @@ static int verify_valid (int module_clk, int dvfs_clock) {
             return module_clk;
 	}
     }
-    if (found == 0) { // new freq is not valid
-            return dvfs_clock;
-    }
+// new freq is not valid
+    return dvfs_clock;
 }
 
 
