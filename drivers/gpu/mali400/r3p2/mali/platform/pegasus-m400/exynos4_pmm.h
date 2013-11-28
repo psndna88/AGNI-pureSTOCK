@@ -120,6 +120,12 @@ int mali_vol_get_from_table(int vol);
 #define GPU_FREQ_END_OF_TABLE 0
 extern unsigned int gpu_freq_table[GPU_FREQ_STEPS+1];
 
+// Yank555.lu : Global voltage delta to be applied to voltage resets
+extern int gpu_voltage_delta;
+
+#define MIN_VOLTAGE_GPU 600000
+#define MAX_VOLTAGE_GPU 1400000
+
 #ifdef __cplusplus
 }
 #endif
