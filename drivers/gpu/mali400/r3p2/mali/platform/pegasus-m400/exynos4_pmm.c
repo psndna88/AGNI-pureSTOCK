@@ -705,7 +705,7 @@ mali_bool mali_dvfs_table_update(void)
                         if (gpu_freq_table[j] == mali_dvfs[i].clock) { // Yank555.lu : if we have found the right freq. step, use that voltage
 
                                 MALI_PRINT((":::exynos_result_of_asv : %d\n", exynos_result_of_asv));
-                                mali_dvfs[i].vol = asv_3d_volt_9_table[j][exynos_result_of_asv];
+                                mali_dvfs[i].vol = max((unsigned int) MIN_VOLTAGE_GPU, min((unsigned int) MAX_VOLTAGE_GPU, asv_3d_volt_9_table[j][exynos_result_of_asv] + gpu_voltage_delta));
                                 MALI_PRINT(("mali_dvfs[%d].vol = %d (%dMHz)\n", i, mali_dvfs[i].vol, mali_dvfs[i].clock));
                                 break; // No need to go on
 
