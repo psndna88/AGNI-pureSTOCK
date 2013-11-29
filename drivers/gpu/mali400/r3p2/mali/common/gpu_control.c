@@ -76,12 +76,13 @@ static ssize_t gpu_voltage_show(struct device *dev, struct device_attribute *att
 static ssize_t gpu_voltage_store(struct device *dev, struct device_attribute *attr, const char *buf,
                                                                         size_t count) {
         unsigned int ret = -EINVAL;
-	int i, j = 0;
-   	for (i = 0; i < MALI_STEPS; i++)
-	{
-            ret += sscanf(&buf[j], "%d", &gv[i]);
-	}
-        if(ret!=MALI_STEPS) return -EINVAL;
+        int i = 0;
+        unsigned int gv[MALI_STEPS];
+
+        ret = sscanf(buf, "%d %d %d %d %d", &gv[0], &gv[1], &gv[2], &gv[3], &gv[4]);
+
+        if(ret != MALI_STEPS)
+                return -EINVAL;
 
         /* safety floor and ceiling - netarchy */
         for( i = 0; i < MALI_STEPS; i++ ) {
@@ -91,8 +92,7 @@ static ssize_t gpu_voltage_store(struct device *dev, struct device_attribute *at
                 else if (gv[i] > MAX_VOLTAGE_GPU) {
                     gv[i] = MAX_VOLTAGE_GPU;
                 }
-                if(ret==MALI_STEPS)
-                    mali_dvfs[i].vol=gv[i];
+                mali_dvfs[i].vol = gv[i];
         }
 
         step0_vol = mali_dvfs[0].vol;
@@ -123,31 +123,29 @@ unsigned int g[(MALI_STEPS-1)*2];
 static ssize_t gpu_clock_store(struct device *dev, struct device_attribute *attr,
                                const char *buf, size_t count) {
         unsigned int ret = -EINVAL;
-	int i, j = 0;
-   	for (i = 0; i < (MALI_STEPS-1)*2; i++)
-	{
-            ret += sscanf(&buf[j], "%d%%", &g[i]);
-	}
-	if (ret == (MALI_STEPS-1)*2 ) i=1;
+        int i = 0;
+        int j = 0;
+        unsigned int g[8];
+
+        if ((ret=sscanf(buf, "%d%% %d%% %d%% %d%% %d%% %d%% %d%% %d%%",
+                         &g[0], &g[1], &g[2], &g[3], &g[4], &g[5], &g[6], &g[7])) == 8 ) i = 1;
 
         if(i) {
-	    for (i = 0; i < (MALI_STEPS-1)*2; i++)
-	    {
-		if (g[i] < 0 || g[i] > 100) return -EINVAL;
+                if(g[1]<0 || g[0]>100 || g[3]<0 || g[2]>100 || g[5]<0 || g[4]>100 || g[7]<0 || g[6]>100)
+                        return -EINVAL;
 		
-		if (i%2 == 0)
-                mali_dvfs[i/2].upthreshold = (int)(g[i]);
-		else
-                mali_dvfs[(i+1)/2].downthreshold = (int)(g[i]);
-	    }	
+                mali_dvfs[0].upthreshold = (int)(g[0]);
+                mali_dvfs[1].downthreshold = (int)(g[1]);
+
+                mali_dvfs[1].upthreshold = (int)(g[2]);
+                mali_dvfs[2].downthreshold = (int)(g[3]);
+                mali_dvfs[2].upthreshold = (int)(g[4]);
+                mali_dvfs[3].downthreshold = (int)(g[5]);
+                mali_dvfs[3].upthreshold = (int)(g[6]);
+                mali_dvfs[4].downthreshold = (int)(g[7]);
         } else {
 
-	    ret = -EINVAL;
-   	    for (i = 0; i < MALI_STEPS; i++)
-	    {
-            	ret += sscanf(&buf[j], "%d%%", &g[i]);
-	    }
-	    if (ret != MALI_STEPS )
+                if ((ret=sscanf(buf, "%d %d %d %d %d", &g[0], &g[1], &g[2], &g[3], &g[4])) != MALI_STEPS)
                         return -EINVAL;
 
                 /* safety floor and ceiling - netarchy */
