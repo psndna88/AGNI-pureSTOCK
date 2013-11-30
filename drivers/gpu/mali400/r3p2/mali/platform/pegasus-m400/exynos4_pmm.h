@@ -116,12 +116,22 @@ int mali_voltage_lock_init(void);
 int mali_vol_get_from_table(int vol);
 #endif
 
+#ifdef CONFIG_CPU_EXYNOS4210
+#define MALI_DVFS_STEPS 3
+#define MALI_DVFS_WATING 10 /* msec */
+#define MALI_DVFS_DEFAULT_STEP 0
+#else
+#define MALI_DVFS_STEPS 5
+#define MALI_DVFS_WATING 10 /* msec */
+#define MALI_DVFS_DEFAULT_STEP 1
+#endif
+
 #define GPU_FREQ_STEPS 20
 #define GPU_FREQ_END_OF_TABLE 0
 extern unsigned int gpu_freq_table[GPU_FREQ_STEPS+1];
 
 // Yank555.lu : Global voltage delta to be applied to voltage resets
-extern int gpu_voltage_delta;
+extern int gpu_voltage_delta[MALI_DVFS_STEPS];
 
 #define MIN_VOLTAGE_GPU 600000
 #define MAX_VOLTAGE_GPU 1400000
