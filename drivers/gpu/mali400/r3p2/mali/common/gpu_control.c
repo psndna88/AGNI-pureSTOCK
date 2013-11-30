@@ -23,11 +23,6 @@
 
 #define GPU_MAX_CLOCK 800
 #define GPU_MIN_CLOCK 54
-#if defined(CONFIG_CPU_EXYNOS4212) || defined(CONFIG_CPU_EXYNOS4412)
-#define MALI_STEPS 5
-#else
-#define MALI_STEPS 3
-#endif
 
 typedef struct mali_dvfs_tableTag{
     unsigned int clock;
@@ -37,11 +32,8 @@ typedef struct mali_dvfs_tableTag{
     unsigned int upthreshold;
 }mali_dvfs_table;
 
-// Yank555.lu : Global voltage delta to be applied to voltage resets
-int gpu_voltage_delta;
-
-extern mali_dvfs_table mali_dvfs[MALI_STEPS];
-unsigned int gv[MALI_STEPS];
+extern mali_dvfs_table mali_dvfs[MALI_DVFS_STEPS];
+unsigned int gv[MALI_DVFS_STEPS];
 extern int step0_clk;
 extern int step1_clk;
 extern int step2_clk;
@@ -64,9 +56,23 @@ extern int step2_down;
 extern int step3_down;
 extern int step4_down;
 
+int gpu_voltage_delta[MALI_DVFS_STEPS] = {
+#if defined(CONFIG_CPU_EXYNOS4212) || defined(CONFIG_CPU_EXYNOS4412)
+	0,
+	0,
+	0,
+	0,
+	0
+#else
+	0,
+	0,
+	0
+#endif
+};
+
 static ssize_t gpu_voltage_show(struct device *dev, struct device_attribute *attr, char *buf) {
 	int i, j = 0;
-   	for (i = 0; i < MALI_STEPS; i++)
+   	for (i = 0; i < MALI_DVFS_STEPS; i++)
 	{
 	    j += sprintf(&buf[j], "Step%d: %d\n", i, mali_dvfs[i].vol);
 	}
@@ -77,23 +83,24 @@ static ssize_t gpu_voltage_store(struct device *dev, struct device_attribute *at
                                                                         size_t count) {
         unsigned int ret = -EINVAL;
         int i = 0;
-        unsigned int gv[MALI_STEPS];
+        unsigned int gv[MALI_DVFS_STEPS];
 
         ret = sscanf(buf, "%d %d %d %d %d", &gv[0], &gv[1], &gv[2], &gv[3], &gv[4]);
 
-        if(ret != MALI_STEPS)
+        if(ret != MALI_DVFS_STEPS)
                 return -EINVAL;
 
         /* safety floor and ceiling - netarchy */
-        for( i = 0; i < MALI_STEPS; i++ ) {
+        for( i = 0; i < MALI_DVFS_STEPS; i++ ) {
                 if (gv[i] < MIN_VOLTAGE_GPU) {
                     gv[i] = MIN_VOLTAGE_GPU;
                 }
                 else if (gv[i] > MAX_VOLTAGE_GPU) {
                     gv[i] = MAX_VOLTAGE_GPU;
                 }
-                mali_dvfs[i].vol = gv[i];
+		gpu_voltage_delta[i] = gv[i] - gpu_voltage_default[i];                
         }
+	mali_dvfs_table_update();
 
         step0_vol = mali_dvfs[0].vol;
         step1_vol = mali_dvfs[1].vol;
@@ -106,19 +113,19 @@ static ssize_t gpu_voltage_store(struct device *dev, struct device_attribute *at
 
 static ssize_t gpu_clock_show(struct device *dev, struct device_attribute *attr, char *buf) {
 	int i, j = 0;
-   	for (i = 0; i < MALI_STEPS; i++)
+   	for (i = 0; i < MALI_DVFS_STEPS; i++)
 	{
 	    j += sprintf(&buf[j], "Step%d: %d\n", i, mali_dvfs[i].clock);
 	}
 
-   	for (i = 0; i < MALI_STEPS - 1; i++)
+   	for (i = 0; i < MALI_DVFS_STEPS - 1; i++)
 	{
 	    j += sprintf(&buf[j], "Threshold%d-%d/up-down: %d%% %d%%\n", i, i+1, mali_dvfs[i].upthreshold, mali_dvfs[i+1].downthreshold);
 	}
    return j;
 }
 
-unsigned int g[(MALI_STEPS-1)*2];
+unsigned int g[(MALI_DVFS_STEPS-1)*2];
 
 static ssize_t gpu_clock_store(struct device *dev, struct device_attribute *attr,
                                const char *buf, size_t count) {
@@ -145,11 +152,11 @@ static ssize_t gpu_clock_store(struct device *dev, struct device_attribute *attr
                 mali_dvfs[4].downthreshold = (int)(g[7]);
         } else {
 
-                if ((ret=sscanf(buf, "%d %d %d %d %d", &g[0], &g[1], &g[2], &g[3], &g[4])) != MALI_STEPS)
+                if ((ret=sscanf(buf, "%d %d %d %d %d", &g[0], &g[1], &g[2], &g[3], &g[4])) != MALI_DVFS_STEPS)
                         return -EINVAL;
 
                 /* safety floor and ceiling - netarchy */
-                for( i = 0; i < MALI_STEPS; i++ ) {
+                for( i = 0; i < MALI_DVFS_STEPS; i++ ) {
                         if (g[i] < GPU_MIN_CLOCK) {
                                 g[i] = GPU_MIN_CLOCK;
                         }
@@ -208,7 +215,12 @@ static ssize_t available_frequencies_show(struct device *dev, struct device_attr
 // Yank555.lu : add a global voltage delta to be applied to all automatic voltage resets
 static ssize_t gpu_voltage_delta_show(struct device *dev, struct device_attribute *attr, char *buf) {
 
-  return sprintf(buf, "%d\n", gpu_voltage_delta);
+	int i, j = 0;
+   	for (i = 0; i < MALI_DVFS_STEPS; i++)
+	{
+	    j += sprintf(&buf[j], "Step%d: %d\n", i, gpu_voltage_delta[i]);
+	}
+   return j;
 
 }
 
@@ -223,8 +235,12 @@ static ssize_t gpu_voltage_delta_store(struct device *dev, struct device_attribu
     return -EINVAL;
   }
 
-  if (data >= -250000 && data <= 250000) {
-    gpu_voltage_delta = data;
+  if (data == 1) { // DerTeufel: reset all voltage deltas
+	int i;
+   	for (i = 0; i < MALI_DVFS_STEPS; i++)
+	{
+    	    gpu_voltage_delta[i] = 0;
+	}
     // Yank555.lu : update mali dvfs table
     mali_dvfs_table_update();
     return count;
