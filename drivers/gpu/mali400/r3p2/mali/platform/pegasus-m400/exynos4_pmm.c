@@ -37,16 +37,6 @@
 
 #include <linux/workqueue.h>
 
-#ifdef CONFIG_CPU_EXYNOS4210
-#define MALI_DVFS_STEPS 3
-#define MALI_DVFS_WATING 10 /* msec */
-#define MALI_DVFS_DEFAULT_STEP 0
-#else
-#define MALI_DVFS_STEPS 5
-#define MALI_DVFS_WATING 10 /* msec */
-#define MALI_DVFS_DEFAULT_STEP 1
-#endif
-
 #ifdef CONFIG_CPU_FREQ
 #include <mach/asv.h>
 #define EXYNOS4_ASV_ENABLED
@@ -98,6 +88,22 @@ int step4_clk = 533;
 int step4_vol = 1075000;
 int step3_up = 90;
 int step4_down = 85;
+
+int gpu_voltage_default[MALI_DVFS_STEPS] = {
+#if defined(CONFIG_CPU_EXYNOS4212) || defined(CONFIG_CPU_EXYNOS4412)
+	875000,
+	900000,
+	950000,
+	1025000,
+	1075000
+#else
+	950000,
+	1050000,
+	1200000
+#endif
+};
+
+
 
 // Yank555.lu : Lookup table for possible frequencies
 unsigned int gpu_freq_table[GPU_FREQ_STEPS+1] = {
@@ -705,7 +711,8 @@ mali_bool mali_dvfs_table_update(void)
                         if (gpu_freq_table[j] == mali_dvfs[i].clock) { // Yank555.lu : if we have found the right freq. step, use that voltage
 
                                 MALI_PRINT((":::exynos_result_of_asv : %d\n", exynos_result_of_asv));
-                                mali_dvfs[i].vol = max((unsigned int) MIN_VOLTAGE_GPU, min((unsigned int) MAX_VOLTAGE_GPU, asv_3d_volt_9_table[j][exynos_result_of_asv] + gpu_voltage_delta));
+				gpu_voltage_default[i] = asv_3d_volt_9_table[j][exynos_result_of_asv];
+                                mali_dvfs[i].vol = max((unsigned int) MIN_VOLTAGE_GPU, min((unsigned int) MAX_VOLTAGE_GPU, asv_3d_volt_9_table[j][exynos_result_of_asv] + gpu_voltage_delta[i]));
                                 MALI_PRINT(("mali_dvfs[%d].vol = %d (%dMHz)\n", i, mali_dvfs[i].vol, mali_dvfs[i].clock));
                                 break; // No need to go on
 
@@ -792,7 +799,7 @@ static mali_bool mali_dvfs_status(unsigned int utilization)
 	unsigned int nextStatus = 0;
 	unsigned int curStatus = 0;
 	mali_bool boostup = MALI_FALSE;
-/*#ifdef EXYNOS4_ASV_ENABLED
+#ifdef EXYNOS4_ASV_ENABLED
 	static mali_bool asv_applied = MALI_FALSE;
 #endif
 
@@ -804,7 +811,7 @@ static mali_bool mali_dvfs_status(unsigned int utilization)
 
 		return MALI_TRUE;
 	}
-#endif*/
+#endif
 
 	MALI_DEBUG_PRINT(4, ("> mali_dvfs_status: %d \n",utilization));
 
@@ -962,10 +969,10 @@ mali_bool init_mali_dvfs_status(void)
 	/* add a error handling here */
 	maliDvfsStatus.currentStep = MALI_DVFS_DEFAULT_STEP;
 
-#ifdef EXYNOS4_ASV_ENABLED
+/*#ifdef EXYNOS4_ASV_ENABLED
         mali_dvfs_table_update();
         change_mali_dvfs_status(1, 0);
-#endif
+#endif*/
 
 	return MALI_TRUE;
 }
