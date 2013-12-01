@@ -97,6 +97,84 @@ MODULE_PARM_DESC(mali_max_pp_cores_group_2, "Limit the number of PP cores to use
 EXPORT_SYMBOL(mali_set_user_setting);
 EXPORT_SYMBOL(mali_get_user_setting);
 
+extern int step0_clk;
+module_param(step0_clk, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step0_clk, "Mali Current step0_clk");
+#ifdef DEBUG
+extern int step0_vol;
+module_param(step0_vol, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step0_vol, "Mali Current step0_vol");
+#endif
+
+extern int step1_clk;
+module_param(step1_clk, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step1_clk, "Mali Current step1_clk");
+
+extern int step0_up;
+module_param(step0_up, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step0_up, "Mali Current step0_up");
+
+extern int step1_down;
+module_param(step1_down, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step1_down, "Mali Current step1_down");
+#ifdef DEBUG
+extern int step1_vol;
+module_param(step1_vol, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step1_vol, "Mali Current step1_vol");
+#endif
+
+extern int step2_clk;
+module_param(step2_clk, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step2_clk, "Mali Current step2_clk");
+
+extern int step1_up;
+module_param(step1_up, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step1_up, "Mali Current step1_up");
+
+extern int step2_down;
+module_param(step2_down, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step2_down, "Mali Current step2_down");
+#ifdef DEBUG
+extern int step2_vol;
+module_param(step2_vol, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step2_vol, "Mali Current step2_vol");
+#endif
+
+extern int step3_clk;
+module_param(step3_clk, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step3_clk, "Mali Current step3_clk");
+
+extern int step2_up;
+module_param(step2_up, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step2_up, "Mali Current step2_up");
+
+extern int step3_down;
+module_param(step3_down, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step3_down, "Mali Current step3_down");
+#ifdef DEBUG
+extern int step3_vol;
+module_param(step3_vol, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step3_vol, "Mali Current step3_vol");
+#endif
+
+extern int step4_clk;
+module_param(step4_clk, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step4_clk, "Mali Current step4_clk");
+
+extern int step3_up;
+module_param(step3_up, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step3_up, "Mali Current step3_up");
+
+extern int step4_down;
+module_param(step4_down, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step4_down, "Mali Current step4_down");
+#ifdef DEBUG
+extern int step4_vol;
+module_param(step4_vol, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(step4_vol, "Mali Current step4        _vol");
+#endif
+
+
 static char mali_dev_name[] = "mali"; /* should be const, but the functions we call requires non-cost */
 
 /* This driver only supports one Mali device, and this variable stores this single platform device */
