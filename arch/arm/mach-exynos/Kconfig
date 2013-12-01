@@ -1805,10 +1805,3 @@ config CORESIGHT_ETM_DEFAULT_ENABLE
 	help
 	  Turns on ETM tracing by default. Otherwise, tracing is
 	  disabled by default but can be enabled by other means.
-
-config CHARGE_LEVEL
-  	bool "Charge level interface"
-  	default y
- 	help
-    	  Allows configuration of ac and usb charging levels
-
