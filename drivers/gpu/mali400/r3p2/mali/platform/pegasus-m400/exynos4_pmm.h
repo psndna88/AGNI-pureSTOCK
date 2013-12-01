@@ -115,6 +115,11 @@ int mali_voltage_lock_pop(void);
 int mali_voltage_lock_init(void);
 int mali_vol_get_from_table(int vol);
 #endif
+
+#define GPU_FREQ_STEPS 20
+#define GPU_FREQ_END_OF_TABLE 0
+extern unsigned int gpu_freq_table[GPU_FREQ_STEPS+1];
+
 #ifdef __cplusplus
 }
 #endif
