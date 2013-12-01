@@ -49,11 +49,6 @@
 #include <linux/fake_shut_down.h>
 #endif
 
-#include "linux/charge_level.h"
-
-int ac_level = AC_CHARGE_LEVEL_DEFAULT;    // Set AC default charge level
-int usb_level  = USB_CHARGE_LEVEL_DEFAULT; // Set USB default charge level
-
 static char *supply_list[] = {
 	"battery",
 };
@@ -1726,7 +1721,6 @@ charge_ok:
 		info->recharge_phase = false;
 		break;
 	case POWER_SUPPLY_TYPE_MAINS:
-		printk("Boeffla-Kernel: POWER_SUPPLY_TYPE_MAINS, using charge rate %d mA\n", ac_level);
 		if (!info->pdata->suspend_chging)
 			wake_lock(&info->charge_wake_lock);
 #if defined(CONFIG_MACH_KONA)
@@ -1737,22 +1731,20 @@ charge_ok:
 #endif
 		battery_charge_control(info, info->pdata->chg_curr_ta,
 						info->pdata->in_curr_limit);
-		battery_charge_control(info, ac_level, ac_level);
 		break;
 	case POWER_SUPPLY_TYPE_USB:
-		printk("Boeffla-Kernel: POWER_SUPPLY_TYPE_USB, using charge rate %d mA\n", usb_level);
 		if (!info->pdata->suspend_chging)
 			wake_lock(&info->charge_wake_lock);
-		battery_charge_control(info, usb_level, usb_level);
+		battery_charge_control(info, info->pdata->chg_curr_usb,
+						info->pdata->chg_curr_usb);
 		break;
 	case POWER_SUPPLY_TYPE_USB_CDP:
-		printk("Boeffla-Kernel: POWER_SUPPLY_TYPE_USB_CDP, using charge rate %d mA\n", ac_level);
 		if (!info->pdata->suspend_chging)
 			wake_lock(&info->charge_wake_lock);
-		battery_charge_control(info, ac_level, ac_level);
+		battery_charge_control(info, info->pdata->chg_curr_cdp,
+						info->pdata->chg_curr_cdp);
 		break;
 	case POWER_SUPPLY_TYPE_DOCK:
-		printk("Boeffla-Kernel: POWER_SUPPLY_TYPE_DOCK\n");
 		if (!info->pdata->suspend_chging)
 			wake_lock(&info->charge_wake_lock);
 		/* default dock prop is AC */
@@ -1760,41 +1752,45 @@ charge_ok:
 		muic_cb_typ = max77693_muic_get_charging_type();
 		switch (muic_cb_typ) {
 		case CABLE_TYPE_AUDIODOCK_MUIC:
-			printk("Boeffla-Kernel: CABLE_TYPE_AUDIODOCK_MUIC, using charge rate %d mA\n", ac_level);
 			pr_info("%s: audio dock, %d\n",
 					__func__, DOCK_TYPE_AUDIO_CURR);
-			battery_charge_control(info, ac_level, ac_level);
+			battery_charge_control(info,
+						DOCK_TYPE_AUDIO_CURR,
+						DOCK_TYPE_AUDIO_CURR);
 			break;
 		case CABLE_TYPE_SMARTDOCK_TA_MUIC:
 			if (info->cable_sub_type == ONLINE_SUB_TYPE_SMART_OTG) {
-				printk("Boeffla-Kernel: CABLE_TYPE_SMARTDOCK_TA_MUIC (with host), using charge rate %d mA\n", ac_level);
 				pr_info("%s: smart dock ta & host, %d\n",
 					__func__, DOCK_TYPE_SMART_OTG_CURR);
-				battery_charge_control(info, ac_level, ac_level);
+				battery_charge_control(info,
+						DOCK_TYPE_SMART_OTG_CURR,
+						DOCK_TYPE_SMART_OTG_CURR);
 			} else {
-				printk("Boeffla-Kernel: CABLE_TYPE_SMARTDOCK_TA_MUIC (no host), using charge rate %d mA\n", ac_level);
 				pr_info("%s: smart dock ta & no host, %d\n",
 					__func__, DOCK_TYPE_SMART_NOTG_CURR);
-				battery_charge_control(info, ac_level, ac_level);
+				battery_charge_control(info,
+						DOCK_TYPE_SMART_NOTG_CURR,
+						DOCK_TYPE_SMART_NOTG_CURR);
 			}
 			break;
 		case CABLE_TYPE_SMARTDOCK_USB_MUIC:
-			printk("Boeffla-Kernel: CABLE_TYPE_SMARTDOCK_USB_MUIC, using charge rate %d mA\n", ac_level);
 			pr_info("%s: smart dock usb(low), %d\n",
 					__func__, DOCK_TYPE_LOW_CURR);
 			info->online_prop = ONLINE_PROP_USB;
-			battery_charge_control(info, ac_level, ac_level);
+			battery_charge_control(info,
+						DOCK_TYPE_LOW_CURR,
+						DOCK_TYPE_LOW_CURR);
 			break;
 		default:
-			printk("Boeffla-Kernel: General dock, using charge rate %d mA\n", ac_level);
 			pr_info("%s: general dock, %d\n",
 					__func__, info->pdata->chg_curr_dock);
-			battery_charge_control(info, ac_level, ac_level);
+		battery_charge_control(info,
+			info->pdata->chg_curr_dock,
+			info->pdata->chg_curr_dock);
 			break;
 		}
 		break;
 	case POWER_SUPPLY_TYPE_WIRELESS:
-		printk("Boeffla-Kernel: POWER_SUPPLY_TYPE_WIRELESS");
 		if (!info->pdata->suspend_chging)
 			wake_lock(&info->charge_wake_lock);
 		battery_charge_control(info, info->pdata->chg_curr_wpc,
@@ -1885,9 +1881,8 @@ monitor_finish:
 		info->prev_battery_health != info->battery_health ||
 		info->prev_charge_virt_state != info->charge_virt_state ||
 		info->prev_battery_soc != info->battery_soc) {
-		/* TBD : timeout value */
-		pr_info("%s: update wakelock(%d)\n", __func__, HZ);
-		wake_lock_timeout(&info->update_wake_lock, HZ);
+		pr_info("%s: update wakelock(%d)\n", __func__, 3 * HZ);
+		wake_lock_timeout(&info->update_wake_lock, 3 * HZ);
 	}
 	info->prev_cable_type = info->cable_type;
 	info->prev_battery_health = info->battery_health;
@@ -1902,9 +1897,12 @@ skip_updating_status:
 	if ((info->lpm_state == true) &&
 		(info->cable_type == POWER_SUPPLY_TYPE_BATTERY)) {
 		pr_info("%s: lpm with battery, maybe power off\n", __func__);
-		wake_lock_timeout(&info->monitor_wake_lock, 3 * HZ);
-	} else
-		wake_lock_timeout(&info->monitor_wake_lock, HZ / 4);
+		wake_lock_timeout(&info->monitor_wake_lock,
+					msecs_to_jiffies(10000));
+	} else {
+		wake_lock_timeout(&info->monitor_wake_lock,
+					msecs_to_jiffies(1000));
+	}
 
 	mutex_unlock(&info->mon_lock);
 
