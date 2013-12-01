@@ -37,7 +37,7 @@ static u32 last_utilization_gpu = 0 ;
 static u32 last_utilization_gp = 0 ;
 static u32 last_utilization_pp = 0 ;
 
-#ifndef CONFIG_PM_DEVFREQ	/* MALI_SEC */
+#ifndef CONFIG_PM_DEVFREQ
 static u32 mali_utilization_timeout = 100;
 #endif
 void (*mali_utilization_callback)(struct mali_gpu_utilization_data *data) = NULL;
