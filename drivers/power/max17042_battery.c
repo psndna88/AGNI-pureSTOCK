@@ -32,6 +32,8 @@
 #include <linux/delay.h>
 #include <linux/mutex.h>
 
+#define DEBUG_PRINT 0
+
 #define LOW_BATT_COMP_RANGE_NUM	5
 #define LOW_BATT_COMP_LEVEL_NUM	2
 
@@ -189,8 +191,10 @@ static int max17042_get_vcell(struct i2c_client *client)
 
 	vcell = (data & 0xFFF) * 78125 / 1000000;
 	vcell += ((((data & 0xF000) >> 4) * 78125) / 1000000) << 4;
+#if DEBUG_PRINT
 	dev_info(&client->dev, "VCELL : %d, data : 0x%x\n",
 			vcell, data);
+#endif
 
 	return vcell * 1000;
 }
@@ -205,9 +209,10 @@ static int max17042_get_soc(struct i2c_client *client)
 	raw_soc = ((data >> 8) * 100) + ((data & 0xFF) * 100) / 256;
 
 	soc = min((raw_soc * 100) / 9800, 100);
-
+#if DEBUG_PRINT
 	dev_info(&client->dev, "SOC : %d, data : 0x%x\n",
 			soc, data);
+#endif
 
 	return soc;
 }
@@ -261,8 +266,10 @@ static int max17042_get_temperature(struct i2c_client *client)
 			temper = ((7 * temper) / 10 + 7) + 20;
 	}
 
+#if DEBUG_PRINT
 	dev_info(&client->dev, "TEMPERATURE : %d, data :0x%x\n",
 		temper, data);
+#endif
 
 	return temper;
 }
@@ -278,8 +285,10 @@ static int max17042_get_avg_current(struct i2c_client *client)
 		((((~data & 0xFFFF) + 1) * 15625) / 100000) * (-1) :
 		(data * 15625) / 100000;
 
+#if DEBUG_PRINT
 	dev_info(&client->dev, "AVG Current : %d, data :0x%x\n",
 		avg_current, data);
+#endif
 	return avg_current;
 }
 
@@ -293,8 +302,10 @@ static int max17042_get_current(struct i2c_client *client)
 	fg_current = (data & (0x1 << 15)) ?
 		((((~data & 0xFFFF) + 1) * 15625) / 100000) * (-1) :
 		(data * 15625) / 100000;
+#if DEBUG_PRINT
 	dev_info(&client->dev, "Current : %d, data :0x%x\n",
 		fg_current, data);
+#endif
 
 	return fg_current;
 }
@@ -1020,9 +1031,11 @@ static void max17042_fullcharged_compensation(
 	struct max17042_chip *chip =
 		container_of(ptr, struct max17042_chip, callbacks);
 
+#if DEBUG_PRINT
 	dev_info(&chip->client->dev,
 			"%s: is_recharging(%d), pre_update(%d)\n",
 			__func__, is_recharging, pre_update);
+#endif
 
 	new_fullcap = max17042_read_reg(chip->client, MAX17402_FullCAP);
 
@@ -1030,10 +1043,12 @@ static void max17042_fullcharged_compensation(
 		new_fullcap = chip->info.capacity;
 
 	if (new_fullcap > (chip->info.capacity * 110 / 100)) {
+#if DEBUG_PRINT
 		dev_info(&chip->client->dev,
 			"%s: [Case 1] previous_fullcap = 0x%04x,"
 			" NewFullCap = 0x%04x\n",
 			__func__, chip->info.previous_fullcap, new_fullcap);
+#endif
 
 		new_fullcap = (chip->info.capacity * 110) / 100;
 		max17042_write_reg(chip->client,
@@ -1041,10 +1056,12 @@ static void max17042_fullcharged_compensation(
 		max17042_write_reg(chip->client,
 			MAX17402_FullCAP, (u16)(new_fullcap));
 	} else if (new_fullcap < (chip->info.capacity * 50 / 100)) {
+#if DEBUG_PRINT
 		dev_info(&chip->client->dev,
 			"%s : [Case 5] previous_fullcap = 0x%04x,"
 			" NewFullCap = 0x%04x\n",
 			__func__, chip->info.previous_fullcap, new_fullcap);
+#endif
 
 		new_fullcap = (chip->info.capacity * 50) / 100;
 		max17042_write_reg(chip->client,
@@ -1053,10 +1070,12 @@ static void max17042_fullcharged_compensation(
 			MAX17402_FullCAP, (u16)(new_fullcap));
 	} else {
 		if (new_fullcap > (chip->info.previous_fullcap * 110 / 100)) {
+#if DEBUG_PRINT
 			dev_info(&chip->client->dev,
 				"%s : [Case 2] previous_fullcap = 0x%04x,"
 				" NewFullCap = 0x%04x\n", __func__,
 				chip->info.previous_fullcap, new_fullcap);
+#endif
 
 			new_fullcap = (chip->info.previous_fullcap * 110) / 100;
 			max17042_write_reg(chip->client,
@@ -1064,10 +1083,12 @@ static void max17042_fullcharged_compensation(
 			max17042_write_reg(chip->client,
 				MAX17402_FullCAP, (u16)(new_fullcap));
 		} else if (new_fullcap < (chip->info.previous_fullcap*90/100)) {
+#if DEBUG_PRINT
 			dev_info(&chip->client->dev,
 				"%s : [Case 3] previous_fullcap = 0x%04x,"
 				" NewFullCap = 0x%04x\n", __func__,
 				chip->info.previous_fullcap, new_fullcap);
+#endif
 
 			new_fullcap = (chip->info.previous_fullcap * 90) / 100;
 			max17042_write_reg(chip->client,
@@ -1075,10 +1096,12 @@ static void max17042_fullcharged_compensation(
 			max17042_write_reg(chip->client,
 				MAX17402_FullCAP, (u16)(new_fullcap));
 		} else {
+#if DEBUG_PRINT
 			dev_info(&chip->client->dev,
 				"%s : [Case 4] previous_fullcap = 0x%04x,"
 				" NewFullCap = 0x%04x\n", __func__,
 				chip->info.previous_fullcap, new_fullcap);
+#endif
 		}
 	}
 
@@ -1099,10 +1122,12 @@ static void max17042_fullcharged_compensation(
 		chip->info.previous_fullcap =
 			max17042_read_reg(chip->client, MAX17402_FullCAP);
 
+#if DEBUG_PRINT
 	dev_info(&chip->client->dev, "%s : (A) FullCap = 0x%04x, RemCap = 0x%04x\n",
 		 __func__,
 		max17042_read_reg(chip->client, MAX17402_FullCAP),
 		max17042_read_reg(chip->client, MAX17042_RepCap));
+#endif
 
 	max17042_periodic_read(chip->client);
 }
@@ -1121,10 +1146,12 @@ static void max17042_check_vf_fullcap_range(
 		new_vffullcap = chip->info.vfcapacity;
 
 	if (new_vffullcap > (chip->info.vfcapacity * 110 / 100)) {
+#if DEBUG_PRINT
 		dev_info(&chip->client->dev,
 			"%s : [Case 1] previous_vffullcap = 0x%04x,"
 			" NewVfFullCap = 0x%04x\n", __func__,
 			chip->info.previous_vffullcap, new_vffullcap);
+#endif
 
 		new_vffullcap = (chip->info.vfcapacity * 110) / 100;
 
@@ -1132,10 +1159,12 @@ static void max17042_check_vf_fullcap_range(
 			(u16)(new_vffullcap / 4));
 		max17042_write_reg(chip->client, MAX17042_DPACC, (u16)0x3200);
 	} else if (new_vffullcap < (chip->info.vfcapacity * 50 / 100)) {
+#if DEBUG_PRINT
 		dev_info(&chip->client->dev,
 			"%s : [Case 5] previous_vffullcap = 0x%04x,"
 			" NewVfFullCap = 0x%04x\n", __func__,
 			chip->info.previous_vffullcap, new_vffullcap);
+#endif
 
 		new_vffullcap = (chip->info.vfcapacity * 50) / 100;
 
@@ -1144,10 +1173,12 @@ static void max17042_check_vf_fullcap_range(
 		max17042_write_reg(chip->client, MAX17042_DPACC, (u16)0x3200);
 	} else {
 		if (new_vffullcap > (chip->info.previous_vffullcap*110 / 100)) {
+#if DEBUG_PRINT
 			dev_info(&chip->client->dev,
 				"%s : [Case 2] previous_vffullcap = 0x%04x,"
 				" NewVfFullCap = 0x%04x\n", __func__,
 				chip->info.previous_vffullcap, new_vffullcap);
+#endif
 
 			new_vffullcap =
 				(chip->info.previous_vffullcap * 110) / 100;
@@ -1157,10 +1188,12 @@ static void max17042_check_vf_fullcap_range(
 				MAX17042_DPACC, (u16)0x3200);
 		} else if (new_vffullcap <
 				(chip->info.previous_vffullcap * 90 / 100)) {
+#if DEBUG_PRINT
 			dev_info(&chip->client->dev,
 				"%s : [Case 3] previous_vffullcap = 0x%04x,"
 				" NewVfFullCap = 0x%04x\n", __func__,
 				chip->info.previous_vffullcap, new_vffullcap);
+#endif
 
 			new_vffullcap = (chip->info.previous_vffullcap*90)/100;
 
@@ -1169,11 +1202,13 @@ static void max17042_check_vf_fullcap_range(
 			max17042_write_reg(chip->client,
 				MAX17042_DPACC, (u16)0x3200);
 		} else {
+#if DEBUG_PRINT
 			dev_info(&chip->client->dev,
 				"%s : [Case 4] previous_vffullcap = 0x%04x,"
 				" NewVfFullCap = 0x%04x\n", __func__,
 				chip->info.previous_vffullcap,
 					new_vffullcap);
+#endif
 			print_flag = 0;
 		}
 	}
@@ -1185,6 +1220,7 @@ static void max17042_check_vf_fullcap_range(
 	chip->info.previous_vffullcap =
 			max17042_read_reg(chip->client, MAX17042_FullCAP_Nom);
 
+#if DEBUG_PRINT
 	if (print_flag)
 		dev_info(&chip->client->dev,
 			"%s:VfFullCap(0x%04x), dQacc(0x%04x), dPacc(0x%04x)\n",
@@ -1192,6 +1228,7 @@ static void max17042_check_vf_fullcap_range(
 			max17042_read_reg(chip->client, MAX17042_FullCAP_Nom),
 			max17042_read_reg(chip->client, MAX17042_DQACC),
 			max17042_read_reg(chip->client, MAX17042_DPACC));
+#endif
 
 }
 

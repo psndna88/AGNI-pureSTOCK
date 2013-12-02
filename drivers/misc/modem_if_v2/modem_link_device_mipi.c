@@ -30,6 +30,7 @@
 #include "modem_link_device_mipi.h"
 #include "modem_utils.h"
 
+#define DEBUG_PRINT 0
 
 static int mipi_hsi_init_communication(struct link_device *ld,
 			struct io_device *iod)
@@ -232,6 +233,7 @@ static void mipi_hsi_tx_work(struct work_struct *work)
 			}  else {
 				mipi_debug("write Done\n");
 
+#if DEBUG_PRINT
 				if ((iod->format == IPC_FMT) ||
 						(iod->format == IPC_RFS))
 					print_hex_dump(KERN_DEBUG,
@@ -243,6 +245,7 @@ static void mipi_hsi_tx_work(struct work_struct *work)
 							fmt_skb->len <= 16 ?
 							(size_t)fmt_skb->len :
 							(size_t)16, false);
+#endif
 			}
 
 			dev_kfree_skb_any(fmt_skb);
@@ -1346,8 +1349,10 @@ static int if_hsi_write(struct if_hsi_channel *channel, u32 *data,
 		mipi_err("ch=%d, hsi_write_done timeout : %d\n",
 					channel->channel_id, size);
 
+#if DEBUG_PRINT
 		print_hex_dump_bytes("[HSI]", DUMP_PREFIX_OFFSET,
 						channel->tx_data, size);
+#endif
 
 		hsi_write_cancel(channel->dev);
 
@@ -1567,6 +1572,7 @@ static void if_hsi_read_done(struct hsi_device *dev, unsigned int size)
 					DUMP_PREFIX_OFFSET,
 					channel->rx_data, channel->packet_size);
 			else {
+#if DEBUG_PRINT
 				print_hex_dump_bytes("[HSI]",
 					DUMP_PREFIX_OFFSET,
 					channel->rx_data, 0x40 - 0x10);
@@ -1575,11 +1581,13 @@ static void if_hsi_read_done(struct hsi_device *dev, unsigned int size)
 					(u8 *)channel->rx_data +
 					channel->packet_size - 0x10,
 					0x10);
+#endif
 			}
 			mipi_err("discard data: channel=%d, packet_size=%d\n",
 				channel->channel_id, channel->packet_size);
 		}
 
+#if DEBUG_PRINT
 		if ((iod->format == IPC_FMT) ||
 					(iod->format == IPC_RFS))
 			print_hex_dump(KERN_DEBUG,
@@ -1591,6 +1599,7 @@ static void if_hsi_read_done(struct hsi_device *dev, unsigned int size)
 					channel->packet_size <= 16 ?
 					(size_t)channel->packet_size :
 					(size_t)16, false);
+#endif
 
 		channel->packet_size = 0;
 
