@@ -165,8 +165,9 @@ static ssize_t gpu_clock_store(struct device *dev, struct device_attribute *attr
                         }
 			/* only apply valid freq. - DerTeufel */
                         for (j = 0; (gpu_freq_table[j] != GPU_FREQ_END_OF_TABLE); j++) {
-			    if (gpu_freq_table[j] == g[i]) {  
+			    if (gpu_freq_table[j] == g[i] && mali_dvfs[i].clock != g[i]) {
                                 mali_dvfs[i].clock=g[i];
+				gpu_voltage_delta_reset(i);
 			    }
 			}
                 }
@@ -212,6 +213,18 @@ static ssize_t available_frequencies_show(struct device *dev, struct device_attr
 
 }
 
+void gpu_voltage_delta_reset(int step) {
+    if (step == -1) {
+	int i;
+   	for (i = 0; i < MALI_DVFS_STEPS; i++)
+	{
+    	    gpu_voltage_delta[i] = 0;
+	}
+    } else {
+    	    gpu_voltage_delta[step] = 0;
+    }
+}
+
 // Yank555.lu : add a global voltage delta to be applied to all automatic voltage resets
 static ssize_t gpu_voltage_delta_show(struct device *dev, struct device_attribute *attr, char *buf) {
 
@@ -236,11 +249,8 @@ static ssize_t gpu_voltage_delta_store(struct device *dev, struct device_attribu
   }
 
   if (data == 1) { // DerTeufel: reset all voltage deltas
-	int i;
-   	for (i = 0; i < MALI_DVFS_STEPS; i++)
-	{
-    	    gpu_voltage_delta[i] = 0;
-	}
+	gpu_voltage_delta_reset(-1);
+
     // Yank555.lu : update mali dvfs table
     mali_dvfs_table_update();
     return count;
