@@ -334,10 +334,16 @@ void kernel_restart_prepare(char *cmd)
 void kernel_restart(char *cmd)
 {
 	kernel_restart_prepare(cmd);
+	if (pm_power_off_prepare)
+		pm_power_off_prepare();
+	disable_nonboot_cpus();
+	syscore_shutdown();
 	if (!cmd)
 		printk(KERN_EMERG "Restarting system.\n");
-	else
+	else{
 		printk(KERN_EMERG "Restarting system with command '%s'.\n", cmd);
+		printk(KERN_EMERG "pid = %d name:%s\n", task_tgid_vnr(current), current->comm);
+	}
 	kmsg_dump(KMSG_DUMP_RESTART);
 	machine_restart(cmd);
 }
