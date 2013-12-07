@@ -390,7 +390,8 @@ int fc8150_get_rssi(HANDLE hDevice, int *rssi)
 	CRNTMODE1 = (LNA >> 6) & 0x01;
 	CRNTMODE0 = (LNA >> 5) & 0x01;
 	/* *rssi = (LNA & 0x07) * 6 + (RFVGA & 0x1F)
-	+ ((CSF & 0x03)+((CSF & 0x70) >> 4) ) * 6 - PGA * 0.25f + K ; */
+	+ ((CSF & 0x03)+((CSF & 0x70) >> 4) ) * 6 - PGA * 0.25f
+	+ A2 * CRNTMODE1 + A3 * CRNTMODE0 + K ; */
 	*rssi = (LNA & 0x07) * 6 + (RFVGA & 0x1F)
 		+ ((CSF & 0x03) + ((CSF & 0x70) >> 4)) * 6 - PGA / 4
 		+ A2 * CRNTMODE1 + A3 * CRNTMODE0 + K;
@@ -402,4 +403,3 @@ int fc8150_tuner_deinit(HANDLE hDevice)
 {
 	return BBM_OK;
 }
-

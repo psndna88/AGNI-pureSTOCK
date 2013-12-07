@@ -183,13 +183,28 @@ void __init s5p_cma_region_reserve(struct cma_region *regions_normal,
 						if (memblock_reserve(0x5F000000,
 								0x200000))
 							panic("memblock\n");
-#elif defined(CONFIG_MACH_GC1)
-					if (reg->start == 0x50900000) {
-						if (memblock_reserve(0x53800000,
+					} else
+#elif defined(CONFIG_MACH_TAB3) || defined(CONFIG_MACH_ZEST)
+					if (reg->start == 0x58100000) {
+						if (memblock_reserve(0x58100000,
+								0x700000))
+							panic("memblock\n");
+						if (memblock_reserve(0x5B000000,
 								0x200000))
 							panic("memblock\n");
+					} else
+
+#elif defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GC2PD)
+					if (reg->start == 0x50200000) {
+						if (memblock_reserve(0x50200000,
+								0x600000))
+							panic("memblock\n");
+						if (memblock_reserve(0x53000000,
+								0x300000))
+							panic("memblock\n");
+					} else
 #endif
-					} else {
+					{
 						if (memblock_reserve(reg->start,
 								reg->size))
 							panic("memblock\n");

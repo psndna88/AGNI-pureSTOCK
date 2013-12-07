@@ -29,6 +29,8 @@
 #include <plat/clock.h>
 #include <plat/cpu.h>
 
+#include <mach/dev.h>
+
 #include "mshci.h"
 
 #ifdef CONFIG_MMC_MSHCI_S3C_DMA_MAP
@@ -462,6 +464,18 @@ static int __devinit mshci_s3c_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to map registers\n");
 		ret = -ENXIO;
 		goto err_add_host;
+	}
+
+	if (soc_is_exynos4212()) {
+		host->bus_dev = dev_get("exynos-busfreq");
+		if (host->bus_dev == (struct device *)-ENODEV) {
+			dev_err(dev, "failed to get bus_dev\n");
+			host->bus_dev = 0;
+		}
+		host->host_dev = dev;
+	} else {
+		host->bus_dev = NULL;
+		host->host_dev = NULL;
 	}
 
 	/* Ensure we have minimal gpio selected CMD/CLK/Detect */

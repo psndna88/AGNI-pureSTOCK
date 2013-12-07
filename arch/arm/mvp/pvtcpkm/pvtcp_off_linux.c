@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP PVTCP Server
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -26,6 +26,8 @@
 
 
 #include "pvtcp.h"
+#include "comm_os.h"
+#include "comm_os_mod_ver.h"
 
 #if defined(CONFIG_NET_NS)
 #include <linux/nsproxy.h>
@@ -46,6 +48,10 @@
 
 /* From mvpkm */
 extern uid_t Mvpkm_vmwareUid;
+extern gid_t Mvpkm_vmwareGid;
+
+extern struct mutex modules_lock;
+extern int (*pvtcpOSModStart)(void);
 
 /*
  * Credentials to back socket file pointer. Used in Android ICS network
@@ -413,16 +419,6 @@ static struct kobj_type stateKType = {
 
 
 /*
- * Initialization of module entry and exit callbacks.
- */
-
-static int Init(void *args);
-static void Exit(void);
-
-COMM_OS_MOD_INIT(Init, Exit);
-
-
-/*
  * AIO socket read buffers, stats and other global state.
  */
 
@@ -647,7 +643,7 @@ GetNetNamespace(PvtcpState *state)
    struct nsproxy *nsproxy;
    struct net *ns;
    struct socket *sock;
-   struct sockaddr_un addr = {
+   struct sockaddr_un addr __attribute__ ((aligned(4))) = {
       .sun_family = AF_UNIX
    };
    struct timeval timeout = {
@@ -859,8 +855,8 @@ StateAlloc(CommChannel channel)
 #endif
    state->extra = stateKObj;
 
-   _cred.uid  = _cred.gid  = _cred.suid  = _cred.sgid  =
-   _cred.euid = _cred.egid = _cred.fsuid = _cred.fsgid = Mvpkm_vmwareUid;
+   _cred.uid = _cred.suid = _cred.euid = _cred.fsuid = Mvpkm_vmwareUid;
+   _cred.gid = _cred.sgid = _cred.egid = _cred.fsgid = Mvpkm_vmwareGid;
 
 
 out:
@@ -932,12 +928,14 @@ PvtcpReleaseSocket(PvtcpSock *pvsk)
 {
    struct socket *sock = SkFromPvsk(pvsk)->sk_socket;
 
+   PvtcpHoldSock(pvsk);
    SOCK_IN_LOCK(pvsk);
    SOCK_OUT_LOCK(pvsk);
    pvsk->peerSockSet = 0;
    SockReleaseWrapper(sock);
    SOCK_OUT_UNLOCK(pvsk);
    SOCK_IN_UNLOCK(pvsk);
+   PvtcpPutSock(pvsk);
    CommOS_Debug(("%s: [0x%p].\n", __FUNCTION__, pvsk));
 }
 
@@ -1231,16 +1229,18 @@ PvtcpResetLoopbackInet6(PvtcpSock *pvsk,
 
 
 /**
- * @brief Called at module load time. It registers with the Comm runtime.
- * @param args initialization arguments
+ * @brief Called at module startup time. It registers with the Comm runtime.
  * @return zero if successful, -1 otherwise
  * @sideeffect Leaves the module loaded
  */
 
 static int
-Init(void *args)
+PvtcpOSModStart(void)
 {
    int rc = -1;
+
+   /* PVTCP is initialized. Called with modules_lock taken. */
+   pvtcpOSModStart = NULL;
 
 #if !defined(PVTCP_DISABLE_NETFILTER)
    rc = nf_register_hooks(netfilterHooks, ARRAY_SIZE(netfilterHooks));
@@ -1284,13 +1284,36 @@ out:
 
 
 /**
+ * @brief Called at initialization time.
+ * @return zero
+ */
+static int __init
+Init(void)
+{
+   /* PVTCP will remain dormant until mvpkm is activated */
+   mutex_lock(&modules_lock);
+   pvtcpOSModStart = PvtcpOSModStart;
+   mutex_unlock(&modules_lock);
+   return 0;
+}
+
+
+/**
  *  @brief Called at module unload time. It shuts down pvtcp.
  *  @sideeffect Total and utter destruction.
  */
 
-static void
+static void __exit
 Exit(void)
 {
+   mutex_lock(&modules_lock);
+   if (pvtcpOSModStart) {
+      pvtcpOSModStart = NULL;
+      mutex_unlock(&modules_lock);
+      return;
+   }
+   mutex_unlock(&modules_lock);
+
    PutLoopbackAddr(pvtcpLoopbackOffAddr);
    CommSvc_UnregisterImpl(&pvtcpImpl);
 #if !defined(PVTCP_DISABLE_NETFILTER)
@@ -1302,6 +1325,16 @@ Exit(void)
    CommOS_Log(("%s: Allocations of large datagrams: %llu.\n",
                __FUNCTION__, pvtcpOffDgramAllocations));
 }
+
+
+module_init(Init);
+module_exit(Exit);
+
+/* Module information. */
+MODULE_AUTHOR("VMware, Inc.");
+MODULE_DESCRIPTION(COMM_OS_MOD_NAME_STRING);
+MODULE_VERSION(COMM_OS_MOD_VERSION_STRING);
+MODULE_LICENSE("GPL v2");
 
 
 /*
@@ -1342,6 +1375,7 @@ DestructCB(struct sock *sk)
    if (pvsk->rpcReply) {
       CommOS_Kfree(pvsk->rpcReply);
    }
+
    CommOS_Kfree(pvsk);
 
    /*
@@ -1507,6 +1541,7 @@ SockAllocInit(struct socket *sock,
               PvtcpSock *parentPvsk)
 {
    struct sock *sk;
+   struct inode *inode;
    PvtcpSock *pvsk;
    int sndBuf = PVTCP_SOCK_RCVSIZE * 4;
 
@@ -1531,6 +1566,13 @@ SockAllocInit(struct socket *sock,
     * PVTCP sockets should be billed against the vmware uid.
     */
    sk->sk_socket->file = &_file;
+
+   /*
+    * Fill socket inode with vmware's uid and gid.
+    */
+   inode = SOCK_INODE(sock);
+   inode->i_uid = _cred.fsuid;
+   inode->i_gid = _cred.fsgid;
 
    /* Set peer (pv) socket. */
    pvsk->peerSock = peerSock;
@@ -1782,15 +1824,17 @@ PvtcpReleaseOp(CommChannel channel,
    }
 
    /*
+    * - remove the pvsk from the state, so the state destructor can't find it
+    *   (the state destructor cannot run while operations are in-flight).
     * - hold the socket before setting the 'release' flag and until after
     *   the call to PvtcpSchedSock(): if the socket had already been scheduled
     *   ReleaseAIO may run, find the flag set and release this socket while
     *   it's being unlocked here.
-    *
     * - hold the dispatch lock until done to ensure that subsequent Ops for
     *   this socket see peerSockSet == 0.
     */
 
+   PvtcpStateRemoveSocket(pvsk->channel, pvsk);
    PvtcpHoldSock(pvsk);
    SOCK_STATE_LOCK(pvsk);
    pvsk->peerSockSet = 0;
@@ -2320,8 +2364,6 @@ ReleaseAIO(PvtcpSock *pvsk)
     */
    SockReleaseWrapper(sock);
    SOCK_OUT_UNLOCK(pvsk);
-
-   PvtcpStateRemoveSocket(pvsk->channel, pvsk);
 }
 
 
@@ -2467,6 +2509,7 @@ static inline void
 GetSockOptAIO(PvtcpSock *pvsk)
 {
    CommPacket packet = {
+      .len = sizeof packet,
       .opCode = PVTCP_OP_GETSOCKOPT,
       .flags = 0
    };
@@ -2489,7 +2532,7 @@ GetSockOptAIO(PvtcpSock *pvsk)
    packet.data32 = pvsk->rpcStatus;
 
    CommSvc_WriteVec(pvsk->channel, &packet, &inVec, &vecLen,
-                    &timeout, &iovOffset);
+                    &timeout, &iovOffset, 1);
 
    if (pvsk->rpcReply) {
       CommOS_Kfree(pvsk->rpcReply);
@@ -2641,7 +2684,7 @@ AcceptAIO(PvtcpSock *pvsk)
       }
 
       rc = CommSvc_WriteVec(pvsk->channel, &packet,
-                            &payload, &payloadLen, &timeout, &iovOffset);
+                            &payload, &payloadLen, &timeout, &iovOffset, 1);
       if ((rc != packet.len) && !COMM_OPF_TEST_ERR(packet.flags)) {
          /* Mustn't leak the new socket if PV can't get a hold of it. */
 
@@ -2768,7 +2811,7 @@ PvtcpProcessAIO(CommOSWork *arg)
          /* Input processing. */
 
          /*
-          * Workqueue handlers are pinned to a CPU core and therefore not
+          * Workqueue handlers are pinned to CPU cores and therefore not
           * migratable. No need to disable preemption.
           */
          err = PvtcpInputAIO(pvsk, perCpuBuf[smp_processor_id()]);
@@ -2856,3 +2899,4 @@ doneInUnlock:
 
    PvtcpPutSock(pvsk);
 }
+

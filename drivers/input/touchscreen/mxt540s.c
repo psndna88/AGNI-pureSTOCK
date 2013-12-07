@@ -51,6 +51,11 @@ int mxt_read_mem(struct mxt_data *data, u16 reg, u8 len, u8 *buf)
 		},
 	};
 
+#if TSP_ITDEV
+	if (data->command_off)
+		return 0;
+#endif
+
 	for (i = 0; i < 3 ; i++) {
 		ret = i2c_transfer(data->client->adapter, msg, 2);
 		if (ret < 0)
@@ -67,6 +72,11 @@ int mxt_write_mem(struct mxt_data *data,
 {
 	int ret = 0, i = 0;
 	u8 tmp[len + 2];
+
+#if TSP_ITDEV
+	if (data->command_off)
+		return 0;
+#endif
 
 	put_unaligned_le16(cpu_to_le16(reg), tmp);
 	memcpy(tmp + 2, buf, len);
@@ -272,8 +282,11 @@ static int mxt_read_config_crc(struct mxt_data *data, u32 *crc_pointer)
 			return error;
 
 		object_type = mxt_reportid_to_type(data, msg[0] , &instance);
-		if (object_type == RESERVED_T0)
-			return -EINVAL;
+		if (object_type == RESERVED_T0) {
+			dev_err(&data->client->dev,
+				"Untreated Object type[%d]\n", object_type);
+			continue;
+		}
 
 		if (object_type == GEN_COMMANDPROCESSOR_T6)
 			break;
@@ -1792,7 +1805,20 @@ static void mxt_handle_init_data(struct mxt_data *data)
 	else
 		data->tsp_ctrl = (val > 0) ? val : 0x83;
 
-	dev_info(&data->client->dev, "T9 CTRL : %d", data->tsp_ctrl);
+	mxt_write_object(data, TOUCH_MULTITOUCHSCREEN_T9,
+			MXT_T9_CTRL, data->tsp_ctrl);
+	dev_info(&data->client->dev, "T9 CTRL : %d\n", data->tsp_ctrl);
+
+	/* Get num of x,y lines that object occupies */
+	ret = mxt_read_object(data, TOUCH_MULTITOUCHSCREEN_T9,
+		MXT_T9_X_SIZE, &val);
+	data->x_num = val;
+
+	ret = mxt_read_object(data, TOUCH_MULTITOUCHSCREEN_T9,
+		MXT_T9_Y_SIZE, &val);
+	data->y_num = val;
+	dev_info(&data->client->dev, "occupied matrix X,Y size:  %d,%d\n",
+		data->x_num, data->y_num);
 }
 
 int  mxt_rest_initialize(struct mxt_fw_info *fw_info)

@@ -33,10 +33,11 @@
 #include <linux/ir_remote_con_mc96.h>
 #include <linux/earlysuspend.h>
 #include "irda_fw.h"
-#include <mach/gpio-rev00-p4notepq.h>
+#include <mach/gpio.h>
 
 #define MAX_SIZE 2048
 #define MC96_READ_LENGTH	8
+#define DUMMY 0xffff
 
 #define USE_STOP_MODE
 
@@ -61,33 +62,39 @@ static void ir_remocon_late_resume(struct early_suspend *h);
 
 static int count_number;
 static int ack_number;
+static int retry_count;
+static int download_pass;
 
 static int irda_fw_update(struct ir_remocon_data *ir_data)
 {
 	struct ir_remocon_data *data = ir_data;
 	struct i2c_client *client = data->client;
-	int i, ret;
+	int i, k, ret, ret2, checksum, checksum2;
 	u8 buf_ir_test[8];
 
+	msleep(20);
 	data->pdata->ir_vdd_onoff(0);
-	data->pdata->ir_wake_en(0);
-	data->pdata->ir_wake_en(1);
+	msleep(20);
 	data->pdata->ir_vdd_onoff(1);
+	data->pdata->ir_wake_en(1);
 	msleep(100);
 
 	ret = i2c_master_recv(client, buf_ir_test, MC96_READ_LENGTH);
 	if (ret < 0) {
-		printk(KERN_ERR "1. %s: err %d\n", __func__, ret);
+		printk(KERN_ERR "%s: err %d\n", __func__, ret);
 		ret = i2c_master_recv(client, buf_ir_test, MC96_READ_LENGTH);
-		if (ret < 0)
-			goto err_i2c_fail;
+		if (ret < 0) {
+			printk(KERN_INFO "%s: broken FW!\n", __func__);
+			retry_count = 1;
+		}
 	}
 	ret = buf_ir_test[2] << 8 | buf_ir_test[3];
-	if (ret < FW_VERSION) {
+	if ((ret != FW_VERSION) || (retry_count != 0)) {
 		printk(KERN_INFO "2. %s: chip : %04x, bin : %04x, need update!\n",
 						__func__, ret, FW_VERSION);
 		data->pdata->ir_vdd_onoff(0);
 		data->pdata->ir_wake_en(0);
+		msleep(20);
 		data->pdata->ir_vdd_onoff(1);
 		msleep(100);
 
@@ -97,11 +104,19 @@ static int irda_fw_update(struct ir_remocon_data *ir_data)
 
 		ret = buf_ir_test[6] << 8 | buf_ir_test[7];
 
-		if (ret == 0x01fe)
-			printk(KERN_INFO "4. %s: boot mode, FW download start\n",
-							__func__);
-		else
+		checksum = 0;
+
+		for (k = 0; k < 6; k++)
+			checksum += buf_ir_test[k];
+
+		if (ret == checksum)
+			printk(KERN_INFO "%s: boot mode, FW download start! ret=%04x\n",
+							__func__, ret);
+		else {
+			printk(KERN_ERR "ABOV IC bootcode broken\n");
 			goto err_bootmode;
+		}
+
 		msleep(30);
 
 		for (i = 0; i < FRAME_COUNT; i++) {
@@ -124,44 +139,72 @@ static int irda_fw_update(struct ir_remocon_data *ir_data)
 			printk(KERN_ERR "5. %s: err %d\n", __func__, ret);
 
 		ret = buf_ir_test[6] << 8 | buf_ir_test[7];
+		checksum = 0;
+		for (k = 0; k < 6; k++)
+			checksum += buf_ir_test[k];
 
-		if (ret == 0x01ba)
-			printk(KERN_INFO "6. %s: boot down complete\n",
+		msleep(20);
+
+		ret2 = i2c_master_recv(client, buf_ir_test, MC96_READ_LENGTH);
+		if (ret2 < 0)
+			printk(KERN_ERR "6. %s: err %d\n", __func__, ret2);
+
+		ret2 = buf_ir_test[6] << 8 | buf_ir_test[7];
+		for (k = 0; k < 6; k++)
+			checksum2 += buf_ir_test[k];
+
+		if (ret == checksum) {
+			printk(KERN_INFO "1. %s: boot down complete\n",
 				__func__);
-		else
+			download_pass = 1;
+		} else if (ret2 == checksum2) {
+			printk(KERN_INFO "2. %s: boot down complete\n",
+				__func__);
+			download_pass = 1;
+		} else {
+			retry_count++;
+			printk(KERN_ERR "FW Checksum fail. Retry = %d\n",
+						retry_count);
 			goto err_bootmode;
+		}
 
 		data->pdata->ir_vdd_onoff(0);
-		data->pdata->ir_wake_en(1);
+		msleep(20);
 		data->pdata->ir_vdd_onoff(1);
+		data->pdata->ir_wake_en(1);
 		msleep(60);
 		ret = i2c_master_recv(client, buf_ir_test, MC96_READ_LENGTH);
 
 		ret = buf_ir_test[2] << 8 | buf_ir_test[3];
 		printk(KERN_INFO "7. %s: user mode : Upgrade FW_version : %04x\n",
 						__func__, ret);
+		data->pdata->ir_wake_en(0);
 		data->pdata->ir_vdd_onoff(0);
 		data->on_off = 0;
+		msleep(100);
 
 	} else {
-		printk(KERN_INFO "8. %s: chip : %04x, bin : %04x, latest FW_version now\n",
+		if (ret != DUMMY)
+			printk(KERN_INFO "8. %s: chip : %04x, bin : %04x, latest FW_ver\n",
 						__func__, ret, FW_VERSION);
 		data->pdata->ir_wake_en(0);
 		data->pdata->ir_vdd_onoff(0);
 		data->on_off = 0;
+		msleep(100);
+
+		if (ret == FW_VERSION)
+			download_pass = 1;
 	}
 
 	return 0;
-err_i2c_fail:
-	printk(KERN_ERR "%s: update fail! i2c ret : %x\n",
-							__func__, ret);
-	return ret;
 err_update:
 	printk(KERN_ERR "%s: update fail! count : %x, ret = %x\n",
 							__func__, i, ret);
 	return ret;
 err_bootmode:
-	printk(KERN_ERR "%s: update fail, ret = %x\n", __func__, ret);
+	printk(KERN_ERR "%s: update fail, checksum = %x ret = %x\n",
+					__func__, checksum, ret);
+	data->pdata->ir_wake_en(0);
 	data->pdata->ir_vdd_onoff(0);
 	data->on_off = 0;
 	return ret;
@@ -197,8 +240,8 @@ static int irda_read_device_info(struct ir_remocon_data *ir_data)
 	int ret;
 
 	printk(KERN_INFO"%s called\n", __func__);
-	data->pdata->ir_wake_en(1);
 	data->pdata->ir_vdd_onoff(1);
+	data->pdata->ir_wake_en(1);
 	msleep(60);
 	ret = i2c_master_recv(client, buf_ir_test, MC96_READ_LENGTH);
 
@@ -323,11 +366,12 @@ static ssize_t remocon_store(struct device *dev, struct device_attribute *attr,
 				data->ir_freq = _data;
 				if (data->on_off) {
 					data->pdata->ir_wake_en(0);
+					udelay(200);
 					data->pdata->ir_wake_en(1);
-					msleep(20);
+					msleep(30);
 				} else {
-					data->pdata->ir_wake_en(1);
 					data->pdata->ir_vdd_onoff(1);
+					data->pdata->ir_wake_en(1);
 					msleep(60);
 					data->on_off = 1;
 				}
@@ -380,9 +424,9 @@ static ssize_t remocon_ack(struct device *dev, struct device_attribute *attr,
 	printk(KERN_INFO "%s : ack_number = %d\n", __func__, ack_number);
 
 	if (ack_number == 6)
-		return snprintf(buf, 1, "%d\n", 1);
+		return sprintf(buf, "1\n");
 	else
-		return snprintf(buf, 1, "%d\n", 0);
+		return sprintf(buf, "0\n");
 }
 
 static DEVICE_ATTR(ir_send, 0664, remocon_show, remocon_store);
@@ -407,9 +451,9 @@ static int __devinit ir_remocon_probe(struct i2c_client *client,
 	struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
 	struct ir_remocon_data *data;
 	struct device *ir_remocon_dev;
-	int error;
+	int i, error;
 
-	printk(KERN_INFO "%s probe!\n", __func__);
+	printk(KERN_INFO "%s start!\n", __func__);
 
 	if (!i2c_check_functionality(adapter, I2C_FUNC_I2C))
 		return -EIO;
@@ -430,7 +474,11 @@ static int __devinit ir_remocon_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, data);
 
-	irda_fw_update(data);
+	for (i = 0; i < 6; i++) {
+		if (download_pass == 1)
+			break;
+		irda_fw_update(data);
+	}
 /*
 	irda_read_device_info(data);
 */

@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Hypervisor Support
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -208,6 +208,7 @@
 #define ARM_OP_MOV_A1           0x01a00000
 #define ARM_OP_MOVW_A2          0x03000000
 #define ARM_OP_MOVT_A1          0x03400000
+#define ARM_OP_MRS_T1           0x8000f3e0
 #define ARM_OP_MRS_A1           0x01000000
 #define ARM_OP_MSR_T1           0x8000f380
 #define ARM_OP_MSR_A1           0x0120f000
@@ -218,6 +219,7 @@
 /*
  * Set SYSm[5] = 1 for VE MSR/MRS, see p77-78 ARM PRD03-GENC-008353 10.0.
  */
+#define ARM_OP_MRS_EXT_T1       (ARM_OP_MRS_T1 | (1 << 21))
 #define ARM_OP_MRS_EXT_A1       (ARM_OP_MRS_A1 | (1 << 9))
 #define ARM_OP_MSR_EXT_T1       (ARM_OP_MSR_T1 | (1 << 21))
 #define ARM_OP_MSR_EXT_A1       (ARM_OP_MSR_A1 | (1 << 9))
@@ -375,6 +377,10 @@
 #define ARM_INSTR_MSR_EXT_A1_ENC(cond,rm,rn) \
    (((cond) << 28) | ARM_OP_MSR_EXT_A1 | (MVP_BIT(rm, 5) << 22) | \
     (MVP_BIT(rm, 4) << 8) | (MVP_EXTRACT_FIELD(rm, 0, 4) << 16) | ((rn) << 0))
+
+#define ARM_INSTR_MRS_EXT_T1_ENC(rm,rd) \
+   (ARM_OP_MRS_EXT_T1 | (MVP_BIT(rm, 5) << 4) | \
+    (MVP_BIT(rm, 4) << 20) | (MVP_EXTRACT_FIELD(rm, 0, 4) << 0) | ((rd) << 24))
 
 #define ARM_INSTR_MRS_EXT_A1_ENC(cond,rd,rm) \
    (((cond) << 28) | ARM_OP_MRS_EXT_A1 | (MVP_BIT(rm, 5) << 22) | \

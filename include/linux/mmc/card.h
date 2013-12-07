@@ -16,6 +16,7 @@
 struct mmc_cid {
 	unsigned int		manfid;
 	char			prod_name[8];
+	unsigned short		prod_rev;
 	unsigned int		serial;
 	unsigned short		oemid;
 	unsigned short		year;
@@ -93,6 +94,7 @@ struct mmc_ext_csd {
 
 	unsigned int            feature_support;
 #define MMC_DISCARD_FEATURE	BIT(0)                  /* CMD38 feature */
+#define MMC_POWEROFF_NOTIFY_FEATURE	BIT(1)		/* PON feature */
 };
 
 struct sd_scr {
@@ -208,6 +210,7 @@ struct mmc_card {
 #define MMC_QUIRK_BLK_NO_CMD23	(1<<7)		/* Avoid CMD23 for regular multiblock */
 /* MoviNAND secure issue */
 #define MMC_QUIRK_MOVINAND_SECURE (1<<8)
+#define MMC_QUIRK_MOVINAND_TLC	(1<<31)		/* Check the moviNAND TLC */
 
 	unsigned int    poweroff_notify_state;	/* eMMC4.5 notify feature */
 #define MMC_NO_POWER_NOTIFICATION	0
@@ -242,8 +245,14 @@ struct mmc_card {
 	unsigned int		sd_bus_speed;	/* Bus Speed Mode set for the card */
 
 	struct dentry		*debugfs_root;
+	unsigned int		movi_ops;
+	unsigned int		movi_fwver;
+	unsigned int		movi_fwdate;
 };
 
+#define MMC_MOVI_VER_VHX2	(1<<3)
+#define MMC_MOVI_VER_VHX0	(1<<4)
+#define MMC_MOVI_VER_VMX0	(1<<5)
 /*
  *  The world is not perfect and supplies us with broken mmc/sdio devices.
  *  For at least some of these bugs we need a work-around.

@@ -37,6 +37,8 @@
 #include <linux/cma.h>
 #include <linux/vmalloc.h>
 
+#include <mach/sec_debug.h>
+
 /*
  * Protects cma_regions, cma_allocators, cma_map, cma_map_length,
  * cma_kobj, cma_sysfs_regions and cma_chunks_by_start.
@@ -279,6 +281,24 @@ static LIST_HEAD(cma_regions);
 
 #define cma_foreach_region(reg) \
 	list_for_each_entry(reg, &cma_regions, list)
+
+bool cma_is_registered_region(phys_addr_t start, size_t size)
+{
+	struct cma_region *reg;
+
+	if (start + size <= start)
+		return false;
+
+	cma_foreach_region(reg) {
+		if ((start >= reg->start) &&
+			((start + size) <= (reg->start + reg->size)) &&
+			(size <= reg->size) &&
+			(start < (reg->start + reg->size)))
+
+			return true;
+	}
+	return false;
+}
 
 int __must_check cma_region_register(struct cma_region *reg)
 {
@@ -986,6 +1006,12 @@ static int __must_check __cma_chunk_insert(struct cma_chunk *chunk)
 		}
 	}
 
+#ifdef CONFIG_MACH_GC1
+	sec_debug_aux_log(SEC_DEBUG_AUXLOG_CMA_RBTREE_CHANGE,
+		"%s: rb_link_node - %p, parent %p", __func__,
+		(void *)&chunk->by_start, (void *)parent);
+#endif
+
 	rb_link_node(&chunk->by_start, parent, new);
 	rb_insert_color(&chunk->by_start, &cma_chunks_by_start);
 
@@ -994,6 +1020,10 @@ static int __must_check __cma_chunk_insert(struct cma_chunk *chunk)
 
 static void __cma_chunk_free(struct cma_chunk *chunk)
 {
+#ifdef CONFIG_MACH_GC1
+	sec_debug_aux_log(SEC_DEBUG_AUXLOG_CMA_RBTREE_CHANGE,
+		"%s: rb_erase - %p", __func__, (void *)&chunk->by_start);
+#endif
 	rb_erase(&chunk->by_start, &cma_chunks_by_start);
 
 	chunk->reg->free_space += chunk->size;

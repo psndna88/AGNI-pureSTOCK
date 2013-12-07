@@ -169,6 +169,7 @@ static const struct usb_device_id usb_quirk_list[] = {
 	{ USB_DEVICE(0x05c6, 0x9048), .driver_info = USB_QUIRK_HSIC_TUNE },
 
 	{ USB_DEVICE(0x05c6, 0x904C), .driver_info = USB_QUIRK_HSIC_TUNE },
+
 	{ }  /* terminating entry must be last */
 };
 

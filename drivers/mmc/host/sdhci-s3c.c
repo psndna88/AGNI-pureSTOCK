@@ -794,7 +794,21 @@ static int sdhci_s3c_resume(struct platform_device *dev)
 	struct sdhci_host *host = platform_get_drvdata(dev);
 	int ret = 0;
 
+#if defined(CONFIG_WIMAX_CMC)
+	struct s3c_sdhci_platdata *pdata = dev->dev.platform_data;
+	u32 ier;
+#endif
+
 	ret = sdhci_resume_host(host);
+
+#if defined(CONFIG_WIMAX_CMC)
+	if (pdata->enable_intr_on_resume) {
+		ier = sdhci_readl(host, SDHCI_INT_ENABLE);
+		ier |= SDHCI_INT_CARD_INT;
+		sdhci_writel(host, ier, SDHCI_INT_ENABLE);
+		sdhci_writel(host, ier, SDHCI_SIGNAL_ENABLE);
+	}
+#endif
 	return ret;
 }
 

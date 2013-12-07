@@ -1627,7 +1627,6 @@ config FORCE_MAX_ZONEORDER
 	int "Maximum zone order" if ARCH_SHMOBILE
 	range 11 64 if ARCH_SHMOBILE
 	default "9" if SA1111
-	default "12" if ARCH_EXYNOS
 	default "11"
 	help
 	  The kernel memory allocator divides physically contiguous memory
@@ -1765,9 +1764,11 @@ config ARM_FLUSH_CONSOLE_ON_RESTART
 	  released if it failed to be acquired, which will cause all the
 	  pending messages to be flushed.
 
-source "arch/arm/mvp/Kconfig"
+
 
 endmenu
+
+source "arch/arm/mvp/Kconfig"
 
 menu "Boot options"
 

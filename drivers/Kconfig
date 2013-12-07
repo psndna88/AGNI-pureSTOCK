@@ -152,15 +152,22 @@ source "drivers/extcon/Kconfig"
 
 source "drivers/barcode_emul/Kconfig"
 
+# MUIC
+source "drivers/muic/Kconfig"
+
 # Secure OS Mobicore
 source "drivers/gud/Kconfig"
+source "drivers/gud20/Kconfig"
 
 source "drivers/iommu/Kconfig"
 
 # FELICA
 source "drivers/felica/Kconfig"
 
-# Authentec
-source "drivers/interceptor/Kconfig"
+
+
+source "drivers/ice4_fpga/Kconfig"
+
+
 
 endmenu

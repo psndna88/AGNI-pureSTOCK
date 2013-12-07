@@ -912,6 +912,12 @@ static int mmc_sdio_suspend(struct mmc_host *host)
 {
 	int i, err = 0;
 
+#if defined(CONFIG_WIMAX_CMC)
+	if ((host->pm_flags & MMC_PM_IGNORE_SUSPEND_RESUME)
+				&& (host->index == 2))
+		goto out;
+#endif
+
 	for (i = 0; i < host->card->sdio_funcs; i++) {
 		struct sdio_func *func = host->card->sdio_func[i];
 		if (func && sdio_func_present(func) && func->dev.driver) {
@@ -942,12 +948,19 @@ static int mmc_sdio_suspend(struct mmc_host *host)
 	}
 #endif
 
+out:
 	return err;
 }
 
 static int mmc_sdio_resume(struct mmc_host *host)
 {
 	int i, err = 0;
+
+#if defined(CONFIG_WIMAX_CMC)
+	if ((host->pm_flags & MMC_PM_IGNORE_SUSPEND_RESUME)
+			&& (host->index == 2))
+		goto out;
+#endif
 
 	BUG_ON(!host);
 	BUG_ON(!host->card);
@@ -990,6 +1003,7 @@ static int mmc_sdio_resume(struct mmc_host *host)
 		}
 	}
 
+out:
 	return err;
 }
 

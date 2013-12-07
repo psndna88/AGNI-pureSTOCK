@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Guest Communications
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -36,7 +36,6 @@ typedef struct workqueue_struct CommOSWorkQueue;
 /* Static data */
 
 static volatile int running;
-static int numCpus;
 static CommOSWorkQueue *dispatchWQ;
 static CommOSDispatchFunc dispatch;
 static CommOSWork dispatchWorksNow[NR_CPUS];
@@ -55,7 +54,11 @@ static CommOSWorkQueue *aioWQ;
 static inline CommOSWorkQueue *
 CreateWorkqueue(const char *name)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+   return alloc_workqueue(name, WQ_MEM_RECLAIM, 0);
+#else
    return create_workqueue(name);
+#endif
 }
 
 
@@ -87,11 +90,12 @@ FlushDelayedWork(CommOSWork *work)
 /**
  *  @brief Enqueue a work item to a workqueue for execution on a given cpu
  *      and after the specified interval.
- *  @param cpu cpu number. If negative, work item is enqueued on current cpu.
+ *  @param cpu cpu number.
  *  @param[in,out] wq target work queue.
  *  @param[in,out] work work item to enqueue.
  *  @param jif delay interval.
  *  @return zero if successful, non-zero otherwise.
+ *  @note Linux requires that "the caller must ensure it can't go away."
  */
 
 static inline int
@@ -100,11 +104,7 @@ QueueDelayedWorkOn(int cpu,
                    CommOSWork *work,
                    unsigned long jif)
 {
-   if (cpu < 0) {
-      return !queue_delayed_work(wq, work, jif) ? -1 : 0;
-   } else {
-      return !queue_delayed_work_on(cpu, wq, work, jif) ? -1 : 0;
-   }
+   return !queue_delayed_work_on(cpu, wq, work, jif) ? -1 : 0;
 }
 
 
@@ -115,6 +115,7 @@ QueueDelayedWorkOn(int cpu,
  *  @param[in,out] work work item to enqueue.
  *  @param jif delay interval.
  *  @return zero if successful, non-zero otherwise.
+ *  @note Linux says that "if the CPU dies it can be processed by another CPU."
  */
 
 static inline int
@@ -122,7 +123,7 @@ QueueDelayedWork(CommOSWorkQueue *wq,
                  CommOSWork *work,
                  unsigned long jif)
 {
-   return QueueDelayedWorkOn(-1, wq, work, jif);
+   return !queue_delayed_work(wq, work, jif) ? -1 : 0;
 }
 
 
@@ -158,9 +159,8 @@ FlushWorkqueue(CommOSWorkQueue *wq)
 void
 CommOS_ScheduleDisp(void)
 {
-   CommOSWork *work = &dispatchWorksNow[get_cpu()];
+   CommOSWork *work = &dispatchWorksNow[raw_smp_processor_id()];
 
-   put_cpu();
    if (running) {
       QueueDelayedWork(dispatchWQ, work, 0);
    }
@@ -204,6 +204,58 @@ DispatchWrapper(CommOSWork *work)
       QueueDelayedWork(dispatchWQ, work, dispatchInterval);
    }
 }
+
+#ifdef CONFIG_HOTPLUG_CPU
+
+/**
+ * @brief CPU hotplug notification handling
+ * @param nfb Notification block
+ * @param action Hotplug action
+ * @param hcpu CPU number
+ * @return NOTIFY_OK
+ */
+
+static int __cpuinit
+CpuCallback(struct notifier_block *nfb, unsigned long action, void *hcpu)
+{
+   unsigned int cpu = (unsigned long)hcpu;
+
+   switch (action) {
+      case CPU_ONLINE:
+      case CPU_ONLINE_FROZEN:
+         if (running) {
+            QueueDelayedWorkOn(cpu, dispatchWQ,
+                               &dispatchWorks[cpu],
+                               dispatchInterval);
+         }
+         break;
+      case CPU_DOWN_PREPARE:
+      case CPU_DOWN_PREPARE_FROZEN:
+         WaitForDelayedWork(&dispatchWorksNow[cpu]);
+         WaitForDelayedWork(&dispatchWorks[cpu]);
+         break;
+      case CPU_DOWN_FAILED:
+      case CPU_DOWN_FAILED_FROZEN:
+         if (running) {
+            QueueDelayedWorkOn(cpu, dispatchWQ,
+                               &dispatchWorks[cpu],
+                               dispatchInterval);
+         }
+         break;
+   }
+
+   return NOTIFY_OK;
+}
+
+/**
+ * @brief Hotplug notification block
+ */
+
+static struct notifier_block __refdata CpuNotifier = {
+   .notifier_call = CpuCallback,
+};
+
+#endif
 
 
 /**
@@ -269,7 +321,6 @@ CommOS_StartIO(const char *dispatchTaskName,    // IN
                unsigned int maxCycles,          // IN
                const char *aioTaskName)         // IN
 {
-   int rc;
    int cpu;
 
    if (running) {
@@ -305,7 +356,6 @@ CommOS_StartIO(const char *dispatchTaskName,    // IN
                  intervalMillis, dispatchInterval));
    CommOS_Debug(("%s: Max cycles %u.\n", __FUNCTION__, dispatchMaxCycles));
 
-   numCpus = num_present_cpus();
    dispatchWQ = CreateWorkqueue(dispatchTaskName);
    if (!dispatchWQ) {
       CommOS_Log(("%s: Couldn't create %s task(s).\n", __FUNCTION__,
@@ -326,17 +376,22 @@ CommOS_StartIO(const char *dispatchTaskName,    // IN
    }
 
    running = 1;
-   for (cpu = 0; cpu < numCpus; cpu++) {
+   for_each_possible_cpu(cpu) {
       CommOS_InitWork(&dispatchWorksNow[cpu], DispatchWrapper);
       CommOS_InitWork(&dispatchWorks[cpu], DispatchWrapper);
-      rc = QueueDelayedWorkOn(cpu, dispatchWQ,
-                              &dispatchWorks[cpu],
-                              dispatchInterval);
-      if (rc != 0) {
-         CommOS_StopIO();
-         return -1;
-      }
    }
+
+#ifdef CONFIG_HOTPLUG_CPU
+   register_hotcpu_notifier(&CpuNotifier);
+#endif
+
+   get_online_cpus();
+   for_each_online_cpu(cpu) {
+      QueueDelayedWorkOn(cpu, dispatchWQ,
+                         &dispatchWorks[cpu],
+                         dispatchInterval);
+   }
+   put_online_cpus();
    CommOS_Log(("%s: Created I/O task(s) successfully.\n", __FUNCTION__));
    return 0;
 }
@@ -360,7 +415,10 @@ CommOS_StopIO(void)
          aioWQ = NULL;
       }
       FlushWorkqueue(dispatchWQ);
-      for (cpu = 0; cpu < numCpus; cpu++) {
+#ifdef CONFIG_HOTPLUG_CPU
+      unregister_hotcpu_notifier(&CpuNotifier);
+#endif
+      for_each_possible_cpu(cpu) {
          WaitForDelayedWork(&dispatchWorksNow[cpu]);
          WaitForDelayedWork(&dispatchWorks[cpu]);
       }
@@ -369,3 +427,9 @@ CommOS_StopIO(void)
       CommOS_Log(("%s: I/O tasks stopped.\n", __FUNCTION__));
    }
 }
+
+
+#if defined(__linux__)
+EXPORT_SYMBOL(CommOS_InitWork);
+#endif // defined(__linux__)
+

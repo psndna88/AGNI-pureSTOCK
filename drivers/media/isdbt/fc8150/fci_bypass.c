@@ -37,4 +37,3 @@ int fci_bypass_deinit(HANDLE hDevice)
 {
 	return BBM_OK;
 }
-

@@ -55,10 +55,6 @@ static LIST_HEAD(mfc_encoders);
 	ctx->ctxbufofs = mfc_mem_base_ofs(alloc->real) >> 11;
 	ctx->ctxbufsize = alloc->size;
 
-	memset((void *)alloc->addr, 0, alloc->size);
-
-	mfc_mem_cache_clean((void *)alloc->addr, alloc->size);
-
 	return 0;
 }
 
@@ -101,7 +97,7 @@ int get_init_arg(struct mfc_inst_ctx *ctx, void *arg)
 		write_reg((1 << 1) | 0x1, MFC_ENC_MSLICE_CTRL);
 		if (init_arg->cmn.in_ms_arg < 1900)
 			init_arg->cmn.in_ms_arg = 1900;
-		write_reg(init_arg->cmn.in_ms_arg, MFC_ENC_MSLICE_BIT);
+		write_reg(init_arg->cmn.in_ms_arg * 8, MFC_ENC_MSLICE_BIT);
 	} else {
 		write_reg(0, MFC_ENC_MSLICE_CTRL);
 		write_reg(0, MFC_ENC_MSLICE_MB);
@@ -1543,6 +1539,22 @@ int mfc_init_encoding(struct mfc_inst_ctx *ctx, union mfc_args *args)
 
 		atomic_inc(&ctx->dev->busfreq_lock_cnt);
 		ctx->busfreq_flag = true;
+	}
+#endif
+
+#if defined(CONFIG_MACH_GC1) && defined(CONFIG_EXYNOS4_CPUFREQ)
+	if ((ctx->width >= 1280 && ctx->height >= 720)
+		|| (ctx->width >= 720 && ctx->height >= 1280)) {
+		if (atomic_read(&ctx->dev->cpufreq_lock_cnt) == 0) {
+			if (0 == ctx->dev->cpufreq_level) /* 800MHz */
+				exynos_cpufreq_get_level(800000,
+						&ctx->dev->cpufreq_level);
+			exynos_cpufreq_lock(DVFS_LOCK_ID_MFC,
+					ctx->dev->cpufreq_level);
+			mfc_dbg("[%s] CPU Freq Locked 800MHz!\n", __func__);
+		}
+		atomic_inc(&ctx->dev->cpufreq_lock_cnt);
+		ctx->cpufreq_flag = true;
 	}
 #endif
 

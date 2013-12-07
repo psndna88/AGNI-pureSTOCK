@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP Hypervisor Support
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -100,7 +100,8 @@ int CommTransp_EnqueueCommit(CommTransp transp);
 int
 CommTransp_EnqueueSegment(CommTransp transp,
                           const void *buf,
-                          unsigned int bufLen);
+                          unsigned int bufLen,
+                          int kern);
 
 int CommTransp_DequeueSpace(CommTransp transp);
 int CommTransp_DequeueReset(CommTransp transp);
@@ -108,58 +109,10 @@ int CommTransp_DequeueCommit(CommTransp transp);
 int
 CommTransp_DequeueSegment(CommTransp transp,
                           void *buf,
-                          unsigned int bufLen);
+                          unsigned int bufLen,
+                          int kern);
 
 unsigned int CommTransp_RequestInlineEvents(CommTransp transp);
 unsigned int CommTransp_ReleaseInlineEvents(CommTransp transp);
-
-
-/**
- * @brief Enqueues data into the transport object, data is available for
- *      reading immediately.
- * @param transp handle to the transport object.
- * @param buf bytes to enqueue.
- * @param bufLen number of bytes to enqueue.
- * @return number of bytes enqueued on success, < 0 otherwise.
- */
-
-static inline int
-CommTransp_EnqueueAtomic(CommTransp transp,
-                         const void *buf,
-                         unsigned int bufLen)
-{
-   int rc;
-
-   CommTransp_EnqueueReset(transp);
-   rc = CommTransp_EnqueueSegment(transp, buf, bufLen);
-   if (CommTransp_EnqueueCommit(transp)) {
-      rc = -1;
-   }
-   return rc;
-}
-
-
-/**
- * @brief Dequeues data from the transport object into a buffer.
- * @param transp handle to the transport object.
- * @param[out] buf buffer to copy to.
- * @param bufLen number of bytes to dequeue.
- * @return number of bytes dequeued on success, < 0 otherwise,
- */
-
-static inline int
-CommTransp_DequeueAtomic(CommTransp transp,
-                         void *buf,
-                         unsigned int bufLen)
-{
-   int rc;
-
-   CommTransp_DequeueReset(transp);
-   rc = CommTransp_DequeueSegment(transp, buf, bufLen);
-   if (CommTransp_DequeueCommit(transp)) {
-      rc = -1;
-   }
-   return rc;
-}
 
 #endif // _COMM_TRANSP_IMPL_H_

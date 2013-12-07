@@ -516,6 +516,7 @@ static int rmnet_usb_probe(struct usb_interface *iface,
 	unsigned int		iface_num;
 	static int		first_rmnet_iface_num = -EINVAL;
 	int			status = 0;
+	int			ret = 0;
 
 	udev = interface_to_usbdev(iface);
 	iface_num = iface->cur_altsetting->desc.bInterfaceNumber;
@@ -557,8 +558,16 @@ static int rmnet_usb_probe(struct usb_interface *iface,
 
 	status = rmnet_usb_ctrl_probe(iface, unet->status,
 		(struct rmnet_ctrl_dev *)unet->data[1]);
-	if (status)
-		goto out;
+	if (status) {
+		if (status == -EPIPE) {
+			ret = set_qmicm_mode(rmnet_pm_dev);
+			if (ret < 0)
+				goto out;
+			return status;
+		}
+		else
+			goto out;
+	}
 
 	status = rmnet_usb_data_debugfs_init(unet);
 	if (status)
@@ -575,6 +584,11 @@ static int rmnet_usb_probe(struct usb_interface *iface,
 	/* allow modem to wake up suspended system */
 	device_set_wakeup_enable(&udev->dev, 1);
 out:
+#ifdef CONFIG_MDM_HSIC_PM
+	/* make reset or dump at 2nd enumeration fail */
+	if (status < 0)
+		mdm_force_fatal();
+#endif
 	return status;
 }
 
@@ -626,6 +640,7 @@ static const struct driver_info rmnet_info_pid9034 = {
 
 static const struct driver_info rmnet_info_pid9048 = {
 	.description   = "RmNET net device",
+	.flags		= FLAG_SEND_ZLP,
 	.bind          = rmnet_usb_bind,
 	.tx_fixup      = rmnet_usb_tx_fixup,
 	.rx_fixup      = rmnet_usb_rx_fixup,
@@ -635,6 +650,7 @@ static const struct driver_info rmnet_info_pid9048 = {
 
 static const struct driver_info rmnet_info_pid904c = {
 	.description   = "RmNET net device",
+	.flags		= FLAG_SEND_ZLP,
 	.bind          = rmnet_usb_bind,
 	.tx_fixup      = rmnet_usb_tx_fixup,
 	.rx_fixup      = rmnet_usb_rx_fixup,

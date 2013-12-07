@@ -248,7 +248,7 @@ void fimg2d_mmutable_value_replace(struct fimg2d_bltcmd *cmd,
 
 	*lv2d = l2d_value;
 
-	flush_all_cpu_caches();
+	fimg2d_dma_sync_inner((unsigned long)lv2d, 4, DMA_BIDIRECTIONAL);
 	fimg2d_clean_outer_pagetable(cmd->ctx->mm, fault_addr, 4);
 
 	printk(KERN_INFO "MMU Level2 value replaced [0x%lx]", l2d_value);

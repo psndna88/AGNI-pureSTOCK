@@ -13,6 +13,10 @@
 #ifndef _ARCH_ARM_MACH_MSM_MDM2_H
 #define _ARCH_ARM_MACH_MSM_MDM2_H
 
+#ifdef CONFIG_FAST_BOOT
+#include <linux/fake_shut_down.h>
+#endif
+
 struct mdm_vddmin_resource {
 	int rpm_id;
 	int ap2mdm_vddmin_gpio;
@@ -32,6 +36,11 @@ struct mdm_platform_data {
 	struct platform_device *peripheral_platform_device_ehci;
 	struct platform_device *peripheral_platform_device_ohci;
 	const unsigned int ramdump_timeout_ms;
+#ifdef CONFIG_SIM_DETECT
+	bool sim_polarity;
+#endif
+
+	void (*modem_complete)(struct device *dev);
 };
 
 struct mdm_hsic_pm_platform_data {

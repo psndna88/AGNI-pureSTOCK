@@ -28,6 +28,10 @@
 /* platform specific set up */
 #include "mali_platform.h"
 
+#include <linux/platform_device.h>
+#include <linux/cma.h>
+#include <plat/pd.h>
+
 /* Initialized when this subsystem is initialized. This is determined by the
  * position in subsystems[], and so the value used to initialize this is
  * determined at compile time */
@@ -149,6 +153,10 @@ static mali_kernel_resource_registrator resource_handler[RESOURCE_TYPE_COUNT] = 
 static _mali_osk_lock_t *system_info_lock = NULL;
 static _mali_system_info * system_info = NULL;
 static u32 system_info_size = 0;
+
+#if !defined(CONFIG_CPU_EXYNOS4210)
+extern struct platform_device exynos4_device_pd[];
+#endif
 
 /* is called from OS specific driver entry point */
 _mali_osk_errcode_t mali_kernel_constructor( void )
@@ -646,8 +654,31 @@ static _mali_osk_errcode_t mali_kernel_subsystem_core_session_begin(struct mali_
 /* MEM_VALIDATION resource handler */
 static _mali_osk_errcode_t mali_kernel_core_resource_mem_validation(_mali_osk_resource_t * resource)
 {
+#if !defined(CONFIG_CPU_EXYNOS4210)
+	struct cma_info mem_info;
+#endif
+
 	/* Check that no other MEM_VALIDATION resources exist */
 	MALI_CHECK( ((u32)-1) == mem_validator.phys_base, _MALI_OSK_ERR_FAULT );
+
+#if !defined(CONFIG_CPU_EXYNOS4210)
+	if (strcmp(resource->description, "Framebuffer Memory") == 0) {
+		if (cma_info(&mem_info,
+				&exynos4_device_pd[PD_G3D].dev, "fimd")) {
+			MALI_PRINT_ERROR(("Failed to get framebuffer "
+					"information from CMA\n",
+					resource->description));
+			return _MALI_OSK_ERR_FAULT;
+		}
+		resource->base = mem_info.lower_bound;
+		resource->size = mem_info.total_size - mem_info.free_size;
+	} else {
+		MALI_PRINT_ERROR(("Failed to add Framebuffer resource %s; "
+				"resource description error\n",
+				resource->description));
+		return _MALI_OSK_ERR_FAULT;
+	}
+#endif
 
 	/* Check restrictions on page alignment */
 	MALI_CHECK( 0 == (resource->base & (~_MALI_OSK_CPU_PAGE_MASK)), _MALI_OSK_ERR_FAULT );
@@ -682,13 +713,22 @@ _mali_osk_errcode_t mali_kernel_core_validate_mali_phys_range( u32 phys_base, u3
 	MALI_CHECK_GOTO( 0 == ( phys_base & (~_MALI_OSK_CPU_PAGE_MASK)), failure );
 	MALI_CHECK_GOTO( 0 == ( size & (~_MALI_OSK_CPU_PAGE_MASK)), failure );
 
-	if ( phys_base             >= mem_validator.phys_base
-		 && (phys_base + size) >= mem_validator.phys_base
-		 && phys_base          <= (mem_validator.phys_base + mem_validator.size)
-		 && (phys_base + size) <= (mem_validator.phys_base + mem_validator.size) )
-	{
+	MALI_CHECK_GOTO(phys_base < (phys_base + size), failure);
+
+#if defined(CONFIG_CPU_EXYNOS4210)
+	if (cma_is_registered_region(phys_base, size)) {
 		MALI_SUCCESS;
 	}
+#else
+	if (phys_base >= mem_validator.phys_base &&
+		(phys_base + (size - 1)) >= mem_validator.phys_base &&
+		phys_base <= (mem_validator.phys_base +
+						(mem_validator.size - 1)) &&
+		(phys_base + (size - 1)) <= (mem_validator.phys_base
+						+ (mem_validator.size - 1))) {
+		MALI_SUCCESS;
+	}
+#endif
 
  failure:
 	MALI_PRINTF( ("*******************************************************************************\n") );

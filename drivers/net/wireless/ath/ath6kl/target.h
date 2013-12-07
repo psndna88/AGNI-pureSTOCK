@@ -18,11 +18,6 @@
 #ifndef TARGET_H
 #define TARGET_H
 
-#define AR6003_BOARD_DATA_ADDR		0x00540654
-#define AR6003_BOARD_DATA_INIT_ADDR	0x00540658
-#define AR6003_BOARD_DATA_OFFSET	4
-#define AR6003_RD_OFFSET		12
-
 #define AR6003_BOARD_DATA_SZ		1024
 #define AR6003_BOARD_EXT_DATA_SZ	768
 #define AR6003_BOARD_EXT_DATA_SZ_V2	1024
@@ -50,6 +45,7 @@
 #define LPO_CAL_ENABLE_S		20
 #define LPO_CAL_ENABLE			0x00100000
 
+#define GPIO_PIN9_ADDRESS		0x0000004c
 #define GPIO_PIN10_ADDRESS		0x00000050
 #define GPIO_PIN11_ADDRESS		0x00000054
 #define GPIO_PIN12_ADDRESS		0x00000058
@@ -332,6 +328,10 @@ struct host_interest {
 
 #define HI_OPTION_FW_SUBMODE_BITS      0x2
 #define HI_OPTION_FW_SUBMODE_SHIFT     0x14
+
+#ifdef SS_3RD_INTF
+#define HI_OPTION_VIRTU_MAC_ENABLE     0x10
+#endif
 
 /* Convert a Target virtual address into a Target physical address */
 #define AR6003_VTOP(vaddr) ((vaddr) & 0x001fffff)

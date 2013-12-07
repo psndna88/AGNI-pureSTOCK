@@ -41,7 +41,11 @@ int register_udev_to_pm_dev(const char *name, struct usb_device *udev);
  */
 void unregister_udev_from_pm_dev(const char *name, struct usb_device *udev);
 
+int set_qmicm_mode(const char *name);
+
 extern struct blocking_notifier_head mdm_reset_notifier_list;
 extern void mdm_force_fatal(void);
+extern void print_mdm_gpio_state(void);
 extern bool lpa_handling;
+extern int hello_packet_rx;
 #endif /* __MDM_HSIC_PM_H__ */

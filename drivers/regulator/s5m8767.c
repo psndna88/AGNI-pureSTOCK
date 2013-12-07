@@ -490,7 +490,7 @@ static int s5m8767_set_voltage(struct regulator_dev *rdev,
 	*selector = i;
 
 	if (val < i) {
-		udelay(DIV_ROUND_UP(desc->step * (i - val),
+		udelay(1 + DIV_ROUND_UP(desc->step * (i - val),
 			s5m8767->ramp_delay * 1000));
 	}
 	return ret;
@@ -728,6 +728,7 @@ static __devinit int s5m8767_pmic_probe(struct platform_device *pdev)
 	struct s5m8767_info *s5m8767;
 	struct i2c_client *i2c;
 	int i, ret, size, buck_init;
+	u8 data[28];
 
 	if (!pdata) {
 		dev_err(pdev->dev.parent, "Platform data not supplied\n");
@@ -779,27 +780,6 @@ static __devinit int s5m8767_pmic_probe(struct platform_device *pdev)
 						buck_voltage_val1.step);
 
 	s5m_reg_write(i2c, S5M8767_REG_BUCK1DVS2, buck_init);
-
-	buck_init = s5m8767_convert_voltage(&buck_voltage_val2,
-						pdata->buck2_init,
-						pdata->buck2_init +
-						buck_voltage_val2.step);
-
-	s5m_reg_write(i2c, S5M8767_REG_BUCK2DVS2, buck_init);
-
-	buck_init = s5m8767_convert_voltage(&buck_voltage_val2,
-						pdata->buck3_init,
-						pdata->buck3_init +
-						buck_voltage_val2.step);
-
-	s5m_reg_write(i2c, S5M8767_REG_BUCK3DVS2, buck_init);
-
-	buck_init = s5m8767_convert_voltage(&buck_voltage_val2,
-						pdata->buck4_init,
-						pdata->buck4_init +
-						buck_voltage_val2.step);
-
-	s5m_reg_write(i2c, S5M8767_REG_BUCK4DVS2, buck_init);
 
 	buck_init = s5m8767_convert_voltage(&buck_voltage_val2,
 						pdata->buck2_init,
@@ -998,6 +978,13 @@ static __devinit int s5m8767_pmic_probe(struct platform_device *pdev)
 					0x90, 0xf0);
 		}
 	}
+
+	/* all LDO OVCM Disable */
+	for	(i = 0; i < 28; i++)
+		data[i] = 0xA2;
+
+	s5m_bulk_write(i2c, S5M8767_REG_LDO1, 28, data);
+	
 
 	for (i = 0; i < pdata->num_regulators; i++) {
 		const struct s5m_voltage_desc *desc;

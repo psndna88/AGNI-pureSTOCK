@@ -2151,8 +2151,12 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	unsigned long did_some_progress;
 	bool sync_migration = false;
 #ifdef CONFIG_ANDROID_WIP
-	unsigned long start_tick = jiffies;
-#endif
+#ifdef CONFIG_SEC_OOM_KILLER
+	unsigned long oom_invoke_timeout = jiffies + HZ/4;
+#else
+	unsigned long oom_invoke_timeout = jiffies + HZ;
+#endif /* CONFIG_SEC_OOM_KILLER */
+#endif /* CONFIG_ANDROID_WIP */
 
 	/*
 	 * In the slowpath, we sanity check order to avoid ever trying to
@@ -2257,7 +2261,7 @@ rebalance:
 	 * ANDROID_WIP: If we are looping more than 1 second, consider OOM
 	 */
 #ifdef CONFIG_ANDROID_WIP
-#define SHOULD_CONSIDER_OOM !did_some_progress || time_after(jiffies, start_tick + HZ)
+#define SHOULD_CONSIDER_OOM !did_some_progress || time_after(jiffies, oom_invoke_timeout)
 #else
 #define SHOULD_CONSIDER_OOM !did_some_progress
 #endif
@@ -2268,7 +2272,7 @@ rebalance:
 #ifdef CONFIG_ANDROID_WIP
 			if (did_some_progress)
 				pr_info("time's up : calling "
-						"__alloc_pages_may_oom\n");
+					"__alloc_pages_may_oom(o:%d, gfp:0x%x)\n", order, gfp_mask);
 #endif
 			page = __alloc_pages_may_oom(gfp_mask, order,
 					zonelist, high_zoneidx,
@@ -2295,6 +2299,9 @@ rebalance:
 					goto nopage;
 			}
 
+#ifdef CONFIG_SEC_OOM_KILLER
+			oom_invoke_timeout = jiffies + HZ/4;
+#endif
 			goto restart;
 		}
 
@@ -5100,6 +5107,7 @@ static int page_alloc_cpu_notify(struct notifier_block *self,
 	int cpu = (unsigned long)hcpu;
 
 	if (action == CPU_DEAD || action == CPU_DEAD_FROZEN) {
+		lru_add_drain_cpu(cpu);
 		drain_pages(cpu);
 
 		/*
@@ -5284,6 +5292,7 @@ void setup_per_zone_wmarks(void)
  */
 static void __meminit calculate_zone_inactive_ratio(struct zone *zone)
 {
+#ifndef CONFIG_ZSWAP
 	unsigned int gb, ratio;
 
 	/* Zone size in gigabytes */
@@ -5294,6 +5303,9 @@ static void __meminit calculate_zone_inactive_ratio(struct zone *zone)
 		ratio = 1;
 
 	zone->inactive_ratio = ratio;
+#else
+	zone->inactive_ratio = 1;
+#endif
 }
 
 static void __meminit setup_per_zone_inactive_ratio(void)

@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP PVTCP Server
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -66,7 +66,7 @@ PvtcpOffLargeDgramBufInit(void)
 /**
  * @brief Reserves/holds the large datagram buffer.
  * @param size size of buffer.
- * @sizeeffect may sleep until the buffer is available.
+ * @sideeffect may sleep until the buffer is available.
  * @return address of buffer, or NULL if size too large or allocation failed.
  */
 
@@ -156,6 +156,37 @@ PvtcpFlowOp(CommChannel channel,
 
 
 /**
+ * @brief Outputs Zero-sized datagram to socket.
+ * @param sock socket on which to send.
+ * @param msg message header containing destination address.
+ * @return size of sent datagram (0), or error code.
+ */
+
+static inline int
+SendZeroSizedDgram(struct socket *sock,
+                   struct msghdr *msg)
+{
+   int rc;
+   struct kvec dummy = { .iov_base = NULL, .iov_len = 0 };
+
+   BUG_ON((sock == NULL) || (msg == NULL));
+
+   rc = kernel_sendmsg(sock, msg, &dummy, 0, 0);
+   if (rc != dummy.iov_len) {
+#if defined(PVTCP_FULL_DEBUG)
+      CommOS_Debug(("%s: Dgram [0x%p] sent [%d], expected [%d]\n",
+                    __FUNCTION__, sock, rc, dummy.iov_len));
+#endif
+      if (rc == -EAGAIN) { /* As if lost on the wire. */
+         rc = 0;
+      }
+   }
+
+   return rc;
+}
+
+
+/**
  * @brief Outputs bytes to socket.
  * @param channel communication channel with offloader.
  * @param upperLayerState state associated with this channel.
@@ -212,10 +243,20 @@ PvtcpIoOp(CommChannel channel,
              (CommOS_ReadAtomic(&pvsk->queueSize) == 0)) {
             /* Attempt to write directly as many bytes as we can. */
 
-            msg.msg_flags = MSG_DONTWAIT | MSG_NOSIGNAL;
-            rc = kernel_sendmsg(sock, &msg, vec, vecLen, dataLen);
+            /*
+             * kernel_sendmsg() may use memcpy_fromiovec() that
+             * "modifies the original iovec".
+             */
+            struct kvec *vecTmp = kmemdup(vec, vecLen * sizeof *vec, GFP_ATOMIC);
+            if (vecTmp) {
+               msg.msg_flags = MSG_DONTWAIT | MSG_NOSIGNAL;
+               rc = kernel_sendmsg(sock, &msg, vecTmp, vecLen, dataLen);
+               kfree(vecTmp);
 
-            if (rc == -EAGAIN) {
+               if (rc == -EAGAIN) {
+                  rc = 0;
+               }
+            } else {
                rc = 0;
             }
             if (rc >= 0) {
@@ -343,35 +384,43 @@ enqueueBytes:
           */
 
          if (vecLen == 0) {
-            /*
-             * Allow zero-sized datagram sending.
-             */
-
-            struct kvec dummy = { .iov_base = NULL, .iov_len = 0 };
-
-            rc = kernel_sendmsg(sock, &msg, &dummy, 0, 0);
-            if (rc != dummy.iov_len) {
-#if defined(PVTCP_FULL_DEBUG)
-               CommOS_Debug(("%s: Dgram [0x%p] sent [%d], expected [%d]\n",
-                             __FUNCTION__, sk, rc, dummy.iov_len));
-#endif
-               if (rc == -EAGAIN) { /* As if lost on the wire. */
-                  rc = 0;
-               }
-            }
+            rc = SendZeroSizedDgram(sock, &msg);
          }
 
          for (vecOff = 0; vecOff < vecLen; vecOff++) {
-            rc = kernel_sendmsg(sock, &msg, &vec[vecOff], 1,
-                                vec[vecOff].iov_len);
-            PvtcpBufFree(vec[vecOff].iov_base);
-            if (rc != vec[vecOff].iov_len) {
+            if (vec[vecOff].iov_len == 0) {
+               BUG_ON(vec[vecOff].iov_base != NULL);
+               rc = SendZeroSizedDgram(sock, &msg);
+            } else {
+               /*
+                * Backup iov_base as it may be modified by kernel_sendmsg().
+                * New net/ipv4/ping.c is using memcpy_fromiovec() that
+                * "modifies the original iovec".
+                */
+               void *buf = vec[vecOff].iov_base;
+               size_t len = vec[vecOff].iov_len;
+
+               internalBuf = PvtcpOffInternalFromBuf(buf);
+               BUG_ON(internalBuf == NULL);
+
+               if (internalBuf->off == USHRT_MAX) {
+                  /* Fragmented payload containing an embedded iovec. */
+
+                  rc = kernel_sendmsg(sock, &msg,
+                                      (struct kvec *)buf,
+                                      internalBuf->len, len);
+               } else {
+                  rc = kernel_sendmsg(sock, &msg, &vec[vecOff], 1, len);
+               }
+               PvtcpBufFree(buf);
+               if (rc != len) {
 #if defined(PVTCP_FULL_DEBUG)
-               CommOS_Debug(("%s: Dgram [0x%p] sent [%d], expected [%d]\n",
-                             __FUNCTION__, sk, rc, vec[vecOff].iov_len));
+                  CommOS_Debug(("%s: Dgram [0x%p] sent [%d], expected [%d]\n",
+                                __FUNCTION__, sk, rc, len));
 #endif
-               if (rc == -EAGAIN) { /* As if lost on the wire. */
-                  rc = 0;
+                  if (rc == -EAGAIN) { /* As if lost on the wire. */
+                     rc = 0;
+                  }
                }
             }
          }
@@ -807,7 +856,7 @@ PvtcpInputAIO(PvtcpSock *pvsk,
          inVec = vec;
          timeout = COMM_MAX_TO;
          rc = CommSvc_WriteVec(pvsk->channel, &packet,
-                               &inVec, &inVecLen, &timeout, &iovOffset);
+                               &inVec, &inVecLen, &timeout, &iovOffset, 1);
          if (rc != packet.len) {
             CommOS_Log(("%s: BOOG -- WROTE INCOMPLETE PACKET [%u->%d]!\n",
                         __FUNCTION__, packet.len, rc));
@@ -829,3 +878,4 @@ PvtcpInputAIO(PvtcpSock *pvsk,
    }
    return err;
 }
+

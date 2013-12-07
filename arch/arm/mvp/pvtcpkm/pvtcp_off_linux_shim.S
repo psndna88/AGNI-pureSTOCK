@@ -1,7 +1,7 @@
 /*
  * Linux 2.6.32 and later Kernel module for VMware MVP PVTCP Server
  *
- * Copyright (C) 2010-2012 VMware, Inc. All rights reserved.
+ * Copyright (C) 2010-2013 VMware, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -55,6 +55,10 @@ asmDestructorShim:
    blx     r1
    pop    {lr}
    cmp     r0, #0
+//#ifndef CONFIG_MODULE_UNLOAD
+#if 1
+   bx      lr                         @ No way to module_put, just return.
+#else
    bxne    lr                         @ We shouldn't module_put, just return.
    ldr     r0, owner
    ldr     r1, modulePutAddr          @ Jump to module_put. module_put
@@ -63,8 +67,9 @@ asmDestructorShim:
 owner:
    .word __this_module
 
-targetAddr:
-   .word DestructCB
-
 modulePutAddr:
    .word module_put
+#endif
+
+targetAddr:
+   .word DestructCB

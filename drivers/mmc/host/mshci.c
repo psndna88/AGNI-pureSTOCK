@@ -1618,9 +1618,9 @@ static void mshci_cmd_irq(struct mshci_host *host, u32 intmask)
 	if (host->cmd->error) {
 		/* to notify an error happend */
 		host->error_state = 1;
-#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_P4NOTE) || \
+#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) || \
 		defined(CONFIG_MACH_C1_USA_ATT) \
-		|| defined(CONFIG_MACH_GRANDE) || defined(CONFIG_MACH_IRON)
+		|| defined(CONFIG_MACH_GRANDE) || defined(CONFIG_MACH_IRON) || defined(CONFIG_MACH_TAB3)
 		if (host->mmc && host->mmc->card)
 			mshci_dumpregs(host);
 #endif
@@ -2141,6 +2141,9 @@ int mshci_add_host(struct mshci_host *host)
 #ifdef CONFIG_MMC_DEBUG
 	mshci_dumpregs(host);
 #endif
+
+	mmc->bus_dev = host->bus_dev;
+	mmc->host_dev = host->host_dev;
 
 	mmiowb();
 

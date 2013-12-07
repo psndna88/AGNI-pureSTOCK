@@ -34,7 +34,9 @@
 #define MXT_T7_ACT_ACQ_INT	1
 
 #define MXT_T9_CTRL 0
-#define MXT_T9_ORIENT 9
+#define MXT_T9_X_SIZE	3
+#define MXT_T9_Y_SIZE	4
+#define MXT_T9_ORIENT	9
 #define MXT_T9_XRANGE_LSB	18
 #define MXT_T9_XRANGE_MSB	19
 #define MXT_T9_YRANGE_LSB	20
@@ -141,8 +143,9 @@
 #define NODE_PER_PAGE	64
 #define DATA_PER_NODE	2
 
-#define REF_MIN_VALUE	19744
-#define REF_MAX_VALUE	28884
+#define REF_OFFSET_VALUE	16384
+#define REF_MIN_VALUE		(19744 - REF_OFFSET_VALUE)
+#define REF_MAX_VALUE		(28884 - REF_OFFSET_VALUE)
 
 #define TSP_CMD_STR_LEN		32
 #define TSP_CMD_RESULT_STR_LEN	512
@@ -271,6 +274,7 @@ struct mxt_data {
 	int driver_paused;
 	int debug_enabled;
 	u16 last_read_addr;
+	int command_off;
 #endif
 #if CHECK_ANTITOUCH
 	u8 check_antitouch;
@@ -279,6 +283,8 @@ struct mxt_data {
 	u8 check_calgood;
 #endif
 	u8 tsp_ctrl;
+	u8 x_num;
+	u8 y_num;
 	u8 max_report_id;
 	u8 finger_report_id;
 	u16 msg_proc;

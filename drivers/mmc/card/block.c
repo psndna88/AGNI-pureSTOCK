@@ -45,6 +45,9 @@
 #include <asm/uaccess.h>
 
 #include "queue.h"
+
+#include <mach/dev.h>
+
 #include "../core/core.h"
 
 MODULE_ALIAS("mmc:block");
@@ -328,6 +331,47 @@ out:
 	return ERR_PTR(err);
 }
 
+struct scatterlist *mmc_blk_get_sg(struct mmc_card *card,
+		unsigned char *buf, int *sg_len, int size)
+{
+	struct scatterlist *sg;
+	struct scatterlist *sl;
+	int total_sec_cnt, sec_cnt;
+	int max_seg_size, len;
+
+	sl = kmalloc(sizeof(struct scatterlist) * card->host->max_segs, GFP_KERNEL);
+	if (!sl)
+		return NULL;
+
+	sg = (struct scatterlist *)sl;
+	sg_init_table(sg, card->host->max_segs);
+
+	total_sec_cnt = size;
+	max_seg_size = card->host->max_seg_size;
+
+	len = 0;
+	while (total_sec_cnt) {
+		if (total_sec_cnt < max_seg_size)
+			sec_cnt = total_sec_cnt;
+		else
+			sec_cnt = max_seg_size;
+		sg_set_page(sg, virt_to_page(buf), sec_cnt, offset_in_page(buf));
+		buf = buf + sec_cnt;
+		total_sec_cnt = total_sec_cnt - sec_cnt;
+		len++;
+		if (total_sec_cnt == 0)
+			break;
+		sg = sg_next(sg);
+	}
+
+	if (sg)
+		sg_mark_end(sg);
+
+	*sg_len = len;
+
+	return sl;
+}
+
 static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 	struct mmc_ioc_cmd __user *ic_ptr)
 {
@@ -337,8 +381,9 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 	struct mmc_command cmd = {0};
 	struct mmc_data data = {0};
 	struct mmc_request mrq = {0};
-	struct scatterlist sg;
+	struct scatterlist *sg = 0;
 	int err = 0;
+	struct mmc_host *host;	
 
 	/*
 	 * The caller must have CAP_SYS_RAWIO, and must be calling this on the
@@ -364,17 +409,30 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 		goto cmd_done;
 	}
 
+	if( idata->ic.ext_flags )
+	{
+		switch( idata->ic.ext_flags )
+		{
+			case MMC_IOC_EXT_SET_CLOCK:
+				mmc_set_clock(card->host, idata->ic.arg);
+				break;
+			defualt: printk(KERN_ERR"Unkown ext flags on mmc_ioc_cmd\n");
+		}
+		goto cmd_done;
+	}
+
 	cmd.opcode = idata->ic.opcode;
 	cmd.arg = idata->ic.arg;
 	cmd.flags = idata->ic.flags;
 
 	if (idata->buf_bytes) {
-		data.sg = &sg;
-		data.sg_len = 1;
+		int len;
 		data.blksz = idata->ic.blksz;
 		data.blocks = idata->ic.blocks;
 
-		sg_init_one(data.sg, idata->buf, idata->buf_bytes);
+		sg = mmc_blk_get_sg(card, idata->buf, &len, idata->buf_bytes);
+		data.sg = sg;
+		data.sg_len = len;
 
 		if (idata->ic.write_flag)
 			data.flags = MMC_DATA_WRITE;
@@ -407,6 +465,10 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 	mrq.cmd = &cmd;
 
 	mmc_claim_host(card->host);
+
+	host = card->host;
+	if (host->bus_dev && host->host_dev)
+		dev_lock(host->bus_dev, host->host_dev, 160160);
 
 	if (idata->ic.is_acmd) {
 		err = mmc_app_cmd(card->host, card);
@@ -451,10 +513,14 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 
 cmd_rel_host:
 	mmc_release_host(card->host);
+	if (host->bus_dev && host->host_dev)
+		dev_unlock(host->bus_dev, host->host_dev);
 
 cmd_done:
 	if (md)
 		mmc_blk_put(md);
+	if (sg)
+		kfree(sg);
 	kfree(idata->buf);
 	kfree(idata);
 	return err;
@@ -1063,9 +1129,9 @@ static int mmc_blk_err_check(struct mmc_card *card,
 	 */
 	if (brq->sbc.error || brq->cmd.error || brq->stop.error ||
 	    brq->data.error) {
-#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_P4NOTE) || \
+#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) || \
 		defined(CONFIG_MACH_C1_USA_ATT) \
-		|| defined(CONFIG_MACH_GRANDE) || defined(CONFIG_MACH_IRON)
+		|| defined(CONFIG_MACH_GRANDE) || defined(CONFIG_MACH_IRON) || defined(CONFIG_MACH_TAB3)
 		if (mmc_card_mmc(card)) {
 			pr_err("brq->sbc.opcode=%d,"
 					"brq->cmd.opcode=%d.\n",
@@ -1933,6 +1999,15 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *rqc)
 				break;
 			}
 			/*
+			 * case : SDcard Sector 0 read timeout even single read
+			 * skip reading other blocks.
+			 */
+			if (mmc_card_sd(card) &&
+					(unsigned)blk_rq_pos(req) == 0 &&
+					brq->data.error == -ETIMEDOUT)
+				goto cmd_abort;
+
+			/*
 			 * After an error, we redo I/O one sector at a
 			 * time, so we only reach here after trying to
 			 * read a single sector.
@@ -1993,9 +2068,9 @@ snd_packed_rd:
 			spin_unlock_irq(&md->lock);
 		}
 	}
-#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_P4NOTE) || \
+#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) || \
 		defined(CONFIG_MACH_C1_USA_ATT) \
-		|| defined(CONFIG_MACH_GRANDE) || defined(CONFIG_MACH_IRON)
+		|| defined(CONFIG_MACH_GRANDE) || defined(CONFIG_MACH_IRON) || defined(CONFIG_MACH_TAB3)
 	/*
 	 * It's for Engineering DEBUGGING only
 	 * This has to be removed before PVR(guessing)
@@ -2050,6 +2125,7 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	int ret;
 	struct mmc_blk_data *md = mq->data;
 	struct mmc_card *card = md->queue.card;
+	struct mmc_host *host = card->host;	
 
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 	if (mmc_bus_needs_resume(card->host)) {
@@ -2058,9 +2134,12 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	}
 #endif
 
-	if (req && !mq->mqrq_prev->req)
+	if (req && !mq->mqrq_prev->req) {
 		/* claim host only for the first request */
 		mmc_claim_host(card->host);
+		if (host->bus_dev && host->host_dev)
+			dev_lock(host->bus_dev, host->host_dev, 160160);
+	}
 
 	ret = mmc_blk_part_switch(card, md);
 	if (ret) {
@@ -2087,9 +2166,12 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	}
 
 out:
-	if (!req)
+	if (!req) {
 		/* release host only when there are no more requests */
 		mmc_release_host(card->host);
+		if (host->bus_dev && host->host_dev)
+			dev_unlock(host->bus_dev, host->host_dev);
+	}
 	return ret;
 }
 
@@ -2391,6 +2473,34 @@ static const struct mmc_fixup blk_fixups[] =
 		  MMC_QUIRK_MOVINAND_SECURE),
 	MMC_FIXUP("VZL00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
 		  MMC_QUIRK_MOVINAND_SECURE),
+
+	/* Some TLC movinand cards needs Sync operation for performance*/ 
+	MMC_FIXUP("S5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("J5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("J5U00B", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("J5U00A", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("L7U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("N5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("K5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("K5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("K7U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("M4G1YC", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("M8G1WA", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("MAG2WA", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
+	MMC_FIXUP("MBG4WA", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+			MMC_QUIRK_MOVINAND_TLC),
 
 	END_FIXUP
 };

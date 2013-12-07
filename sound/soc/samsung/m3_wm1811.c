@@ -339,7 +339,7 @@ static void m3_micd_set_rate(struct snd_soc_codec *codec)
 			    WM8958_MICD_RATE_MASK, val);
 }
 
-static void m3_micdet(u16 status, void *data)
+static void m3_mic_id(void *data, u16 status)
 {
 	struct wm1811_machine_priv *wm1811 = data;
 	struct wm8994_priv *wm8994 = snd_soc_codec_get_drvdata(wm1811->codec);
@@ -414,25 +414,6 @@ static void m3_micdet(u16 status, void *data)
 				mutex_unlock(&wm1811->codec->mutex);
 			}
 		}
-	}
-
-	/* Report short circuit as a button */
-	if (wm8994->jack_mic) {
-		report = 0;
-		if (status & WM1811_JACKDET_BTN0)
-			report |= SND_JACK_BTN_0;
-
-		if (status & WM1811_JACKDET_BTN1)
-			report |= SND_JACK_BTN_1;
-
-		if (status & WM1811_JACKDET_BTN2)
-			report |= SND_JACK_BTN_2;
-
-		dev_dbg(wm1811->codec->dev, "Detected Button: %08x (%08X)\n",
-			report, status);
-
-		snd_soc_jack_report(wm8994->micdet[0].jack, report,
-				    wm8994->btn_mask);
 	}
 }
 
@@ -916,12 +897,12 @@ static int m3_wm1811_init_paiftx(struct snd_soc_pcm_runtime *rtd)
 		dev_err(codec->dev, "Failed to set KEY_MEDIA: %d\n", ret);
 
 	ret = snd_jack_set_key(wm1811->jack.jack, SND_JACK_BTN_1,
-							KEY_VOLUMEDOWN);
+							KEY_VOLUMEUP);
 	if (ret < 0)
 		dev_err(codec->dev, "Failed to set KEY_VOLUMEUP: %d\n", ret);
 
 	ret = snd_jack_set_key(wm1811->jack.jack, SND_JACK_BTN_2,
-							KEY_VOLUMEUP);
+							KEY_VOLUMEDOWN);
 
 	if (ret < 0)
 		dev_err(codec->dev, "Failed to set KEY_VOLUMEDOWN: %d\n", ret);
@@ -929,8 +910,8 @@ static int m3_wm1811_init_paiftx(struct snd_soc_pcm_runtime *rtd)
 	if (wm8994->revision > 1) {
 		dev_info(codec->dev, "wm1811: Rev %c support mic detection\n",
 			'A' + wm8994->revision);
-		ret = wm8958_mic_detect(codec, &wm1811->jack, m3_micdet,
-			wm1811);
+		ret = wm8958_mic_detect(codec, &wm1811->jack, NULL,
+				NULL, m3_mic_id, wm1811);
 
 		if (ret < 0)
 			dev_err(codec->dev, "Failed start detection: %d\n",

@@ -1182,12 +1182,6 @@ netdev_tx_t usbnet_start_xmit (struct sk_buff *skb,
 	}
 
 	spin_lock_irqsave(&dev->txq.lock, flags);
-	if (dev->udev->dev.power.runtime_status == RPM_RESUMING ||
-			dev->udev->dev.power.runtime_status == RPM_SUSPENDING) {
-		spin_unlock_irqrestore(&dev->txq.lock, flags);
-		usb_free_urb(urb);
-		return NETDEV_TX_BUSY;
-	}
 	retval = usb_autopm_get_interface_async(dev->intf);
 	if (retval < 0) {
 		spin_unlock_irqrestore(&dev->txq.lock, flags);
