@@ -316,7 +316,7 @@ static enum skb_state defer_bh(struct usbnet *dev, struct sk_buff *skb,
 		struct sk_buff_head *list, enum skb_state state)
 {
 	unsigned long		flags;
-	enum skb_state		old_state;
+	enum skb_state 		old_state;
 	struct skb_data *entry = (struct skb_data *) skb->cb;
 
 	spin_lock_irqsave(&list->lock, flags);
@@ -526,7 +526,7 @@ block:
 
 	if (urb) {
 		if (netif_running (dev->net) &&
-		    !test_bit(EVENT_RX_HALT, &dev->flags) &&
+		    !test_bit (EVENT_RX_HALT, &dev->flags) &&
 		    state != unlink_start) {
 			rx_submit (dev, urb, GFP_ATOMIC);
 			usb_mark_last_busy(dev->udev);
