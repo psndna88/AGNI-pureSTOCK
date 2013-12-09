@@ -306,7 +306,11 @@ static int mmc_read_switch(struct mmc_card *card)
 		goto out;
 	}
 
+<<<<<<< HEAD
 	if (status[13] & 0x02)
+=======
+	if (status[13] & UHS_SDR50_BUS_SPEED)
+>>>>>>> refs/remotes/kernel.org/linux-3.0.y
 		card->sw_caps.hs_max_dtr = 50000000;
 
 	if (card->scr.sda_spec3) {
