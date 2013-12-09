@@ -32,6 +32,16 @@
 
 #include <trace/events/power.h>
 
+#if defined(CONFIG_CPU_FREQ) && defined(CONFIG_ARCH_EXYNOS4)
+#define CONFIG_DVFS_LIMIT
+#endif
+
+#ifdef CONFIG_DVFS_LIMIT
+#include <mach/cpufreq.h>
+#include <../kernel/power/power.h>
+#define VALID_LEVEL 1
+#endif
+
 /**
  * The "cpufreq driver" - the arch- or hardware-dependent low
  * level driver of CPUFreq support, and its spinlock. This lock
@@ -393,7 +403,52 @@ static ssize_t store_##file_name					\
 }
 
 store_one(scaling_min_freq, min);
-store_one(scaling_max_freq, max);
+
+/* Yank555.lu - while storing scaling_max also set cpufreq_max_limit accordingly */
+/* store_one(scaling_max_freq, max); */
+static ssize_t store_scaling_max_freq
+(struct cpufreq_policy *policy, const char *buf, size_t count)
+{
+#ifdef CONFIG_DVFS_LIMIT
+	unsigned int cpufreq_level;
+	int lock_ret;
+#endif
+	unsigned int ret = -EINVAL;
+	struct cpufreq_policy new_policy;
+
+	ret = cpufreq_get_policy(&new_policy, policy->cpu);
+	if (ret)
+		return -EINVAL;
+
+	ret = sscanf(buf, "%u", &new_policy.max);
+	if (ret != 1)
+		return -EINVAL;
+
+	ret = __cpufreq_set_policy(policy, &new_policy);
+	policy->user_policy.max = policy->max;
+
+	/* Yank555.lu : set cpufreq_max_limit accordingly if dvfs limit is defined */
+#ifdef CONFIG_DVFS_LIMIT
+	/* 
+	 * Keep scaling_max linked to cpufreq_max_limit only if it was previously linked,
+	 * link will be re-established when cpufreq_max_limit is released again, this will
+	 * enable Powersave mode to continue working as designed !
+	 */
+	if ((cpufreq_max_limit_coupled == SCALING_MAX_COUPLED)   ||
+	    (cpufreq_max_limit_coupled == SCALING_MAX_UNDEFINED)    ) {
+		if (get_cpufreq_level(policy->max, &cpufreq_level) == VALID_LEVEL) {
+			if (cpufreq_max_limit_val != -1)
+				/* Unlock the previous lock */
+				exynos_cpufreq_upper_limit_free(DVFS_LOCK_ID_USER);
+			lock_ret = exynos_cpufreq_upper_limit(DVFS_LOCK_ID_USER, cpufreq_level);
+			cpufreq_max_limit_val = policy->max;
+			cpufreq_max_limit_coupled = SCALING_MAX_COUPLED;
+		}
+	}
+#endif
+
+	return ret ? ret : count;
+}
 
 /**
  * show_cpuinfo_cur_freq - current CPU frequency as detected by hardware
@@ -553,6 +608,16 @@ static ssize_t show_scaling_setspeed(struct cpufreq_policy *policy, char *buf)
 	return policy->governor->show_setspeed(policy, buf);
 }
 
+extern ssize_t store_UV_mV_table(struct cpufreq_policy *policy,
+				 const char *buf, size_t count);
+
+extern ssize_t store_UV_uV_table(struct cpufreq_policy *policy,
+				 const char *buf, size_t count);
+
+extern ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf);
+
+extern ssize_t show_UV_uV_table(struct cpufreq_policy *policy, char *buf);
+
 /**
  * show_scaling_driver - show the current cpufreq HW/BIOS limitation
  */
@@ -573,6 +638,7 @@ cpufreq_freq_attr_ro(cpuinfo_min_freq);
 cpufreq_freq_attr_ro(cpuinfo_max_freq);
 cpufreq_freq_attr_ro(cpuinfo_transition_latency);
 cpufreq_freq_attr_ro(scaling_available_governors);
+cpufreq_freq_attr_ro(available_freqs);
 cpufreq_freq_attr_ro(scaling_driver);
 cpufreq_freq_attr_ro(scaling_cur_freq);
 cpufreq_freq_attr_ro(bios_limit);
@@ -582,6 +648,8 @@ cpufreq_freq_attr_rw(scaling_min_freq);
 cpufreq_freq_attr_rw(scaling_max_freq);
 cpufreq_freq_attr_rw(scaling_governor);
 cpufreq_freq_attr_rw(scaling_setspeed);
+cpufreq_freq_attr_rw(UV_mV_table);
+cpufreq_freq_attr_rw(UV_uV_table);
 
 static struct attribute *default_attrs[] = {
 	&cpuinfo_min_freq.attr,
@@ -594,7 +662,10 @@ static struct attribute *default_attrs[] = {
 	&scaling_governor.attr,
 	&scaling_driver.attr,
 	&scaling_available_governors.attr,
+	&cpufreq_freq_attr_scaling_available_freqs.attr,
 	&scaling_setspeed.attr,
+	&UV_mV_table.attr,
+	&UV_uV_table.attr,
 	NULL
 };
 
@@ -724,6 +795,8 @@ static int cpufreq_add_dev_policy(unsigned int cpu,
 
 			spin_lock_irqsave(&cpufreq_driver_lock, flags);
 			cpumask_copy(managed_policy->cpus, policy->cpus);
+			cpumask_and(managed_policy->cpus,
+				managed_policy->cpus, cpu_online_mask);
 			per_cpu(cpufreq_cpu_data, cpu) = managed_policy;
 			spin_unlock_irqrestore(&cpufreq_driver_lock, flags);
 
