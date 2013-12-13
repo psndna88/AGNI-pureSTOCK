@@ -21,7 +21,7 @@
  *
  * Fundamental types and constants relating to WFA P2P (aka WiFi Direct)
  *
- * $Id: p2p.h 356416 2012-09-12 16:40:42Z $
+ * $Id: p2p.h 357863 2012-09-20 06:40:47Z $
  */
 
 #ifndef _P2P_H_
@@ -376,7 +376,7 @@ typedef struct wifi_p2p_pub_act_frame wifi_p2p_pub_act_frame_t;
 #define P2P_PAF_DEVDIS_RSP	6	
 #define P2P_PAF_PROVDIS_REQ	7	
 #define P2P_PAF_PROVDIS_RSP	8	
-#define P2P_PAF_SUBTYPE_INVALID	255	
+#define P2P_PAF_SUBTYPE_INVALID	255
 
 
 #define P2P_TYPE_MNREQ		P2P_PAF_GON_REQ
