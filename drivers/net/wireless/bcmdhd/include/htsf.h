@@ -1,9 +1,9 @@
 /*
- * BT-AMP support routines
+ * Time stamps for latency measurements 
  *
- * Copyright (C) 1999-2012, Broadcom Corporation
+ * Copyright (C) 1999-2011, Broadcom Corporation
  * 
- *      Unless you and Broadcom execute a separate written software license
+ *         Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
  * under the terms of the GNU General Public License version 2 (the "GPL"),
  * available at http://www.broadcom.com/licenses/GPLv2.php, with the
@@ -21,19 +21,54 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_bta.h 291086 2011-10-21 01:17:24Z $
+ * $Id: htsf.h 277737 2011-08-16 17:54:59Z $
  */
-#ifndef __dhd_bta_h__
-#define __dhd_bta_h__
+#ifndef _HTSF_H_
+#define _HTSF_H_
 
-struct dhd_pub;
+#define HTSFMAGIC       	0xCDCDABAB  /* in network order for tcpdump  */
+#define HTSFENDMAGIC    	0xEFEFABAB  /* to distinguish from RT2 magic */
+#define HTSF_HOSTOFFSET		102
+#define HTSF_DNGLOFFSET		HTSF_HOSTOFFSET	- 4
+#define HTSF_DNGLOFFSET2	HTSF_HOSTOFFSET	+ 106
+#define HTSF_MIN_PKTLEN 	200
+#define ETHER_TYPE_BRCM_PKTDLYSTATS     0x886d
 
-extern int dhd_bta_docmd(struct dhd_pub *pub, void *cmd_buf, uint cmd_len);
+typedef enum htsfts_type {
+	T10,
+	T20,
+	T30,
+	T40,
+	T50,
+	T60,
+	T70,
+	T80,
+	T90,
+	TA0,
+	TE0
+} htsf_timestamp_t;
 
-extern void dhd_bta_doevt(struct dhd_pub *pub, void *data_buf, uint data_len);
+typedef struct {
+	uint32 magic;
+	uint32 prio;
+	uint32 seqnum;
+	uint32 misc;
+	uint32 c10;
+	uint32 t10;
+	uint32 c20;
+	uint32 t20;
+	uint32 t30;
+	uint32 t40;
+	uint32 t50;
+	uint32 t60;
+	uint32 t70;
+	uint32 t80;
+	uint32 t90;
+	uint32 cA0;
+	uint32 tA0;
+	uint32 cE0;
+	uint32 tE0;
+	uint32 endmagic;
+} htsfts_t;
 
-extern int dhd_bta_tx_hcidata(struct dhd_pub *pub, void *data_buf, uint data_len);
-extern void dhd_bta_tx_hcidata_complete(struct dhd_pub *dhdp, void *txp, bool success);
-
-
-#endif /* __dhd_bta_h__ */
+#endif /* _HTSF_H_ */
