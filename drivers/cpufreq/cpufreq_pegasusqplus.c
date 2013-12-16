@@ -36,6 +36,9 @@
 #endif
 #define EARLYSUSPEND_HOTPLUGLOCK 1
 
+#include <mach/cpufreq.h>
+#include <../kernel/power/power.h>
+
 /*
  * dbs is used in this file as a shortform for demandbased switching
  * It helps to keep variable names smaller, simpler
@@ -1785,6 +1788,8 @@ static void cpufreq_pegasusqplus_early_suspend(struct early_suspend *h)
 }
 static void cpufreq_pegasusqplus_late_resume(struct early_suspend *h)
 {
+	struct cpu_dbs_info_s *dbs_info;
+
 #if EARLYSUSPEND_HOTPLUGLOCK
 	atomic_set(&g_hotplug_lock, dbs_tuners_ins.early_suspend);
 #endif
@@ -1794,9 +1799,16 @@ static void cpufreq_pegasusqplus_late_resume(struct early_suspend *h)
 	dbs_tuners_ins.early_suspend = -1;
 	dbs_tuners_ins.freq_step = prev_freq_stepplus;
 	dbs_tuners_ins.sampling_rate = prev_sampling_rateplus;
+
 #if EARLYSUSPEND_HOTPLUGLOCK
 	apply_hotplug_lock();
 #endif
+
+	if (cpufreq_max_limit_val != -1) {
+		pr_info("%s: pushing CPU frequency to %d\n", __func__, cpufreq_max_limit_val);
+		dbs_info = &per_cpu(od_cpu_dbs_info, 0);
+		dbs_freq_increase(dbs_info->cur_policy, cpufreq_max_limit_val);
+	}
 }
 #endif
 
