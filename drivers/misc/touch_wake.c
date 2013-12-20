@@ -13,6 +13,15 @@
  * Bumped version to 1.1
  *
  *                                         Jean-Pierre Rasquin <yank555.lu@gmail.com>
+ *
+ * --------------------------------------------------------------------------------------
+ *
+ * Fixed proxy detection, only disable touchwake when proxy sensor is active and
+ * proximity is really detected
+ *
+ * Bumped version to 1.1a
+ *
+ *                                         Jean-Pierre Rasquin <yank555.lu@gmail.com>
  */
 
 #include <linux/init.h>
@@ -46,7 +55,7 @@ static struct input_dev * powerkey_device;
 static struct wake_lock touchwake_wake_lock;
 static struct timeval last_powerkeypress;
 
-#define TOUCHWAKE_VERSION "1.1"
+#define TOUCHWAKE_VERSION "1.1a"
 #define TIME_LONGPRESS 500
 #define POWERPRESS_DELAY 100
 #define POWERPRESS_TIMEOUT 1000
@@ -96,10 +105,17 @@ static void touchwake_early_suspend(struct early_suspend * h)
 				touchwake_disable_touch();
 			}
 		} else {
-			#ifdef DEBUG_PRINT
-			pr_info("[TOUCHWAKE] Early suspend - keep touch enabled indefinately\n");
-			#endif
-			wake_lock(&touchwake_wake_lock);
+			if (timed_out && !prox_near) {
+				#ifdef DEBUG_PRINT
+				pr_info("[TOUCHWAKE] Early suspend - keep touch enabled indefinately\n");
+				#endif
+				wake_lock(&touchwake_wake_lock);
+			} else {
+				#ifdef DEBUG_PRINT
+				pr_info("[TOUCHWAKE] Early suspend - disable touch immediately (indefinate mode)\n");
+				#endif
+				touchwake_disable_touch();
+			}
 		}
 	} else {
 		#ifdef DEBUG_PRINT

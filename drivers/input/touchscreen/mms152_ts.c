@@ -56,6 +56,8 @@
 #include <linux/fb.h>
 #endif
 
+#include "touchboost_switch.h"
+
 #ifdef CONFIG_TOUCH_WAKE
 #include <linux/touch_wake.h>
 #endif
@@ -508,10 +510,17 @@ static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 	int ret;
 
 	mutex_lock(&info->dvfs_lock);
-	if (info->cpufreq_level <= 0) {
-		ret = exynos_cpufreq_get_level(800000, &info->cpufreq_level);
-		if (ret < 0)
-			pr_err("[TSP] exynos_cpufreq_get_level error");
+	if (unlikely(info->cpufreq_level <= 0 || info->cpufreq_level != tb_freq_level)) { // Yank : Check if frequency level has changed or hasn't been initialized yet
+		if (unlikely(tb_freq_level == TOUCHBOOST_FREQ_UNDEFINED)) {
+			ret = exynos_cpufreq_get_level(tb_freq, &info->cpufreq_level);    // Yank : Touchboost switch not yet initalized, lookup frequency level here
+			if (ret < 0) {
+				pr_err("[TSP] exynos_cpufreq_get_level error");
+			} else {
+				tb_freq_level = info->cpufreq_level;			  // Yank : Update the prefetched level at this stage
+			}
+		} else {
+			info->cpufreq_level = tb_freq_level;				  // Yank : Touchboost switch is initialized, use the prefetched level
+		}
 		goto out;
 	}
 	if (on == 0) {
@@ -716,8 +725,11 @@ static void release_all_fingers(struct mms_ts_info *info)
 	}
 	input_sync(info->input_dev);
 #if TOUCH_BOOSTER
+	if (tb_switch == TOUCHBOOST_ON)
+	{
 	set_dvfs_lock(info, 2);
 	pr_info("[TSP] dvfs_lock free.\n ");
+	}
 #endif
 }
 
@@ -1108,7 +1120,10 @@ touch_press();
 	input_sync(info->input_dev);
 
 #if TOUCH_BOOSTER
+	if (tb_switch == TOUCHBOOST_ON)
+	{
 	set_dvfs_lock(info, !!touch_is_pressed);
+	}
 #endif
 
 out:
@@ -4148,8 +4163,10 @@ static int mms_ts_resume(struct device *dev)
 #endif
 	dev_notice(&info->client->dev, "%s: users=%d\n", __func__,
 		   info->input_dev->users);
+#if !defined(CONFIG_TARGET_LOCALE_KOR)
 	info->pdata->power(1);
 	msleep(120);
+#endif
 
 	if (info->fw_ic_ver < 0x18) {
 		if (info->ta_status) {
@@ -4198,6 +4215,16 @@ static void mms_ts_late_resume(struct early_suspend *h)
 	info = container_of(h, struct mms_ts_info, early_suspend);
 	mms_ts_resume(&info->client->dev);
 #endif
+}
+#endif
+
+#if defined(CONFIG_TARGET_LOCALE_KOR)
+static void mms_ts_power_late_resume(struct early_suspend *h)
+{
+	struct mms_ts_info *info;
+	info = container_of(h, struct mms_ts_info, power_early_suspend);
+
+	info->pdata->power(true);
 }
 #endif
 
@@ -4361,12 +4388,15 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 	}
 
 #if TOUCH_BOOSTER
+	if (tb_switch == TOUCHBOOST_ON)
+	{
 	mutex_init(&info->dvfs_lock);
 	INIT_DELAYED_WORK(&info->work_dvfs_off, set_dvfs_off);
 	INIT_DELAYED_WORK(&info->work_dvfs_chg, change_dvfs_lock);
 	bus_dev = dev_get("exynos-busfreq");
 	info->cpufreq_level = -1;
 	info->dvfs_lock_status = false;
+	}
 #endif
 
 	info->enabled = true;
