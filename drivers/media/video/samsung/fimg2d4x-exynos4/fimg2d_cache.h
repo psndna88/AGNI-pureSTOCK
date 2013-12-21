@@ -99,7 +99,8 @@ void fimg2d_clean_outer_pagetable(struct mm_struct *mm, unsigned long addr, size
 void fimg2d_clean_outer_pagetable_clone(unsigned long *pgd_clone, unsigned long addr, size_t size);
 void fimg2d_clean_inner_pagetable_clone(unsigned long *pgd_clone, unsigned long addr, size_t size);
 void fimg2d_dma_sync_outer(struct mm_struct *mm, unsigned long addr, size_t size, enum cache_opr opr);
-enum pt_status fimg2d_check_pagetable(struct mm_struct *mm, unsigned long addr, size_t size);
+enum pt_status fimg2d_check_in_pagetable(struct mm_struct *mm, unsigned long addr, size_t size);
+enum pt_status fimg2d_check_out_pagetable(struct mm_struct *mm, unsigned long addr, size_t size);
 enum pt_status fimg2d_migrate_pagetable(unsigned long *pgd_clone,
 					unsigned long vaddr, unsigned long paddr, size_t size);
 void fimg2d_mmutable_value_replace(struct fimg2d_bltcmd *cmd,

@@ -28,9 +28,6 @@
 #include <linux/types.h>
 #include <linux/security.h>
 
-/* the file system magic number */
-#define SDCARDFS_SUPER_MAGIC	0xb550ca10
-
 /* the file system name */
 #define SDCARDFS_NAME "sdcardfs"
 
