@@ -1105,6 +1105,13 @@ config TOUCHSCREEN_MELFAS_GD2
 	  To compile this driver as a module, choose M here: the
 	  module will be called GC model MMS.
 
+config TOUCH_BOOST_SWITCH
+	bool "Support for Touch Boost sysfs tunable cpu frequency"
+	depends on TOUCHSCREEN_MELFAS || TOUCHSCREEN_MELFAS_NOTE
+	default n
+	help
+		Say Y here to enable Touch Boost Switch
+
 source "drivers/input/touchscreen/wacom/Kconfig"
 
 source "drivers/input/touchscreen/rmi4/Kconfig"
