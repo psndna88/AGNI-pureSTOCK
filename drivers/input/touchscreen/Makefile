@@ -74,12 +74,20 @@ obj-$(CONFIG_TOUCHSCREEN_WM97XX_MAINSTONE)	+= mainstone-wm97xx.o
 obj-$(CONFIG_TOUCHSCREEN_WM97XX_ZYLONITE)	+= zylonite-wm97xx.o
 obj-$(CONFIG_TOUCHSCREEN_W90X900)	+= w90p910_ts.o
 obj-$(CONFIG_TOUCHSCREEN_TPS6507X)	+= tps6507x-ts.o
+ifeq ($(CONFIG_TOUCH_BOOST_SWITCH),y)
+obj-$(CONFIG_TOUCHSCREEN_MELFAS)	+= mms_ts.o touchboost_switch.o
+else
 obj-$(CONFIG_TOUCHSCREEN_MELFAS)	+= mms_ts.o
+endif
 obj-$(CONFIG_TOUCHSCREEN_MELFAS_W)	+= mms_ts_w.o
 obj-$(CONFIG_TOUCHSCREEN_MELFAS_MMS)	+= melfas_mms_ts.o
 obj-$(CONFIG_TOUCHSCREEN_MELFAS_GC)	+= mms_ts_gc.o
 obj-$(CONFIG_TOUCHSCREEN_MMS152)	+= mms152.o mms152_download.o mms152_isc_download.o
+ifeq ($(CONFIG_TOUCH_BOOST_SWITCH),y)
+obj-$(CONFIG_TOUCHSCREEN_MELFAS_NOTE)	+= mms152_ts.o touchboost_switch.o
+else
 obj-$(CONFIG_TOUCHSCREEN_MELFAS_NOTE)	+= mms152_ts.o
+endif
 obj-$(CONFIG_TOUCHSCREEN_MMS152_TAB3)	+= mms152_tab3.o
 obj-$(CONFIG_TOUCHSCREEN_MMS252)	+= mms252.o
 obj-$(CONFIG_MELFAS_TOUCHKEY)		+= melfas_touchkey.o melfas_download.o

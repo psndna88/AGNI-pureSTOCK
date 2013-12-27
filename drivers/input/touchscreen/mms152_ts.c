@@ -60,6 +60,10 @@
 #include <linux/touch_wake.h>
 #endif
 
+#ifdef CONFIG_TOUCH_BOOST_SWITCH
+#include "touchboost_switch.h"
+#endif
+
 #define MAX_FINGERS		10
 #define MAX_WIDTH		30
 #define MAX_PRESSURE		255
@@ -508,10 +512,24 @@ static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 	int ret;
 
 	mutex_lock(&info->dvfs_lock);
+#ifdef CONFIG_TOUCH_BOOST_SWITCH
+	if (unlikely(info->cpufreq_level <= 0 || info->cpufreq_level != tb_freq_level)) { // Yank : Check if frequency level has changed or hasn't been initialized yet
+		if (unlikely(tb_freq_level == TOUCHBOOST_FREQ_UNDEFINED)) {
+		ret = exynos_cpufreq_get_level(tb_freq, &info->cpufreq_level);    // Yank : Touchboost switch not yet initalized, lookup frequency level here
+		if (ret < 0) {
+				pr_err("[TSP] exynos_cpufreq_get_level error");
+			} else {
+				tb_freq_level = info->cpufreq_level;			  // Yank : Update the prefetched level at this stage
+			}
+		} else {
+			info->cpufreq_level = tb_freq_level;				  // Yank : Touchboost switch is initialized, use the prefetched level
+		}
+#else
 	if (info->cpufreq_level <= 0) {
 		ret = exynos_cpufreq_get_level(800000, &info->cpufreq_level);
 		if (ret < 0)
 			pr_err("[TSP] exynos_cpufreq_get_level error");
+#endif
 		goto out;
 	}
 	if (on == 0) {
@@ -716,8 +734,15 @@ static void release_all_fingers(struct mms_ts_info *info)
 	}
 	input_sync(info->input_dev);
 #if TOUCH_BOOSTER
+#ifdef CONFIG_TOUCH_BOOST_SWITCH
+	if (tb_switch == TOUCHBOOST_ON)
+	{
+#endif
 	set_dvfs_lock(info, 2);
 	pr_info("[TSP] dvfs_lock free.\n ");
+#ifdef CONFIG_TOUCH_BOOST_SWITCH
+	}
+#endif
 #endif
 }
 
@@ -1107,7 +1132,14 @@ touch_press();
 	input_sync(info->input_dev);
 
 #if TOUCH_BOOSTER
+#ifdef CONFIG_TOUCH_BOOST_SWITCH
+	if (tb_switch == TOUCHBOOST_ON)
+	{
+#endif
 	set_dvfs_lock(info, !!touch_is_pressed);
+#ifdef CONFIG_TOUCH_BOOST_SWITCH
+	}
+#endif
 #endif
 
 out:
@@ -4360,12 +4392,19 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 	}
 
 #if TOUCH_BOOSTER
+#ifdef CONFIG_TOUCH_BOOST_SWITCH
+	if (tb_switch == TOUCHBOOST_ON)
+	{
+#endif
 	mutex_init(&info->dvfs_lock);
 	INIT_DELAYED_WORK(&info->work_dvfs_off, set_dvfs_off);
 	INIT_DELAYED_WORK(&info->work_dvfs_chg, change_dvfs_lock);
 	bus_dev = dev_get("exynos-busfreq");
 	info->cpufreq_level = -1;
 	info->dvfs_lock_status = false;
+#ifdef CONFIG_TOUCH_BOOST_SWITCH
+	}
+#endif
 #endif
 
 	info->enabled = true;
