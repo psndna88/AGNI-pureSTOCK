@@ -129,9 +129,6 @@ struct battery_info {
 	unsigned int recharge_start;
 	unsigned int health_state;
 
-	unsigned int llk_state;
-	unsigned int llk_cable_type;
-
 	/* SIOP */
 	unsigned int siop_state;
 	unsigned int siop_charge_current;
@@ -223,15 +220,6 @@ extern bool is_jig_attached;
 #else
 #undef EXTENDED_ONLINE_TYPE
 #endif
-
-/* LLK */
-#if defined(CONFIG_MACH_T0_USA_VZW)
-#define BATTERY_LLK
-#else
-#undef BATTERY_LLK
-#endif
-#define BATTERY_LLK_SOC_MIN	30
-#define BATTERY_LLK_SOC_MAX	35
 
 enum online_property {
 	ONLINE_PROP_UNKNOWN = 0,

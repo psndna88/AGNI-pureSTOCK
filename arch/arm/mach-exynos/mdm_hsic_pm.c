@@ -42,10 +42,6 @@
 #include <mach/mdm2.h>
 #include <linux/usb/android_composite.h>
 #endif
-#ifdef CONFIG_USBIRQ_BALANCING_LTE_HIGHTP
-#include <linux/netdevice.h>
-#include <mach/mdm2.h>
-#endif
 
 #define EXTERNAL_MODEM "external_modem"
 #define EHCI_REG_DUMP
@@ -94,9 +90,6 @@ struct mdm_hsic_pm_data {
 #ifdef CONFIG_CPU_FREQ_TETHERING
 	struct notifier_block netdev_notifier;
 	struct notifier_block usb_composite_notifier;
-#endif
-#ifdef CONFIG_USBIRQ_BALANCING_LTE_HIGHTP
-	struct notifier_block rndis_notifier;
 #endif
 
 	bool block_request;
@@ -1080,62 +1073,7 @@ static int usb_composite_notifier_event(struct notifier_block *this,
 	return NOTIFY_DONE;
 }
 #endif
-#ifdef CONFIG_USBIRQ_BALANCING_LTE_HIGHTP
-// only for T0 USB HOST
-int clear_cpu0_from_usbhost_irq(int enable)
-{
-	unsigned int irq = IRQ_USB_HOST;
-	cpumask_var_t new_value;
-	int err = 0;
 
-	if (!irq_can_set_affinity(irq))
-		return -EIO;
-
-	if (!alloc_cpumask_var(&new_value, GFP_KERNEL))
-		return -ENOMEM;
-
-	cpumask_setall(new_value);
-
-	if (enable)	
-		cpumask_clear_cpu(0, new_value);
-
-	if (cpumask_intersects(new_value, cpu_online_mask)) {
-		err = irq_set_affinity(irq, new_value);
-	}
-
-free_cpumask:
-	free_cpumask_var(new_value);
-	return err;
-}
-
-static int link_pm_rndis_event(struct notifier_block *this,
-				unsigned long event, void *ptr)
-{
-	struct mdm_hsic_pm_data *pm_data =
-		container_of(this, struct mdm_hsic_pm_data, rndis_notifier);
-	struct mdm_hsic_pm_platform_data *mdm_pdata = pm_data->mdm_pdata;
-	struct net_device *dev = ptr;
-
-	if (!net_eq(dev_net(dev), &init_net))
-		return NOTIFY_DONE;
-
-	if (!strncmp(dev->name, "rndis", 5)) {
-		switch (event) {
-		case NETDEV_UP:
-			clear_cpu0_from_usbhost_irq(1);
-			pr_info("%s: %s UP\n", __func__, dev->name);
-
-			break;
-		case NETDEV_DOWN:
-			clear_cpu0_from_usbhost_irq(0);
-			pr_info("%s: %s DOWN\n", __func__, dev->name);
-
-			break;
-		}
-	}
-	return NOTIFY_DONE;
-}
-#endif
 static int mdm_hsic_pm_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -1202,10 +1140,6 @@ static int mdm_hsic_pm_probe(struct platform_device *pdev)
 	pm_data->usb_composite_notifier.notifier_call =
 		usb_composite_notifier_event;
 	register_usb_composite_notifier(&pm_data->usb_composite_notifier);
-#endif
-#ifdef CONFIG_USBIRQ_BALANCING_LTE_HIGHTP
-	pm_data->rndis_notifier.notifier_call = link_pm_rndis_event;
-	register_netdevice_notifier(&pm_data->rndis_notifier);
 #endif
 
 	wake_lock_init(&pm_data->l2_wake, WAKE_LOCK_SUSPEND, pm_data->name);

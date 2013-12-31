@@ -33,6 +33,7 @@ endif
 
 obj-$(CONFIG_VIDEO_TSI)		+= tsi/
 
-
+ifeq ($(CONFIG_MALI_VER_BEFORE_R3P2), y)
+endif
 
 EXTRA_CFLAGS += -Idrivers/media/video

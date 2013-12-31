@@ -314,7 +314,7 @@ drop:
 	return -1;
 }
 
-int ip_rcv_finish(struct sk_buff *skb)
+static int ip_rcv_finish(struct sk_buff *skb)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	struct rtable *rt;

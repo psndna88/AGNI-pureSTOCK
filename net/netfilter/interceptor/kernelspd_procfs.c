@@ -398,7 +398,7 @@ spd_proc_init(
   spd_control_file =
       proc_create(
               LINUX_SPD_PROC_FILENAME,
-              S_IFREG | S_IRUSR | S_IWUSR,
+              S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH,
               NULL, &spd_proc_fops);
 
   if (spd_control_file == NULL)

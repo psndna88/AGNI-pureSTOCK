@@ -1273,12 +1273,6 @@ charge_state_con:
 			__func__, ((chg_curr != 0) ? "enabled" : "disabled"),
 				info->charge_current, info->input_current,
 				info->charge_start_time);
-		if (info->llk_state == true) {
-			battery_control_info(info, POWER_SUPPLY_PROP_STATUS, DISABLE);
-			info->charge_virt_state =
-						POWER_SUPPLY_STATUS_DISCHARGING;
-			info->charge_real_state = info->charge_virt_state;
-		}
 
 		/* release ambiguous state */
 		if ((info->ambiguous_state == true) &&
@@ -1582,25 +1576,6 @@ static void battery_monitor_work(struct work_struct *work)
 	info->cable_type = battery_get_cable(info);
 #endif
 
-#if defined(BATTERY_LLK)
-	if (info->battery_soc >= BATTERY_LLK_SOC_MAX) {
-		pr_info("%s: charge stop by llk limit(%d ?? %d ~ %d)\n",
-				__func__, info->battery_soc,
-				BATTERY_LLK_SOC_MIN, BATTERY_LLK_SOC_MAX);
-		info->llk_state = true;
-		info->llk_cable_type = info->cable_type;
-	} else if (info->battery_soc <= BATTERY_LLK_SOC_MIN) {
-		pr_info("%s: charge start by llk limit(%d ?? %d ~ %d)\n",
-				__func__, info->battery_soc,
-				BATTERY_LLK_SOC_MIN, BATTERY_LLK_SOC_MAX);
-		info->llk_state = false;
-	} else {
-		pr_info("%s: charge keep by llk limit(%d ?? %d ~ %d), llk(%d)\n",
-				__func__, info->battery_soc,
-				BATTERY_LLK_SOC_MIN, BATTERY_LLK_SOC_MAX,
-				info->llk_state);
-	}
-#endif
 	/* adc ldo , vf irq control */
 	if ((info->pdata->vf_det_src == VF_DET_GPIO) ||
 		(info->pdata->vf_det_src == VF_DET_ADC_GPIO)) {
@@ -1696,11 +1671,6 @@ static void battery_monitor_work(struct work_struct *work)
 	}
 #endif
 
-#if defined(BATTERY_LLK)
-	if (info->llk_state == true)
-		info->cable_type = POWER_SUPPLY_TYPE_BATTERY;
-#endif
-
 	if (battery_temper_cond(info) == true) {
 		pr_info("%s: charge stopped by temperature\n", __func__);
 		battery_charge_control(info, OFF_CURR, OFF_CURR);
@@ -1739,15 +1709,7 @@ charge_ok:
 	case POWER_SUPPLY_TYPE_BATTERY:
 		if (!info->pdata->suspend_chging)
 			wake_unlock(&info->charge_wake_lock);
-		if (info->llk_state == true) {
-			if (info->llk_cable_type == POWER_SUPPLY_TYPE_MAINS)
-				battery_charge_control(info, OFF_CURR,
-					info->pdata->in_curr_limit);
-			else
-				battery_charge_control(info, OFF_CURR,
-					info->pdata->chg_curr_usb);
-		} else
-			battery_charge_control(info, OFF_CURR, OFF_CURR);
+		battery_charge_control(info, OFF_CURR, OFF_CURR);
 
 		/* clear charge scenario state */
 		info->overheated_state = false;

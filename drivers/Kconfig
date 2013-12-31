@@ -165,9 +165,6 @@ source "drivers/iommu/Kconfig"
 source "drivers/felica/Kconfig"
 
 
-
 source "drivers/ice4_fpga/Kconfig"
-
-
 
 endmenu

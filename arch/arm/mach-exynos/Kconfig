@@ -720,10 +720,6 @@ config COMPACTION_RETRY_DEBUG
 	  before and after compation retrial.
 	  This should be turned off later.
 
-config SEC_DUAL_MODEM_MODE
-	bool "sec dual modem mode"
-	default n
-
 # machine support
 
 menu "EXYNOS4 Machines"
@@ -1329,9 +1325,8 @@ config IPCAM_01_BD
 config GC2PD_00_BD
 	bool "Galaxy Camera 2 common Board"
 
-config MACH_SF2
-        bool "SF2 Camera Board"
-
+config SF2_CAM_REV0
+        bool "SF2 Camera Rev 0"
 
 
 config WRITEBACK_ENABLED
@@ -2127,11 +2122,6 @@ config CORESIGHT_ETM_DEFAULT_ENABLE
 
 config CPU_FREQ_TETHERING
 	bool "Lock cpu freq & bus clock when tethering mode turn on"
-	depends on QC_MODEM
-	default n
-
-config USBIRQ_BALANCING_LTE_HIGHTP
-	bool "USBIRQ_BALANCING_LTE_HIGHTP"
 	depends on QC_MODEM
 	default n
 
