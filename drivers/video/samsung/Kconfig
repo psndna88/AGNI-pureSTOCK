@@ -117,6 +117,13 @@ config FIMD_EXT_SUPPORT
 	depends on SLP
 	default n
 
+config FB_S5P_MDNIE_HIJACK
+	bool "Samsung MDNIE HiJack (by Yank555.lu)"
+	depends on FB_S5P
+	default n
+	---help---
+	This enables support to hijack Samsung MDNIE feature
+
 if FIMD_EXT_SUPPORT
 
 config MDNIE_SUPPORT
