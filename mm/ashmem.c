@@ -358,7 +358,7 @@ static int ashmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		return lru_count;
 
 	if (!mutex_trylock(&ashmem_mutex))
-		return lru_count;
+		return -1;
 	list_for_each_entry_safe(range, next, &ashmem_lru_list, lru) {
 		struct inode *inode = range->asma->file->f_dentry->d_inode;
 		loff_t start = range->pgstart * PAGE_SIZE;
