@@ -4,6 +4,7 @@
  */
 
 #include <asm-generic/vmlinux.lds.h>
+#include <asm/cache.h>
 #include <asm/thread_info.h>
 #include <asm/memory.h>
 #include <asm/page.h>
@@ -82,7 +83,7 @@ SECTIONS
 #endif
 	}
 
-	PERCPU_SECTION(32)
+	PERCPU_SECTION(L1_CACHE_BYTES)
 
 #ifndef CONFIG_XIP_KERNEL
 	. = ALIGN(PAGE_SIZE);
@@ -180,13 +181,13 @@ SECTIONS
 #endif
 
 		NOSAVE_DATA
-		CACHELINE_ALIGNED_DATA(32)
-		READ_MOSTLY_DATA(32)
+		CACHELINE_ALIGNED_DATA(L1_CACHE_BYTES)
+		READ_MOSTLY_DATA(L1_CACHE_BYTES)
 
 		/*
 		 * The exception fixup table (might need resorting at runtime)
 		 */
-		. = ALIGN(32);
+		. = ALIGN(4);
 		__start___ex_table = .;
 #ifdef CONFIG_MMU
 		*(__ex_table)
