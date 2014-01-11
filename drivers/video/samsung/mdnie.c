@@ -52,6 +52,7 @@
 #include "mdnie_table_m0_sharpness_tweak.h"
 #elif defined(CONFIG_FB_S5P_EA8061) || defined(CONFIG_FB_S5P_S6EVR02)
 #include "mdnie_table_t0.h"
+#include "mdnie_table_m0_sharpness_tweak.h"
 #elif defined(CONFIG_FB_S5P_S6E63M0)
 #include "mdnie_table_m0.h"
 #elif defined(CONFIG_FB_S5P_S6C1372) && defined(CONFIG_MACH_TAB3)
