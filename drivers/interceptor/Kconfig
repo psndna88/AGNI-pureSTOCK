@@ -1,0 +1,3 @@
+config AUTHENTEC_VPNCLIENT_INTERCEPTOR
+	bool "AuthenTec VPNClient Interceptor"
+        default n
