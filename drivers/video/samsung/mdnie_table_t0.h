@@ -1072,6 +1072,48 @@ static unsigned short tune_auto_camera[] = {
 	END_SEQ, 0x0000
 };
 
+#ifdef CONFIG_FB_S5P_MDNIE_HIJACK
+// Yank555.lu : hijack profile (use natural as base) // NATURAL_UI from N7100 Update 3 (MK9) - psndna88
+static unsigned short tune_hijack[] = {
+        0x0000, 0x0000, /*BANK 0*/
+        0x0008, 0x00ac, /*Dither8 UC4 ABC2 CP1 | CC8 MCM4 SCR2 SCC1 | CS8 DE4 DNR2 HDR1*/
+        0x0030, 0x0000, /*FA cs1 de8 hdr2 fa1*/
+        0x0092, 0x0020, /*DE pe*/
+        0x0093, 0x0020, /*DE pf*/
+        0x0094, 0x0020, /*DE pb*/
+        0x0095, 0x0020, /*DE ne*/
+        0x0096, 0x0020, /*DE nf*/
+        0x0097, 0x0020, /*DE nb*/
+        0x0098, 0x1000, /*DE max ratio*/
+        0x0099, 0x0100, /*DE min ratio*/
+        0x00e1, 0xd6ac, /*SCR RrCr*/
+        0x00e2, 0x32ff, /*SCR RgCg*/
+        0x00e3, 0x2ef0, /*SCR RbCb*/
+        0x00e4, 0xa5fa, /*SCR GrMr*/
+        0x00e5, 0xff4d, /*SCR GgMg*/
+        0x00e6, 0x59ff, /*SCR GbMb*/
+        0x00e7, 0x00ff, /*SCR BrYr*/
+        0x00e8, 0x00fb, /*SCR BgYg*/
+        0x00e9, 0xff61, /*SCR BbYb*/
+        0x00ea, 0x00ff, /*SCR KrWr*/
+        0x00eb, 0x00fa, /*SCR KgWg*/
+        0x00ec, 0x00f8, /*SCR KbWb*/
+        0x0000, 0x0001, /*BANK 1*/
+        0x001f, 0x0080, /*CC chsel strength*/
+        0x0020, 0x0000, /*CC lut r   0*/
+        0x0021, 0x1090, /*CC lut r  16 144*/
+        0x0022, 0x20a0, /*CC lut r  32 160*/
+        0x0023, 0x30b0, /*CC lut r  48 176*/
+        0x0024, 0x40c0, /*CC lut r  64 192*/
+        0x0025, 0x50d0, /*CC lut r  80 208*/
+        0x0026, 0x60e0, /*CC lut r  96 224*/
+        0x0027, 0x70f0, /*CC lut r 112 240*/
+        0x0028, 0x80ff, /*CC lut r 128 255*/
+        0x00ff, 0x0000, /*Mask Release*/
+        END_SEQ, 0x0000
+};
+#endif
+
 struct mdnie_tuning_info tuning_table[CABC_MAX][MODE_MAX][SCENARIO_MAX] = {
 	{
 		{
