@@ -46,6 +46,10 @@
 #endif
 #include <linux/i2c/touchkey_i2c.h>
 
+// Yank555.lu : Add cleartext status settings for h/w key LED lightup on touchscreen touch
+#define TOUCHKEY_LED_DISABLED	0
+#define TOUCHKEY_LED_ENABLED	1
+
 /* M0 Touchkey temporary setting */
 
 #if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_M3)
@@ -82,6 +86,7 @@ static int touchkey_keycode[] = { 0,
 #endif
 };
 static const int touchkey_count = sizeof(touchkey_keycode) / sizeof(int);
+int touch_led_on_screen_touch = TOUCHKEY_LED_ENABLED; // Yank555.lu : Light up h/w key on touchscreen touch by default
 
 #if defined(TK_HAS_AUTOCAL)
 static u16 raw_data0;
@@ -1404,6 +1409,34 @@ static ssize_t touchkey_back_show(struct device *dev,
 }
 #endif
 
+// Yank555.lu : touch_led_on_screen_touch : only accept feedback from touchscreen driver if enabled
+static ssize_t touch_led_on_screen_touch_show(struct device *dev,
+					      struct device_attribute *attr, char *buf)
+{
+	switch (touch_led_on_screen_touch) {
+	  case TOUCHKEY_LED_DISABLED:	return sprintf(buf, "%d : H/W key won't light up on touchscreen touch\n",touch_led_on_screen_touch);
+	  case TOUCHKEY_LED_ENABLED:	return sprintf(buf, "%d : H/W key will light up on touchscreen touch\n",touch_led_on_screen_touch);
+	  default:			return sprintf(buf, "%d : value out of range\n",touch_led_on_screen_touch);
+	}
+
+}
+
+static ssize_t touch_led_on_screen_touch_store(struct device *dev,
+					       struct device_attribute *attr, const char *buf, size_t count)
+{
+	int new_touch_led_on_screen_touch;
+
+	sscanf(buf, "%du", &new_touch_led_on_screen_touch);
+
+	switch (new_touch_led_on_screen_touch) {
+	  case TOUCHKEY_LED_DISABLED:
+	  case TOUCHKEY_LED_ENABLED:	touch_led_on_screen_touch = new_touch_led_on_screen_touch;
+					return count;
+	  default:			return -EINVAL;
+	}
+
+}
+
 #if defined(TK_HAS_AUTOCAL)
 static ssize_t autocalibration_enable(struct device *dev,
 				      struct device_attribute *attr,
@@ -1562,6 +1595,10 @@ static DEVICE_ATTR(touchkey_menu, S_IRUGO | S_IWUSR | S_IWGRP,
 static DEVICE_ATTR(touchkey_back, S_IRUGO | S_IWUSR | S_IWGRP,
 		   touchkey_back_show, NULL);
 
+// Yank555.lu : touch_led_on_screen_touch : only accept feedback from touchscreen driver if enabled
+static DEVICE_ATTR(touch_led_on_screen_touch, S_IRUGO | S_IWUSR | S_IWGRP,
+		   touch_led_on_screen_touch_show, touch_led_on_screen_touch_store);
+
 #if defined(TK_USE_4KEY)
 static DEVICE_ATTR(touchkey_home, S_IRUGO, touchkey_home_show, NULL);
 static DEVICE_ATTR(touchkey_search, S_IRUGO, touchkey_search_show, NULL);
@@ -1609,6 +1646,7 @@ static struct attribute *touchkey_attributes[] = {
 	&dev_attr_brightness.attr,
 	&dev_attr_touchkey_menu.attr,
 	&dev_attr_touchkey_back.attr,
+	&dev_attr_touch_led_on_screen_touch.attr, // Yank555.lu : touch_led_on_screen_touch : only accept feedback from touchscreen driver if enabled
 #if defined(TK_USE_4KEY)
 	&dev_attr_touchkey_home.attr,
 	&dev_attr_touchkey_search.attr,
