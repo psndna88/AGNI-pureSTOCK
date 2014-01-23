@@ -25,7 +25,7 @@
 #define CPUFREQ_NAME_LEN 16
 
 #if defined(CONFIG_CPU_EXYNOS4212) || defined(CONFIG_CPU_EXYNOS4412)
-#define CPUFREQ_LEVEL_END		(L14 + 1)
+#define CPUFREQ_LEVEL_END		(L16 + 1)
 #endif
 
 /*********************************************************************
