@@ -36,4 +36,6 @@ obj-$(CONFIG_VIDEO_TSI)		+= tsi/
 ifeq ($(CONFIG_MALI_VER_BEFORE_R3P2), y)
 endif
 
+obj-$(CONFIG_EXYNOS_MEDIA_MONITOR)  += media_monitor/
+
 EXTRA_CFLAGS += -Idrivers/media/video
