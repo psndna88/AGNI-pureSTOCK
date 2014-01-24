@@ -351,6 +351,10 @@ int exynos4x12_asv_init(struct samsung_asv *asv_info)
 
 		exynos4x12_pre_set_abb();
 
+#ifdef CONFIG_ABB_CONTROL
+		abb_control_init();
+#endif
+
 		return -EEXIST;
 	}
 

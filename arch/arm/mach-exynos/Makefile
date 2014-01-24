@@ -31,6 +31,7 @@ obj-$(CONFIG_EXYNOS5_PM)	+= pm-exynos5.o sleep-exynos5.o
 obj-$(CONFIG_CPU_FREQ)		+= cpufreq.o
 obj-$(CONFIG_EXYNOS4_CPUFREQ)	+= asv.o asv-4210.o asv-4x12.o
 obj-$(CONFIG_EXYNOS4_CPUFREQ)	+= cpufreq-4210.o cpufreq-4x12.o
+obj-$(CONFIG_ABB_CONTROL)	    += abb_control.o
 obj-$(CONFIG_EXYNOS5_CPUFREQ)	+= asv.o asv-5250.o
 obj-$(CONFIG_EXYNOS5_CPUFREQ)	+= cpufreq-5250.o
 obj-$(CONFIG_EXYNOS4_CPUIDLE)	+= cpuidle-exynos4.o idle-exynos4.o
