@@ -82,7 +82,10 @@ enum busfreq_level_idx {
 	LV_END
 };
 
-static struct busfreq_table *exynos4_busfreq_table;
+#ifndef CONFIG_ABB_CONTROL
+static
+#endif
+struct busfreq_table *exynos4_busfreq_table;
 
 static struct busfreq_table exynos4_busfreq_table_orig[] = {
 	{LV_0, 400266, 1100000, 0, 0, 0}, /* MIF : 400MHz INT : 200MHz */
@@ -717,6 +720,7 @@ void exynos4x12_target(int index)
 		tmp = __raw_readl(EXYNOS4_CLKDIV_STAT_CAM1);
 	} while (tmp & 0x1111);
 
+#ifndef CONFIG_ABB_CONTROL
 	/* if pega-prime, ABB value is not changed */
 	if (samsung_rev() >= EXYNOS4412_REV_2_0)
 		return;
@@ -731,6 +735,10 @@ void exynos4x12_target(int index)
 			exynos4x12_set_abb_member(ABB_MIF, ABB_MODE_130V);
 		}
 	}
+#else
+	abb_target(ABB_INT, exynos4_busfreq_table[index].mem_clk);
+	abb_target(ABB_MIF, exynos4_busfreq_table[index].mem_clk);
+#endif
 }
 
 unsigned int exynos4x12_get_table_index(struct opp *opp)
