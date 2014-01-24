@@ -2142,3 +2142,8 @@ config MACH_GD2_SENSOR
 config TDSCDMA_MODEM_SPRD8803
 	bool "Samsung M0-TD MODEM SPRD8803"
 	default n
+
+config ABB_CONTROL
+	bool "Adaptive body bias control"
+	depends on EXYNOS4_CPUFREQ && CPU_EXYNOS4412
+	default n
