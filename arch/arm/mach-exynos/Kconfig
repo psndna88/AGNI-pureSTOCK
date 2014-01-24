@@ -2134,3 +2134,8 @@ config MACH_GD2_SENSOR
 	  K330 / STM
 	  AK8963 / AKM
 	  CM36651 / CAPELLA
+
+config ABB_CONTROL
+	bool "Adaptive body bias control"
+	depends on EXYNOS4_CPUFREQ && CPU_EXYNOS4412
+	default n
