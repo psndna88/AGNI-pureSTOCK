@@ -1296,6 +1296,8 @@ static int check_down(void)
 	return 0;
 }
 
+static bool arter97_prev_lock = false;
+
 static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 {
 	unsigned int max_load_freq;
@@ -1341,6 +1343,25 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 
 	/* Get Absolute Load - in terms of freq */
 	max_load_freq = 0;
+
+	/*
+	 *  firelock by arter97
+	 *
+	 *  Leave ONLY cpu0 online and kill everything
+	 *  when current frequency equals to minimum frequency
+	 *  and restore everything to default if not
+	 *
+	 *  2014.01.26
+	 */
+	if (!arter97_prev_lock && (policy->cur == policy->min)) {
+		atomic_set(&g_hotplug_lock, 1);
+		apply_hotplug_lock();
+		arter97_prev_lock = true;
+	} else if(arter97_prev_lock) {
+		atomic_set(&g_hotplug_lock, -1);
+		apply_hotplug_lock();
+		arter97_prev_lock = false;
+	}
 
 	for_each_cpu(j, policy->cpus) {
 		struct cpu_dbs_info_s *j_dbs_info;
