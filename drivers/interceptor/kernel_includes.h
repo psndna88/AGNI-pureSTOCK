@@ -134,9 +134,9 @@ typedef unsigned int Boolean;
 
 /******************************   LINUX       *****************************/
 /* Sanity checks about module support and that we are supporting it really  */
-#ifndef MODULE
-#    error  "MODULE must be defined when compiling for Linux"
-#endif
+//#ifndef MODULE
+//#    error  "MODULE must be defined when compiling for Linux"
+//#endif
 
 #include <linux/string.h>
 
