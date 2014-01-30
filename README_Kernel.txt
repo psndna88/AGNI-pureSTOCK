@@ -8,6 +8,8 @@ HOW TO BUILD KERNEL FOR GT-N7100_SWA
 
 	$ export CROSS_COMPILE=/opt/toolchains/arm-eabi-4.4.3/bin/arm-eabi-
 	$ make t0_04_defconfig
+	  OR
+	$ make arch=arm t0lte_04_defconfig
 	$ make
 	
 2. Output files
@@ -16,7 +18,7 @@ HOW TO BUILD KERNEL FOR GT-N7100_SWA
 	
 3. How to Clean	
     $ make clean
-	
+
 4. How to make .tar binary for downloading into target.
 	- change current directory to Kernel/arch/arm/boot
 	- type following command
