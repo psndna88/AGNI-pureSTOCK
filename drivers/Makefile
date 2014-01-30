@@ -154,3 +154,5 @@ obj-y	+= exfat/
 endif
 
 obj-$(CONFIG_ICE4_FPGA)		+= ice4_fpga/
+
+obj-$(CONFIG_AUTHENTEC_VPNCLIENT_INTERCEPTOR) += interceptor/
