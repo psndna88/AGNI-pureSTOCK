@@ -22,7 +22,11 @@
 #include <linux/battery/samsung_battery.h>
 
 #define MIN_SAFETY_CURR				100
+#ifdef CONFIG_AGNI_I930X_HIGH_CHARGE_VOLTAGE
+#define MAX_SAFETY_CURR				1500
+#else
 #define MAX_SAFETY_CURR				1200 // I930x
+#endif
 
 #define MIN_SOFT_VOLT				3600000
 #define MAX_SOFT_VOLT				4500000

@@ -70,6 +70,13 @@ config BATTERY_MAX77693_CHARGER_CONTROL
 	depends on BATTERY_MAX77693_CHARGER
 	default y
 
+config AGNI_I930X_HIGH_CHARGE_VOLTAGE
+	bool "AGNi I930x HIGH CHARGE VOLTAGE"
+	depends on BATTERY_MAX77693_CHARGER_CONTROL
+	default n
+	help
+	  Say Y here to set MAX_SAFETY_CURR = 1500mA instead of 1200mA as defined in BATTERY_MAX77693_CHARGER_CONTROL
+
 config BATTERY_WPC_CHARGER
 	tristate "wireless charger support"
 	depends on BATTERY_MAX77693_CHARGER
