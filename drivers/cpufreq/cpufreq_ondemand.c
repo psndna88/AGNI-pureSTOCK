@@ -1028,6 +1028,7 @@ static int cpufreq_ondemand_flexrate_do(struct cpufreq_policy *policy,
 	return 0;
 }
 
+#ifndef CONFIG_CPU_FREQ_GOV_PEGASUSQ
 int cpufreq_ondemand_flexrate_request(unsigned int rate_us,
 				      unsigned int duration)
 {
@@ -1083,6 +1084,7 @@ out:
 	return err;
 }
 EXPORT_SYMBOL_GPL(cpufreq_ondemand_flexrate_request);
+#endif
 
 static ssize_t store_flexrate_request(struct kobject *a, struct attribute *b,
 				      const char *buf, size_t count)
