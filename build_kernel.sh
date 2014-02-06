@@ -7,7 +7,7 @@ export ARCH=arm
 
 if [ ! -f $KERNELDIR/.config ];
 then
-  make defconfig psn_i9305_v3.5.1_defconfig
+  make defconfig psn_i9305_v3.5.2_defconfig
 fi
 
 . $KERNELDIR/.config
@@ -17,13 +17,13 @@ mv .git .git-halt
 cd $KERNELDIR/
 make -j2 || exit 1
 
-mkdir -p $KERNELDIR/BUILT/lib/modules
+mkdir -p $KERNELDIR/BUILT_I9305/lib/modules
 
-rm $KERNELDIR/BUILT/lib/modules/*
-rm $KERNELDIR/BUILT/zImage
+rm $KERNELDIR/BUILT_I9305/lib/modules/*
+rm $KERNELDIR/BUILT_I9305/zImage
 
-find -name '*.ko' -exec cp -av {} $KERNELDIR/BUILT/lib/modules/ \;
-${CROSS_COMPILE}strip --strip-unneeded $KERNELDIR/BUILT/lib/modules/*
-cp $KERNELDIR/arch/arm/boot/zImage $KERNELDIR/BUILT/
+find -name '*.ko' -exec cp -av {} $KERNELDIR/BUILT_I9305/lib/modules/ \;
+${CROSS_COMPILE}strip --strip-unneeded $KERNELDIR/BUILT_I9305/lib/modules/*
+cp $KERNELDIR/arch/arm/boot/zImage $KERNELDIR/BUILT_I9305/
 
 mv .git-halt .git
