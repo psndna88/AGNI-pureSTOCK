@@ -32,7 +32,9 @@ struct mhs_context {
 #ifdef CONFIG_SND_WOLFSON_SOUND_CONTROL
 extern void set_mic_level(void);
 #endif
+#ifdef CONFIG_FB_S5P_MDNIE_CONTROL
 extern void do_mdnie_refresh(struct work_struct *work);
+#endif
 
 void mhs_set_status(enum mhs_type type, bool status)
 {
@@ -40,7 +42,9 @@ void mhs_set_status(enum mhs_type type, bool status)
 	switch (type) {
 		case MHS_ENCODING:	mhs_ctx.encoding = status; break;
 		case MHS_DECODING:	mhs_ctx.decoding = status;
-//					do_mdnie_refresh(NULL); //TODO see above
+#ifdef CONFIG_FB_S5P_MDNIE_CONTROL
+					do_mdnie_refresh(NULL); //TODO see above
+#endif
 					break;
 		case MHS_CAMERA_STREAM:	mhs_ctx.camera_stream = status;
 #ifdef CONFIG_SND_WOLFSON_SOUND_CONTROL
