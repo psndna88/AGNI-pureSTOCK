@@ -1,7 +1,7 @@
 #!/bin/sh
 export KERNELDIR=`readlink -f .`
 . ~/AGNi_stamp_STOCK.sh
-. ~/gcc_4.7.2_armv7l.sh
+. ~/gcc_4.7.4_linaro_cortex-a9.sh
 
 export ARCH=arm
 
