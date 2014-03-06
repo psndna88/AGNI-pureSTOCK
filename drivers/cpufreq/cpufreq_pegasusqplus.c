@@ -1613,7 +1613,6 @@ static void do_dbs_timer(struct work_struct *work)
 }
 
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
-#ifndef CONFIG_CPU_FREQ_GOV_PEGASUSQ
 int cpufreq_ondemand_flexrate_request(unsigned int rate_us, unsigned int duration)
 {
 	struct cpufreq_policy *policy = cpufreq_cpu_get(0);
@@ -1694,7 +1693,6 @@ out:
 
 EXPORT_SYMBOL_GPL(cpufreq_ondemand_flexrate_request);
 
-#endif
 #endif
 
 static inline void dbs_timer_init(struct cpu_dbs_info_s *dbs_info)
