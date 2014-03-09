@@ -151,25 +151,23 @@ struct inodes_stat_t {
  *                        non-volatile media on completion.
  *
  */
-#define RW_MASK                        REQ_WRITE
-#define RWA_MASK                REQ_RAHEAD
+#define RW_MASK			REQ_WRITE
+#define RWA_MASK		REQ_RAHEAD
 
-#define READ                        0
-#define WRITE                        RW_MASK
-#define READA                        RWA_MASK
+#define READ			0
+#define WRITE			RW_MASK
+#define READA			RWA_MASK
 
-#define READ_SYNC                (READ | REQ_SYNC)
-#define READ_META                (READ | REQ_META)
-#define WRITE_SYNC                (WRITE | REQ_SYNC | REQ_NOIDLE)
-#define WRITE_ODIRECT                (WRITE | REQ_SYNC)
-#define WRITE_META                (WRITE | REQ_META)
-#define WRITE_FLUSH                (WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FLUSH)
-#define WRITE_FUA                (WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FUA)
-#define WRITE_FLUSH_FUA                (WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FLUSH | REQ_FUA)
+#define READ_SYNC		(READ | REQ_SYNC)
+#define WRITE_SYNC		(WRITE | REQ_SYNC | REQ_NOIDLE)
+#define WRITE_ODIRECT		(WRITE | REQ_SYNC)
+#define WRITE_FLUSH		(WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FLUSH)
+#define WRITE_FUA		(WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FUA)
+#define WRITE_FLUSH_FUA		(WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FLUSH | REQ_FUA)
 
-#define SEL_IN                1
-#define SEL_OUT                2
-#define SEL_EX                4
+#define SEL_IN		1
+#define SEL_OUT		2
+#define SEL_EX		4
 
 /* public flags for file_system_type */
 #define FS_REQUIRES_DEV 1 
@@ -523,6 +521,7 @@ enum positive_aop_returns {
 struct page;
 struct address_space;
 struct writeback_control;
+enum migrate_mode;
 
 struct iov_iter {
         const struct iovec *iov;
@@ -607,9 +606,12 @@ struct address_space_operations {
                         loff_t offset, unsigned long nr_segs);
         int (*get_xip_mem)(struct address_space *, pgoff_t, int,
                                                 void **, unsigned long *);
-        /* migrate the contents of a page to the specified target */
+	/*
+	 * migrate the contents of a page to the specified target. If sync
+	 * is false, it must not block.
+	 */
         int (*migratepage) (struct address_space *,
-                        struct page *, struct page *);
+			struct page *, struct page *, enum migrate_mode);
         int (*launder_page) (struct page *);
         int (*is_partially_uptodate) (struct page *, read_descriptor_t *,
                                         unsigned long);
@@ -2499,7 +2501,8 @@ extern int generic_check_addressable(unsigned, u64);
 
 #ifdef CONFIG_MIGRATION
 extern int buffer_migrate_page(struct address_space *,
-                                struct page *, struct page *);
+				struct page *, struct page *,
+				enum migrate_mode);
 #else
 #define buffer_migrate_page NULL
 #endif
