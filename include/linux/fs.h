@@ -1395,52 +1395,57 @@ struct super_block {
 #else
         struct list_head        s_files;
 #endif
-        /* s_dentry_lru, s_nr_dentry_unused protected by dcache.c lru locks */
-        struct list_head        s_dentry_lru;        /* unused dentry lru */
-        int                        s_nr_dentry_unused;        /* # of dentry on lru */
+	/* s_dentry_lru, s_nr_dentry_unused protected by dcache.c lru locks */
+	struct list_head	s_dentry_lru;	/* unused dentry lru */
+	int			s_nr_dentry_unused;	/* # of dentry on lru */
 
-        struct block_device        *s_bdev;
-        struct backing_dev_info *s_bdi;
-        struct mtd_info                *s_mtd;
-        struct list_head        s_instances;
-        struct quota_info        s_dquot;        /* Diskquota specific options */
+	struct block_device	*s_bdev;
+	struct backing_dev_info *s_bdi;
+	struct mtd_info		*s_mtd;
+	struct list_head	s_instances;
+	struct quota_info	s_dquot;	/* Diskquota specific options */
 
-        int                        s_frozen;
-        wait_queue_head_t        s_wait_unfrozen;
+	int			s_frozen;
+	wait_queue_head_t	s_wait_unfrozen;
 
-        char s_id[32];                                /* Informational name */
-        u8 s_uuid[16];                                /* UUID */
+	char s_id[32];				/* Informational name */
+	u8 s_uuid[16];				/* UUID */
 
-        void                         *s_fs_info;        /* Filesystem private info */
-        fmode_t                        s_mode;
+	void 			*s_fs_info;	/* Filesystem private info */
+	fmode_t			s_mode;
 
-        /* Granularity of c/m/atime in ns.
-           Cannot be worse than a second */
-        u32                   s_time_gran;
+	/* Granularity of c/m/atime in ns.
+	   Cannot be worse than a second */
+	u32		   s_time_gran;
 
-        /*
-         * The next field is for VFS *only*. No filesystems have any business
-         * even looking at it. You had been warned.
-         */
-        struct mutex s_vfs_rename_mutex;        /* Kludge */
+	/*
+	 * The next field is for VFS *only*. No filesystems have any business
+	 * even looking at it. You had been warned.
+	 */
+	struct mutex s_vfs_rename_mutex;	/* Kludge */
 
-        /*
-         * Filesystem subtype.  If non-empty the filesystem type field
-         * in /proc/mounts will be "type.subtype"
-         */
-        char *s_subtype;
+	/*
+	 * Filesystem subtype.  If non-empty the filesystem type field
+	 * in /proc/mounts will be "type.subtype"
+	 */
+	char *s_subtype;
 
-        /*
-         * Saved mount options for lazy filesystems using
-         * generic_show_options()
-         */
-        char __rcu *s_options;
-        const struct dentry_operations *s_d_op; /* default d_op for dentries */
+	/*
+	 * Saved mount options for lazy filesystems using
+	 * generic_show_options()
+	 */
+	char __rcu *s_options;
+	const struct dentry_operations *s_d_op; /* default d_op for dentries */
 
-        /*
-         * Saved pool identifier for cleancache (-1 means none)
-         */
-        int cleancache_poolid;
+	/*
+	 * Saved pool identifier for cleancache (-1 means none)
+	 */
+	int cleancache_poolid;
+
+#ifdef CONFIG_ASYNC_FSYNC
+#define FLAG_ASYNC_FSYNC        0x1
+  	unsigned int fsync_flags;
+#endif
 };
 
 extern struct timespec current_fs_time(struct super_block *sb);
