@@ -1441,6 +1441,11 @@ struct super_block {
 	 * Saved pool identifier for cleancache (-1 means none)
 	 */
 	int cleancache_poolid;
+
+#ifdef CONFIG_ASYNC_FSYNC
+#define FLAG_ASYNC_FSYNC        0x1
+  	unsigned int fsync_flags;
+#endif
 };
 
 extern struct timespec current_fs_time(struct super_block *sb);
