@@ -159,10 +159,8 @@ struct inodes_stat_t {
 #define READA			RWA_MASK
 
 #define READ_SYNC		(READ | REQ_SYNC)
-#define READ_META		(READ | REQ_META)
 #define WRITE_SYNC		(WRITE | REQ_SYNC | REQ_NOIDLE)
 #define WRITE_ODIRECT		(WRITE | REQ_SYNC)
-#define WRITE_META		(WRITE | REQ_META)
 #define WRITE_FLUSH		(WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FLUSH)
 #define WRITE_FUA		(WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FUA)
 #define WRITE_FLUSH_FUA		(WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FLUSH | REQ_FUA)
@@ -580,44 +578,44 @@ typedef int (*read_actor_t)(read_descriptor_t *, struct page *,
 		unsigned long, unsigned long);
 
 struct address_space_operations {
-	int (*writepage)(struct page *page, struct writeback_control *wbc);
-	int (*readpage)(struct file *, struct page *);
+        int (*writepage)(struct page *page, struct writeback_control *wbc);
+        int (*readpage)(struct file *, struct page *);
 
-	/* Write back some dirty pages from this mapping. */
-	int (*writepages)(struct address_space *, struct writeback_control *);
+        /* Write back some dirty pages from this mapping. */
+        int (*writepages)(struct address_space *, struct writeback_control *);
 
-	/* Set a page dirty.  Return true if this dirtied it */
-	int (*set_page_dirty)(struct page *page);
+        /* Set a page dirty.  Return true if this dirtied it */
+        int (*set_page_dirty)(struct page *page);
 
-	int (*readpages)(struct file *filp, struct address_space *mapping,
-			struct list_head *pages, unsigned nr_pages);
+        int (*readpages)(struct file *filp, struct address_space *mapping,
+                        struct list_head *pages, unsigned nr_pages);
 
-	int (*write_begin)(struct file *, struct address_space *mapping,
-				loff_t pos, unsigned len, unsigned flags,
-				struct page **pagep, void **fsdata);
-	int (*write_end)(struct file *, struct address_space *mapping,
-				loff_t pos, unsigned len, unsigned copied,
-				struct page *page, void *fsdata);
+        int (*write_begin)(struct file *, struct address_space *mapping,
+                                loff_t pos, unsigned len, unsigned flags,
+                                struct page **pagep, void **fsdata);
+        int (*write_end)(struct file *, struct address_space *mapping,
+                                loff_t pos, unsigned len, unsigned copied,
+                                struct page *page, void *fsdata);
 
-	/* Unfortunately this kludge is needed for FIBMAP. Don't use it */
-	sector_t (*bmap)(struct address_space *, sector_t);
-	void (*invalidatepage) (struct page *, unsigned long);
-	int (*releasepage) (struct page *, gfp_t);
-	void (*freepage)(struct page *);
-	ssize_t (*direct_IO)(int, struct kiocb *, const struct iovec *iov,
-			loff_t offset, unsigned long nr_segs);
-	int (*get_xip_mem)(struct address_space *, pgoff_t, int,
-						void **, unsigned long *);
+        /* Unfortunately this kludge is needed for FIBMAP. Don't use it */
+        sector_t (*bmap)(struct address_space *, sector_t);
+        void (*invalidatepage) (struct page *, unsigned long);
+        int (*releasepage) (struct page *, gfp_t);
+        void (*freepage)(struct page *);
+        ssize_t (*direct_IO)(int, struct kiocb *, const struct iovec *iov,
+                        loff_t offset, unsigned long nr_segs);
+        int (*get_xip_mem)(struct address_space *, pgoff_t, int,
+                                                void **, unsigned long *);
 	/*
-        /* migrate the contents of a page to the specified target */
+	 * migrate the contents of a page to the specified target. If sync
 	 * is false, it must not block.
 	 */
-	int (*migratepage) (struct address_space *,
-                        struct page *, struct page *);
-	int (*launder_page) (struct page *);
-	int (*is_partially_uptodate) (struct page *, read_descriptor_t *,
-					unsigned long);
-	int (*error_remove_page)(struct address_space *, struct page *);
+        int (*migratepage) (struct address_space *,
+			struct page *, struct page *, enum migrate_mode);
+        int (*launder_page) (struct page *);
+        int (*is_partially_uptodate) (struct page *, read_descriptor_t *,
+                                        unsigned long);
+        int (*error_remove_page)(struct address_space *, struct page *);
 };
 
 extern const struct address_space_operations empty_aops;
@@ -2503,7 +2501,8 @@ extern int generic_check_addressable(unsigned, u64);
 
 #ifdef CONFIG_MIGRATION
 extern int buffer_migrate_page(struct address_space *,
-                                struct page *, struct page *);
+				struct page *, struct page *,
+				enum migrate_mode);
 #else
 #define buffer_migrate_page NULL
 #endif
