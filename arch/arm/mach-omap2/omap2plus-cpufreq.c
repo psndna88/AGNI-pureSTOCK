@@ -174,14 +174,11 @@ static int omap_cpufreq_policy_notifier_call(struct notifier_block *this,
 				unsigned long code, void *data)
 {
 	/* Ketut P. Kumajaya: follow scaling_max_freq rule */
-#if !defined(CONFIG_OMAP4430_CPU_OVERCLOCK)
-	struct cpufreq_policy *policy = data;
-#endif
+	/* struct cpufreq_policy *policy = data; */
 
 	switch (code) {
 	case CPUFREQ_ADJUST:
-#if !defined(CONFIG_OMAP4430_CPU_OVERCLOCK)
-		if ((!strnicmp(policy->governor->name,
+		/* if ((!strnicmp(policy->governor->name,
 					"powersave", CPUFREQ_NAME_LEN))
 				|| (!strnicmp(policy->governor->name,
 					"performance", CPUFREQ_NAME_LEN))
@@ -198,11 +195,9 @@ static int omap_cpufreq_policy_notifier_call(struct notifier_block *this,
 		} else {
 			cpufreq_lock_type[MAX_LIMIT].disable_lock = false;
 			cpufreq_lock_type[MIN_LIMIT].disable_lock = false;
-		}
-#else
+		} */
 		cpufreq_lock_type[MIN_LIMIT].disable_lock = true;
 		cpufreq_lock_type[MAX_LIMIT].disable_lock = true;
-#endif
 	case CPUFREQ_INCOMPATIBLE:
 	case CPUFREQ_NOTIFY:
 	default:
@@ -770,8 +765,13 @@ static int __cpuinit omap_cpu_init(struct cpufreq_policy *policy)
 
 	cpufreq_frequency_table_get_attr(freq_table, policy->cpu);
 
+#ifdef CONFIG_OMAP4430_CPU_OVERCLOCK
+	policy->min = 180000;
+	policy->max = 1008000;
+#else
 	policy->min = policy->cpuinfo.min_freq;
 	policy->max = policy->cpuinfo.max_freq;
+#endif
 	policy->cur = omap_getspeed(policy->cpu);
 
 	for (i = 0; freq_table[i].frequency != CPUFREQ_TABLE_END; i++)
