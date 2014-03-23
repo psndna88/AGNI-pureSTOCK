@@ -121,6 +121,11 @@ struct scan_control {
 
 #define lru_to_page(_head) (list_entry((_head)->prev, struct page, lru))
 
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+atomic_t kswapd_thread_on = ATOMIC_INIT(1);
+extern int get_soft_reclaim_status(void);
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
+
 #ifdef ARCH_HAS_PREFETCH
 #define prefetch_prev_lru_page(_page, _base, _field)			\
 	do {								\
@@ -3031,6 +3036,11 @@ static void kswapd_try_to_sleep(pg_data_t *pgdat, int order, int classzone_idx)
 		 * per-cpu vmstat threshold while kswapd is awake and restore
 		 * them before going back to sleep.
 		 */
+
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+		atomic_set(&kswapd_thread_on,0);
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
+
 		set_pgdat_percpu_threshold(pgdat, calculate_normal_threshold);
 
 		if (!kthread_should_stop())
@@ -3136,6 +3146,10 @@ static int kswapd(void *p)
 		if (kthread_should_stop())
 			break;
 
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+		atomic_set(&kswapd_thread_on, 1);
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
+
 		/*
 		 * We can speed up thawing tasks if we don't call balance_pgdat
 		 * after returning from the refrigerator
@@ -3206,12 +3220,138 @@ unsigned long zone_reclaimable_pages(struct zone *zone)
 	nr = zone_page_state(zone, NR_ACTIVE_FILE) +
 	     zone_page_state(zone, NR_INACTIVE_FILE);
 
+#ifndef CONFIG_ZRAM_FOR_ANDROID
 	if (nr_swap_pages > 0)
 		nr += zone_page_state(zone, NR_ACTIVE_ANON) +
 		      zone_page_state(zone, NR_INACTIVE_ANON);
+#endif
 
 	return nr;
 }
+
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+/*
+ * This is the main entry point to direct page reclaim for RTCC.
+ *
+ * If a full scan of the inactive list fails to free enough memory then we
+ * are "out of memory" and something needs to be killed.
+ *
+ * If the caller is !__GFP_FS then the probability of a failure is reasonably
+ * high - the zone may be full of dirty or under-writeback pages, which this
+ * caller can't do much about.  We kick the writeback threads and take explicit
+ * naps in the hope that some of these pages can be written.  But if the
+ * allocating task holds filesystem locks which prevent writeout this might not
+ * work, and the allocation attempt will fail.
+ *
+ * returns:	0, if no pages reclaimed
+ * 		else, the number of pages reclaimed
+ */
+static unsigned long rtcc_do_try_to_free_pages(struct zonelist *zonelist, struct scan_control *sc, struct shrink_control *shrink)
+{
+	int priority;
+	unsigned long total_scanned = 0;
+	unsigned int cpuset_mems_cookie;
+	struct zoneref *z;
+	struct zone *zone;
+	unsigned long writeback_threshold;
+
+  	cpuset_mems_cookie = get_mems_allowed();
+	delayacct_freepages_start();
+
+	if (scanning_global_lru(sc))
+		count_vm_event(ALLOCSTALL);
+
+	for (priority = DEF_PRIORITY; priority >= 0; priority--) {
+		sc->nr_scanned = 0;
+		if (!priority)
+			disable_swap_token(sc->mem_cgroup);
+		shrink_zones(priority, zonelist, sc);
+		total_scanned += sc->nr_scanned;
+		if (sc->nr_reclaimed >= sc->nr_to_reclaim)
+			goto out;
+
+		/*
+		 * Try to write back as many pages as we just scanned.  This
+		 * tends to cause slow streaming writers to write data to the
+		 * disk smoothly, at the dirtying rate, which is nice.   But
+		 * that's undesirable in laptop mode, where we *want* lumpy
+		 * writeout.  So in laptop mode, write out the whole world.
+		 */
+		writeback_threshold = sc->nr_to_reclaim + sc->nr_to_reclaim / 2;
+		if (total_scanned > writeback_threshold) {
+			wakeup_flusher_threads(laptop_mode ? 0 : total_scanned);
+			sc->may_writepage = 1;
+		}
+
+		/* Take a nap, wait for some writeback to complete */
+		if (!sc->hibernation_mode && sc->nr_scanned &&
+		    priority < DEF_PRIORITY - 2) {
+			struct zone *preferred_zone;
+
+			first_zones_zonelist(zonelist, gfp_zone(sc->gfp_mask),
+						&cpuset_current_mems_allowed,
+						&preferred_zone);
+			wait_iff_congested(preferred_zone, BLK_RW_ASYNC, HZ/10);
+		}
+	}
+
+out:
+	delayacct_freepages_end();
+	put_mems_allowed(cpuset_mems_cookie);
+
+	if (sc->nr_reclaimed)
+		return sc->nr_reclaimed;
+
+	/*
+	 * As hibernation is going on, kswapd is freezed so that it can't mark
+	 * the zone into all_unreclaimable. Thus bypassing all_unreclaimable
+	 * check.
+	 */
+	if (oom_killer_disabled)
+		return 0;
+
+	/* top priority shrink_zones still had more to do? don't OOM, then */
+	if (scanning_global_lru(sc) && !all_unreclaimable(zonelist, sc))
+		return 1;
+
+	return 0;
+}
+
+long rtcc_reclaim_pages(long nr_to_reclaim)
+{
+	struct reclaim_state reclaim_state;
+	struct scan_control sc = {
+		.gfp_mask = GFP_KERNEL,
+		.may_swap = 1,
+		.may_unmap = 1,
+		.may_writepage = 1,
+		.nr_to_reclaim = nr_to_reclaim,
+		.swappiness = 100,
+		.order = 0,
+	};
+	struct shrink_control shrink = {
+		.gfp_mask = sc.gfp_mask,
+	};
+	struct zonelist *zonelist = node_zonelist(numa_node_id(), sc.gfp_mask);
+	struct task_struct *p = current;
+	unsigned long nr_reclaimed;
+
+	p->flags |= PF_MEMALLOC;
+	lockdep_set_current_reclaim_state(sc.gfp_mask);
+	reclaim_state.reclaimed_slab = 0;
+	p->reclaim_state = &reclaim_state;
+
+	nr_reclaimed = rtcc_do_try_to_free_pages(zonelist, &sc, &shrink);
+
+	p->reclaim_state = NULL;
+	lockdep_clear_current_reclaim_state();
+	p->flags &= ~PF_MEMALLOC;
+
+	printk("RTCC, reclaim %ld pages\n", nr_reclaimed);
+
+	return nr_reclaimed;
+}
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
 
 #ifdef CONFIG_HIBERNATION
 /*
