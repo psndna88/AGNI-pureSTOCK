@@ -117,6 +117,11 @@ struct scan_control {
 
 #define lru_to_page(_head) (list_entry((_head)->prev, struct page, lru))
 
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+atomic_t kswapd_thread_on = ATOMIC_INIT(1);
+extern int get_soft_reclaim_status(void);
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
+
 #ifdef ARCH_HAS_PREFETCH
 #define prefetch_prev_lru_page(_page, _base, _field)                        \
         do {                                                                \
@@ -2842,49 +2847,54 @@ out:
 
 static void kswapd_try_to_sleep(pg_data_t *pgdat, int order, int classzone_idx)
 {
-        long remaining = 0;
-        DEFINE_WAIT(wait);
+	long remaining = 0;
+	DEFINE_WAIT(wait);
 
-        if (freezing(current) || kthread_should_stop())
-                return;
+	if (freezing(current) || kthread_should_stop())
+		return;
 
-        prepare_to_wait(&pgdat->kswapd_wait, &wait, TASK_INTERRUPTIBLE);
+	prepare_to_wait(&pgdat->kswapd_wait, &wait, TASK_INTERRUPTIBLE);
 
-        /* Try to sleep for a short interval */
-        if (!sleeping_prematurely(pgdat, order, remaining, classzone_idx)) {
-                remaining = schedule_timeout(HZ/10);
-                finish_wait(&pgdat->kswapd_wait, &wait);
-                prepare_to_wait(&pgdat->kswapd_wait, &wait, TASK_INTERRUPTIBLE);
-        }
+	/* Try to sleep for a short interval */
+	if (!sleeping_prematurely(pgdat, order, remaining, classzone_idx)) {
+		remaining = schedule_timeout(HZ/10);
+		finish_wait(&pgdat->kswapd_wait, &wait);
+		prepare_to_wait(&pgdat->kswapd_wait, &wait, TASK_INTERRUPTIBLE);
+	}
 
-        /*
-         * After a short sleep, check if it was a premature sleep. If not, then
-         * go fully to sleep until explicitly woken up.
-         */
-        if (!sleeping_prematurely(pgdat, order, remaining, classzone_idx)) {
-                trace_mm_vmscan_kswapd_sleep(pgdat->node_id);
+	/*
+	 * After a short sleep, check if it was a premature sleep. If not, then
+	 * go fully to sleep until explicitly woken up.
+	 */
+	if (!sleeping_prematurely(pgdat, order, remaining, classzone_idx)) {
+		trace_mm_vmscan_kswapd_sleep(pgdat->node_id);
 
-                /*
-                 * vmstat counters are not perfectly accurate and the estimated
-                 * value for counters such as NR_FREE_PAGES can deviate from the
-                 * true value by nr_online_cpus * threshold. To avoid the zone
-                 * watermarks being breached while under pressure, we reduce the
-                 * per-cpu vmstat threshold while kswapd is awake and restore
-                 * them before going back to sleep.
-                 */
-                set_pgdat_percpu_threshold(pgdat, calculate_normal_threshold);
+		/*
+		 * vmstat counters are not perfectly accurate and the estimated
+		 * value for counters such as NR_FREE_PAGES can deviate from the
+		 * true value by nr_online_cpus * threshold. To avoid the zone
+		 * watermarks being breached while under pressure, we reduce the
+		 * per-cpu vmstat threshold while kswapd is awake and restore
+		 * them before going back to sleep.
+		 */
 
-                if (!kthread_should_stop())
-                        schedule();
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+		atomic_set(&kswapd_thread_on,0);
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
 
-                set_pgdat_percpu_threshold(pgdat, calculate_pressure_threshold);
-        } else {
-                if (remaining)
-                        count_vm_event(KSWAPD_LOW_WMARK_HIT_QUICKLY);
-                else
-                        count_vm_event(KSWAPD_HIGH_WMARK_HIT_QUICKLY);
-        }
-        finish_wait(&pgdat->kswapd_wait, &wait);
+		set_pgdat_percpu_threshold(pgdat, calculate_normal_threshold);
+
+		if (!kthread_should_stop())
+			schedule();
+
+		set_pgdat_percpu_threshold(pgdat, calculate_pressure_threshold);
+	} else {
+		if (remaining)
+			count_vm_event(KSWAPD_LOW_WMARK_HIT_QUICKLY);
+		else
+			count_vm_event(KSWAPD_HIGH_WMARK_HIT_QUICKLY);
+	}
+	finish_wait(&pgdat->kswapd_wait, &wait);
 }
 
 /*
@@ -2902,95 +2912,99 @@ static void kswapd_try_to_sleep(pg_data_t *pgdat, int order, int classzone_idx)
  */
 static int kswapd(void *p)
 {
-        unsigned long order, new_order;
-        unsigned balanced_order;
-        int classzone_idx, new_classzone_idx;
-        int balanced_classzone_idx;
-        pg_data_t *pgdat = (pg_data_t*)p;
-        struct task_struct *tsk = current;
+	unsigned long order, new_order;
+	unsigned balanced_order;
+	int classzone_idx, new_classzone_idx;
+	int balanced_classzone_idx;
+	pg_data_t *pgdat = (pg_data_t*)p;
+	struct task_struct *tsk = current;
 
-        struct reclaim_state reclaim_state = {
-                .reclaimed_slab = 0,
-        };
-        const struct cpumask *cpumask = cpumask_of_node(pgdat->node_id);
+	struct reclaim_state reclaim_state = {
+		.reclaimed_slab = 0,
+	};
+	const struct cpumask *cpumask = cpumask_of_node(pgdat->node_id);
 
-        lockdep_set_current_reclaim_state(GFP_KERNEL);
+	lockdep_set_current_reclaim_state(GFP_KERNEL);
 
-        if (!cpumask_empty(cpumask))
-                set_cpus_allowed_ptr(tsk, cpumask);
-        current->reclaim_state = &reclaim_state;
+	if (!cpumask_empty(cpumask))
+		set_cpus_allowed_ptr(tsk, cpumask);
+	current->reclaim_state = &reclaim_state;
 
-        /*
-         * Tell the memory management that we're a "memory allocator",
-         * and that if we need more memory we should get access to it
-         * regardless (see "__alloc_pages()"). "kswapd" should
-         * never get caught in the normal page freeing logic.
-         *
-         * (Kswapd normally doesn't need memory anyway, but sometimes
-         * you need a small amount of memory in order to be able to
-         * page out something else, and this flag essentially protects
-         * us from recursively trying to free more memory as we're
-         * trying to free the first piece of memory in the first place).
-         */
-        tsk->flags |= PF_MEMALLOC | PF_SWAPWRITE | PF_KSWAPD;
-        set_freezable();
+	/*
+	 * Tell the memory management that we're a "memory allocator",
+	 * and that if we need more memory we should get access to it
+	 * regardless (see "__alloc_pages()"). "kswapd" should
+	 * never get caught in the normal page freeing logic.
+	 *
+	 * (Kswapd normally doesn't need memory anyway, but sometimes
+	 * you need a small amount of memory in order to be able to
+	 * page out something else, and this flag essentially protects
+	 * us from recursively trying to free more memory as we're
+	 * trying to free the first piece of memory in the first place).
+	 */
+	tsk->flags |= PF_MEMALLOC | PF_SWAPWRITE | PF_KSWAPD;
+	set_freezable();
 
-        order = new_order = 0;
-        balanced_order = 0;
-        classzone_idx = new_classzone_idx = pgdat->nr_zones - 1;
-        balanced_classzone_idx = classzone_idx;
-        for ( ; ; ) {
-                int ret;
+	order = new_order = 0;
+	balanced_order = 0;
+	classzone_idx = new_classzone_idx = pgdat->nr_zones - 1;
+	balanced_classzone_idx = classzone_idx;
+	for ( ; ; ) {
+		int ret;
 
-                /*
-                 * If the last balance_pgdat was unsuccessful it's unlikely a
-                 * new request of a similar or harder type will succeed soon
-                 * so consider going to sleep on the basis we reclaimed at
-                 */
-                if (balanced_classzone_idx >= new_classzone_idx &&
-                                        balanced_order == new_order) {
-                        new_order = pgdat->kswapd_max_order;
-                        new_classzone_idx = pgdat->classzone_idx;
-                        pgdat->kswapd_max_order =  0;
-                        pgdat->classzone_idx = pgdat->nr_zones - 1;
-                }
+		/*
+		 * If the last balance_pgdat was unsuccessful it's unlikely a
+		 * new request of a similar or harder type will succeed soon
+		 * so consider going to sleep on the basis we reclaimed at
+		 */
+		if (balanced_classzone_idx >= new_classzone_idx &&
+					balanced_order == new_order) {
+			new_order = pgdat->kswapd_max_order;
+			new_classzone_idx = pgdat->classzone_idx;
+			pgdat->kswapd_max_order =  0;
+			pgdat->classzone_idx = pgdat->nr_zones - 1;
+		}
 
-                if (order < new_order || classzone_idx > new_classzone_idx) {
-                        /*
-                         * Don't sleep if someone wants a larger 'order'
-                         * allocation or has tigher zone constraints
-                         */
-                        order = new_order;
-                        classzone_idx = new_classzone_idx;
-                } else {
-                        kswapd_try_to_sleep(pgdat, balanced_order,
-                                                balanced_classzone_idx);
-                        order = pgdat->kswapd_max_order;
-                        classzone_idx = pgdat->classzone_idx;
-                        new_order = order;
-                        new_classzone_idx = classzone_idx;
-                        pgdat->kswapd_max_order = 0;
-                        pgdat->classzone_idx = pgdat->nr_zones - 1;
-                }
+		if (order < new_order || classzone_idx > new_classzone_idx) {
+			/*
+			 * Don't sleep if someone wants a larger 'order'
+			 * allocation or has tigher zone constraints
+			 */
+			order = new_order;
+			classzone_idx = new_classzone_idx;
+		} else {
+			kswapd_try_to_sleep(pgdat, balanced_order,
+						balanced_classzone_idx);
+			order = pgdat->kswapd_max_order;
+			classzone_idx = pgdat->classzone_idx;
+			new_order = order;
+			new_classzone_idx = classzone_idx;
+			pgdat->kswapd_max_order = 0;
+			pgdat->classzone_idx = pgdat->nr_zones - 1;
+		}
 
-                ret = try_to_freeze();
-                if (kthread_should_stop())
-                        break;
+		ret = try_to_freeze();
+		if (kthread_should_stop())
+			break;
 
-                /*
-                 * We can speed up thawing tasks if we don't call balance_pgdat
-                 * after returning from the refrigerator
-                 */
-                if (!ret) {
-                        trace_mm_vmscan_kswapd_wake(pgdat->node_id, order);
-                        balanced_classzone_idx = classzone_idx;
-                        balanced_order = balance_pgdat(pgdat, order,
-                                                &balanced_classzone_idx);
-                }
-        }
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+		atomic_set(&kswapd_thread_on, 1);
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
 
-        current->reclaim_state = NULL;
-        return 0;
+		/*
+		 * We can speed up thawing tasks if we don't call balance_pgdat
+		 * after returning from the refrigerator
+		 */
+		if (!ret) {
+			trace_mm_vmscan_kswapd_wake(pgdat->node_id, order);
+			balanced_classzone_idx = classzone_idx;
+			balanced_order = balance_pgdat(pgdat, order,
+						&balanced_classzone_idx);
+		}
+	}
+
+	current->reclaim_state = NULL;
+	return 0;
 }
 
 /*
@@ -3047,12 +3061,138 @@ unsigned long zone_reclaimable_pages(struct zone *zone)
         nr = zone_page_state(zone, NR_ACTIVE_FILE) +
              zone_page_state(zone, NR_INACTIVE_FILE);
 
-        if (nr_swap_pages > 0)
-                nr += zone_page_state(zone, NR_ACTIVE_ANON) +
-                      zone_page_state(zone, NR_INACTIVE_ANON);
+#ifndef CONFIG_ZRAM_FOR_ANDROID
+	if (nr_swap_pages > 0)
+		nr += zone_page_state(zone, NR_ACTIVE_ANON) +
+		      zone_page_state(zone, NR_INACTIVE_ANON);
+#endif
 
         return nr;
 }
+
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+/*
+ * This is the main entry point to direct page reclaim for RTCC.
+ *
+ * If a full scan of the inactive list fails to free enough memory then we
+ * are "out of memory" and something needs to be killed.
+ *
+ * If the caller is !__GFP_FS then the probability of a failure is reasonably
+ * high - the zone may be full of dirty or under-writeback pages, which this
+ * caller can't do much about.  We kick the writeback threads and take explicit
+ * naps in the hope that some of these pages can be written.  But if the
+ * allocating task holds filesystem locks which prevent writeout this might not
+ * work, and the allocation attempt will fail.
+ *
+ * returns:	0, if no pages reclaimed
+ * 		else, the number of pages reclaimed
+ */
+static unsigned long rtcc_do_try_to_free_pages(struct zonelist *zonelist, struct scan_control *sc, struct shrink_control *shrink)
+{
+	int priority;
+	unsigned long total_scanned = 0;
+	unsigned int cpuset_mems_cookie;
+	struct zoneref *z;
+	struct zone *zone;
+	unsigned long writeback_threshold;
+
+  	cpuset_mems_cookie = get_mems_allowed();
+	delayacct_freepages_start();
+
+	if (scanning_global_lru(sc))
+		count_vm_event(ALLOCSTALL);
+
+	for (priority = DEF_PRIORITY; priority >= 0; priority--) {
+		sc->nr_scanned = 0;
+		if (!priority)
+			disable_swap_token(sc->mem_cgroup);
+		shrink_zones(priority, zonelist, sc);
+		total_scanned += sc->nr_scanned;
+		if (sc->nr_reclaimed >= sc->nr_to_reclaim)
+			goto out;
+
+		/*
+		 * Try to write back as many pages as we just scanned.  This
+		 * tends to cause slow streaming writers to write data to the
+		 * disk smoothly, at the dirtying rate, which is nice.   But
+		 * that's undesirable in laptop mode, where we *want* lumpy
+		 * writeout.  So in laptop mode, write out the whole world.
+		 */
+		writeback_threshold = sc->nr_to_reclaim + sc->nr_to_reclaim / 2;
+		if (total_scanned > writeback_threshold) {
+			wakeup_flusher_threads(laptop_mode ? 0 : total_scanned);
+			sc->may_writepage = 1;
+		}
+
+		/* Take a nap, wait for some writeback to complete */
+		if (!sc->hibernation_mode && sc->nr_scanned &&
+		    priority < DEF_PRIORITY - 2) {
+			struct zone *preferred_zone;
+
+			first_zones_zonelist(zonelist, gfp_zone(sc->gfp_mask),
+						&cpuset_current_mems_allowed,
+						&preferred_zone);
+			wait_iff_congested(preferred_zone, BLK_RW_ASYNC, HZ/10);
+		}
+	}
+
+out:
+	delayacct_freepages_end();
+	put_mems_allowed(cpuset_mems_cookie);
+
+	if (sc->nr_reclaimed)
+		return sc->nr_reclaimed;
+
+	/*
+	 * As hibernation is going on, kswapd is freezed so that it can't mark
+	 * the zone into all_unreclaimable. Thus bypassing all_unreclaimable
+	 * check.
+	 */
+	if (oom_killer_disabled)
+		return 0;
+
+	/* top priority shrink_zones still had more to do? don't OOM, then */
+	if (scanning_global_lru(sc) && !all_unreclaimable(zonelist, sc))
+		return 1;
+
+	return 0;
+}
+
+long rtcc_reclaim_pages(long nr_to_reclaim)
+{
+	struct reclaim_state reclaim_state;
+	struct scan_control sc = {
+		.gfp_mask = GFP_KERNEL,
+		.may_swap = 1,
+		.may_unmap = 1,
+		.may_writepage = 1,
+		.nr_to_reclaim = nr_to_reclaim,
+		.swappiness = 100,
+		.order = 0,
+	};
+	struct shrink_control shrink = {
+		.gfp_mask = sc.gfp_mask,
+	};
+	struct zonelist *zonelist = node_zonelist(numa_node_id(), sc.gfp_mask);
+	struct task_struct *p = current;
+	unsigned long nr_reclaimed;
+
+	p->flags |= PF_MEMALLOC;
+	lockdep_set_current_reclaim_state(sc.gfp_mask);
+	reclaim_state.reclaimed_slab = 0;
+	p->reclaim_state = &reclaim_state;
+
+	nr_reclaimed = rtcc_do_try_to_free_pages(zonelist, &sc, &shrink);
+
+	p->reclaim_state = NULL;
+	lockdep_clear_current_reclaim_state();
+	p->flags &= ~PF_MEMALLOC;
+
+	printk("RTCC, reclaim %ld pages\n", nr_reclaimed);
+
+	return nr_reclaimed;
+}
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
 
 #ifdef CONFIG_HIBERNATION
 /*
