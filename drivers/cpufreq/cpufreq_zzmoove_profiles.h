@@ -189,7 +189,7 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		40,		// sampling_rate_idle_threshold (range from 1 to 100)
 		2,		// sampling_rate_sleep_multiplier (range from 1 to 4)
 		0,		// scaling_block_cycles (0=disable, any value above 0)
-		1200000,	// scaling_block_freq (all valid system frequencies)
+		1400000,	// scaling_block_freq (all valid system frequencies) // psndna88 N710x modification
 		10,		// scaling_block_threshold (0=disable, range from 1 to 100)
 		2,		// scaling_block_force_down (0=disable, range from 2 to any value)
 		75,		// smooth_up (range from 1 to 100)
@@ -227,7 +227,7 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		55,		// down_threshold_hotplug7
 		800000,		// down_threshold_hotplug_freq1
 		1000000,	// down_threshold_hotplug_freq2
-		1200000,	// down_threshold_hotplug_freq3
+		1400000,	// down_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// down_threshold_hotplug_freq4
 		0,		// down_threshold_hotplug_freq5
 		0,		// down_threshold_hotplug_freq6
@@ -276,9 +276,9 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		68,		// up_threshold_hotplug5
 		68,		// up_threshold_hotplug6
 		68,		// up_threshold_hotplug7
-		1000000,	// up_threshold_hotplug_freq1
-		1200000,	// up_threshold_hotplug_freq2
-		1400000,	// up_threshold_hotplug_freq3
+		1200000,	// up_threshold_hotplug_freq1 // psndna88 N710x modification
+		1400000,	// up_threshold_hotplug_freq2 // psndna88 N710x modification
+		1600000,	// up_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// up_threshold_hotplug_freq4
 		0,		// up_threshold_hotplug_freq5
 		0,		// up_threshold_hotplug_freq6
@@ -300,8 +300,8 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		55,		// down_threshold_hotplug6
 		55,		// down_threshold_hotplug7
 		800000,		// down_threshold_hotplug_freq1
-		1000000,	// down_threshold_hotplug_freq2
-		1200000,	// down_threshold_hotplug_freq3
+		1200000,	// down_threshold_hotplug_freq2 // psndna88 N710x modification
+		1400000,	// down_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// down_threshold_hotplug_freq4
 		0,		// down_threshold_hotplug_freq5
 		0,		// down_threshold_hotplug_freq6
@@ -350,9 +350,9 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		68,		// up_threshold_hotplug5
 		68,		// up_threshold_hotplug6
 		68,		// up_threshold_hotplug7
-		1000000,	// up_threshold_hotplug_freq1
-		1200000,	// up_threshold_hotplug_freq2
-		1400000,	// up_threshold_hotplug_freq3
+		1200000,	// up_threshold_hotplug_freq1 // psndna88 N710x modification
+		1400000,	// up_threshold_hotplug_freq2 // psndna88 N710x modification
+		1600000,	// up_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// up_threshold_hotplug_freq4
 		0,		// up_threshold_hotplug_freq5
 		0,		// up_threshold_hotplug_freq6
@@ -375,7 +375,7 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		55,		// down_threshold_hotplug7
 		600000,		// down_threshold_hotplug_freq1
 		800000,		// down_threshold_hotplug_freq2
-		1000000,	// down_threshold_hotplug_freq3
+		1200000,	// down_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// down_threshold_hotplug_freq4
 		0,		// down_threshold_hotplug_freq5
 		0,		// down_threshold_hotplug_freq6
@@ -426,7 +426,7 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		68,		// up_threshold_hotplug7
 		700000,		// up_threshold_hotplug_freq1
 		1000000,	// up_threshold_hotplug_freq2
-		1200000,	// up_threshold_hotplug_freq3
+		1400000,	// up_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// up_threshold_hotplug_freq4
 		0,		// up_threshold_hotplug_freq5
 		0,		// up_threshold_hotplug_freq6
@@ -449,7 +449,7 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		55,		// down_threshold_hotplug7
 		500000,		// down_threshold_hotplug_freq1
 		600000,		// down_threshold_hotplug_freq2
-		1100000,	// down_threshold_hotplug_freq3
+		1200000,	// down_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// down_threshold_hotplug_freq4
 		0,		// down_threshold_hotplug_freq5
 		0,		// down_threshold_hotplug_freq6
@@ -500,7 +500,7 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		68,		// up_threshold_hotplug7
 		500000,		// up_threshold_hotplug_freq1
 		1100000,	// up_threshold_hotplug_freq2
-		1200000,	// up_threshold_hotplug_freq3
+		1400000,	// up_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// up_threshold_hotplug_freq4
 		0,		// up_threshold_hotplug_freq5
 		0,		// up_threshold_hotplug_freq6
@@ -722,7 +722,7 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		68,		// up_threshold_hotplug7
 		400000,		// up_threshold_hotplug_freq1
 		800000,		// up_threshold_hotplug_freq2
-		1000000,	// up_threshold_hotplug_freq3
+		1200000,	// up_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// up_threshold_hotplug_freq4
 		0,		// up_threshold_hotplug_freq5
 		0,		// up_threshold_hotplug_freq6
@@ -796,7 +796,7 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		68,		// up_threshold_hotplug7
 		300000,		// up_threshold_hotplug_freq1
 		700000,		// up_threshold_hotplug_freq2
-		900000,		// up_threshold_hotplug_freq3
+		1000000,	// up_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// up_threshold_hotplug_freq4
 		0,		// up_threshold_hotplug_freq5
 		0,		// up_threshold_hotplug_freq6
@@ -819,7 +819,7 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		55,		// down_threshold_hotplug7
 		300000,		// down_threshold_hotplug_freq1
 		700000,		// down_threshold_hotplug_freq2
-		900000,		// down_threshold_hotplug_freq3
+		1000000,	// down_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// down_threshold_hotplug_freq4
 		0,		// down_threshold_hotplug_freq5
 		0,		// down_threshold_hotplug_freq6
@@ -870,7 +870,7 @@ struct zzmoove_profile zzmoove_profiles[] = {
 		68,		// up_threshold_hotplug7
 		400000,		// up_threshold_hotplug_freq1
 		800000,		// up_threshold_hotplug_freq2
-		1000000,	// up_threshold_hotplug_freq3
+		1200000,	// up_threshold_hotplug_freq3 // psndna88 N710x modification
 		0,		// up_threshold_hotplug_freq4
 		0,		// up_threshold_hotplug_freq5
 		0,		// up_threshold_hotplug_freq6
