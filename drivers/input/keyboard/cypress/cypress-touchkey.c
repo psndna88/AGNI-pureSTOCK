@@ -87,6 +87,7 @@ static int touchkey_keycode[] = { 0,
 };
 static const int touchkey_count = sizeof(touchkey_keycode) / sizeof(int);
 int touch_led_on_screen_touch = TOUCHKEY_LED_ENABLED; // Yank555.lu : Light up h/w key on touchscreen touch by default
+int touch_led_disabled = 0; // 1= force disable the touchkey backlight
 
 #if defined(TK_HAS_AUTOCAL)
 static u16 raw_data0;
@@ -1588,6 +1589,43 @@ static ssize_t set_touchkey_firm_status_show(struct device *dev,
 	return count;
 }
 
+static ssize_t touch_led_force_disable_show(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+    int ret;
+
+    ret = sprintf(buf, "%d\n", touch_led_disabled);
+    pr_info("[Touchkey] %s: touch_led_disabled=%d\n", __func__, touch_led_disabled);
+
+    return ret;
+}
+
+static ssize_t touch_led_force_disable_store(struct device *dev,
+        struct device_attribute *attr, const char *buf,
+        size_t size)
+{
+    struct touchkey_i2c *tkey_i2c = dev_get_drvdata(dev);
+	static const int ledCmd[] = {TK_CMD_LED_ON, TK_CMD_LED_OFF};
+    int data, ret;
+
+    ret = sscanf(buf, "%d\n", &data);
+    if (unlikely(ret != 1)) {
+        pr_err("[Touchkey] %s: err\n", __func__);
+        return -EINVAL;
+    }
+    pr_info("[Touchkey] %s: value=%d\n", __func__, data);
+    
+    if (data == 1) {
+        i2c_touchkey_write(tkey_i2c->client, (u8 *) &ledCmd[1], 1);
+        touchkey_led_status = TK_CMD_LED_OFF;
+    }
+    touch_led_disabled = data;
+
+    return size;
+}
+static DEVICE_ATTR(force_disable, S_IRUGO | S_IWUSR | S_IWGRP,
+        touch_led_force_disable_show, touch_led_force_disable_store);
+
 static DEVICE_ATTR(recommended_version, S_IRUGO | S_IWUSR | S_IWGRP,
 		   touch_version_read, touch_version_write);
 static DEVICE_ATTR(updated_version, S_IRUGO | S_IWUSR | S_IWGRP,
@@ -1679,6 +1717,7 @@ static struct attribute *touchkey_attributes[] = {
 	&dev_attr_autocal_enable.attr,
 	&dev_attr_autocal_stat.attr,
 #endif
+	&dev_attr_force_disable.attr,
 	NULL,
 };
 
