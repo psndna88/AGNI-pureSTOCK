@@ -763,6 +763,10 @@ repeat:
 	page = grab_cache_page_write_begin(mapping, index, flags);
 	if (!page)
 		return -ENOMEM;
+
+	/* to avoid latency during memory pressure */
+	unlock_page(page);
+
 	*pagep = page;
 	if (f2fs_has_inline_data(inode) && (pos + len) <= MAX_INLINE_DATA)
 		goto inline_data;
@@ -771,10 +775,18 @@ repeat:
 	err = f2fs_reserve_block(&dn, index);
 	f2fs_unlock_op(sbi);
 	if (err) {
-		f2fs_put_page(page, 1);
+		f2fs_put_page(page, 0);
 		return err;
 	}
 inline_data:
+	lock_page(page);
+	if (unlikely(page->mapping != mapping)) {
+		f2fs_put_page(page, 1);
+		goto repeat;
+	}
+
+	f2fs_wait_on_page_writeback(page, DATA);
+
 	if ((len == PAGE_CACHE_SIZE) || PageUptodate(page))
 		return 0;
 	if ((pos & PAGE_CACHE_MASK) >= i_size_read(inode)) {
