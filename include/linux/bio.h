@@ -138,6 +138,9 @@ static inline int bio_has_allocated_vec(struct bio *bio)
  * drivers should not use the __ version unless they _really_ want to
  * run through the entire bio and not just pending pieces
  */
+#define bio_for_each_segment_all(bvl, bio, i)				\
+	for (i = 0, bvl = (bio)->bi_io_vec; i < (bio)->bi_vcnt; i++, bvl++)
+
 #define __bio_for_each_segment(bvl, bio, i, start_idx)			\
 	for (bvl = bio_iovec_idx((bio), (start_idx)), i = (start_idx);	\
 	     i < (bio)->bi_vcnt;					\
@@ -220,6 +223,7 @@ extern void bio_free(struct bio *, struct bio_set *);
 extern void bio_endio(struct bio *, int);
 struct request_queue;
 extern int bio_phys_segments(struct request_queue *, struct bio *);
+extern int submit_bio_wait(int rw, struct bio *bio);
 
 extern void __bio_clone(struct bio *, struct bio *);
 extern struct bio *bio_clone(struct bio *, gfp_t);
