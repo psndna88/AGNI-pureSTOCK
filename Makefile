@@ -370,7 +370,12 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Wno-format-security \
 		   -fno-delete-null-pointer-checks \
 		   -mtune=cortex-a9 -mfpu=neon -munaligned-access \
-		   -ffast-math
+		   -ffast-math -D__ANDROID__ -s -pipe -Ofast -funsafe-math-optimizations -mvectorize-with-neon-quad \
+		   -fgcse-lm -fgcse-sm -fsched-spec-load -fforce-addr -fmodulo-sched -fmodulo-sched-allow-regmoves -fno-tree-vectorize  \
+		   -fno-tree-slp-vectorize -fno-defer-pop -fmerge-constants -fmerge-all-constants -fgcse-after-reload \
+	   	   -funsafe-loop-optimizations -fsingle-precision-constant -fomit-frame-pointer -finline-functions -funswitch-loops \
+		   -fpredictive-commoning -fno-schedule-insns2 -fivopts -ftree-loop-distribution -fgraphite-identity -floop-nest-optimize \
+		   -floop-interchange -floop-strip-mine -floop-block -floop-parallelize-all -Wno-unused
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
