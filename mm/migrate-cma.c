@@ -474,7 +474,7 @@ static int __migrate_page(struct address_space *mapping,
 }
 
 int migrate_page(struct address_space *mapping,
-		struct page *newpage, struct page *page, enum migrate_mode mode)
+		struct page *newpage, struct page *page)
 {
 	return __migrate_page(mapping, newpage, page, 0, 0);
 }
@@ -487,13 +487,13 @@ EXPORT_SYMBOL(migrate_page);
  * exist.
  */
 int buffer_migrate_page(struct address_space *mapping,
-		struct page *newpage, struct page *page, enum migrate_mode mode)
+		struct page *newpage, struct page *page)
 {
 	struct buffer_head *bh, *head;
 	int rc;
 
 	if (!page_has_buffers(page))
-		return migrate_page(mapping, newpage, page, mode);
+		return migrate_page(mapping, newpage, page);
 
 	head = page_buffers(page);
 
@@ -633,7 +633,7 @@ static int fallback_migrate_page(struct address_space *mapping,
  *  == 0 - success
  */
 static int move_to_new_page(struct page *newpage, struct page *page,
-					int remap_swapcache, enum migrate_mode mode,
+					int remap_swapcache, bool sync,
 					int pass, int tries)
 {
 	struct address_space *mapping;
@@ -667,10 +667,8 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 		 * Do not writeback pages if !sync and migratepage is
 		 * not pointing to migrate_page() which is nonblocking
 		 * (swapcache/tmpfs uses migratepage = migrate_page).
-		 * Yank555.lu :
-		 * --- changed in 3.0.39, !sync is assumed to by ASYNC
 		 */
-		if (PageDirty(page) && mode == MIGRATE_ASYNC &&
+		if (PageDirty(page) && !sync &&
 		    mapping->a_ops->migratepage != migrate_page) {
 			rc = -EBUSY;
 			if (rc) {
@@ -689,7 +687,7 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 			 * path for page migration.
 			 */
 			rc = mapping->a_ops->migratepage(mapping,
-							newpage, page, mode);
+							newpage, page);
 			if (rc) {
 				if (is_failed_page(page, pass, tries)) {
 					printk(KERN_ERR "%s[%d]: 3 ",
@@ -727,7 +725,7 @@ static int move_to_new_page(struct page *newpage, struct page *page,
  * to the newly allocated page in newpage.
  */
 static int unmap_and_move(new_page_t get_new_page, unsigned long private,
-			struct page *page, int force, bool offlining, enum migrate_mode mode,
+			struct page *page, int force, bool offlining, bool sync,
 			int pass, int tries)
 {
 	int rc = 0;
@@ -758,7 +756,7 @@ static int unmap_and_move(new_page_t get_new_page, unsigned long private,
 	 */
 
 	if (!trylock_page(page)) {
-		if (!force || mode == MIGRATE_ASYNC) {
+		if (!force || !sync) {
 			if (is_failed_page(page, pass, tries)) {
 				printk("%s[%d] 1 ", __func__, __LINE__);
 				dump_page(page);
@@ -821,10 +819,8 @@ static int unmap_and_move(new_page_t get_new_page, unsigned long private,
 		/*
 		 * For !sync, there is no point retrying as the retry loop
 		 * is expected to be too short for PageWriteback to be cleared
-		 * Yank555.lu :
-		 * --- changed in 3.0.39, !sync is assumed to by ASYNC
 		 */
-		if (mode == MIGRATE_ASYNC) {
+		if (!sync) {
 			rc = -EBUSY;
 			goto uncharge;
 		}
@@ -903,7 +899,7 @@ static int unmap_and_move(new_page_t get_new_page, unsigned long private,
 
 skip_unmap:
 	if (!page_mapped(page)) {
-		rc = move_to_new_page(newpage, page, remap_swapcache, mode,
+		rc = move_to_new_page(newpage, page, remap_swapcache, sync,
 					pass, tries);
 		if (rc) {
 			if (is_failed_page(page, pass, tries)) {
@@ -975,7 +971,7 @@ move_newpage:
  */
 static int unmap_and_move_huge_page(new_page_t get_new_page,
 				unsigned long private, struct page *hpage,
-				int force, bool offlining, enum migrate_mode mode)
+				int force, bool offlining, bool sync)
 {
 	int rc = 0;
 	int *result = NULL;
@@ -992,7 +988,7 @@ static int unmap_and_move_huge_page(new_page_t get_new_page,
 	 * --- changed in 3.0.39, !sync is assumed to by ASYNC
 	 */
 	if (!trylock_page(hpage)) {
-		if (!force || mode == MIGRATE_ASYNC)
+		if (!force || !sync)
 			goto out;
 		lock_page(hpage);
 	}
@@ -1003,7 +999,7 @@ static int unmap_and_move_huge_page(new_page_t get_new_page,
 	try_to_unmap(hpage, TTU_MIGRATION|TTU_IGNORE_MLOCK|TTU_IGNORE_ACCESS);
 
 	if (!page_mapped(hpage))
-		rc = move_to_new_page(new_hpage, hpage, 1, mode, 0, 0);
+		rc = move_to_new_page(new_hpage, hpage, 1, sync, 0, 0);
 
 	if (rc)
 		remove_migration_ptes(hpage, hpage);
@@ -1048,7 +1044,7 @@ struct page *migrate_pages_current = NULL;
  */
 int migrate_pages(struct list_head *from,
 		new_page_t get_new_page, unsigned long private, bool offlining,
-		enum migrate_mode mode, int tries)
+		bool sync, int tries)
 {
 	int retry = 1;
 	int nr_failed = 0;
@@ -1069,7 +1065,7 @@ int migrate_pages(struct list_head *from,
 
 			rc = unmap_and_move(get_new_page, private,
 						page, pass > 2, offlining,
-						mode, pass, tries);
+						sync, pass, tries);
 			if (rc)
 				failed_pages[tries][pass] = page;
 
@@ -1107,7 +1103,7 @@ out:
 
 int migrate_huge_pages(struct list_head *from,
 		new_page_t get_new_page, unsigned long private, bool offlining,
-		enum migrate_mode mode)
+		bool sync)
 {
 	int retry = 1;
 	int nr_failed = 0;
@@ -1124,7 +1120,7 @@ int migrate_huge_pages(struct list_head *from,
 
 			rc = unmap_and_move_huge_page(get_new_page,
 					private, page, pass > 2, offlining,
-					mode);
+					sync);
 
 			switch (rc) {
 			case -ENOMEM:
