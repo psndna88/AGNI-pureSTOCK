@@ -221,10 +221,11 @@ static int f2fs_set_acl(struct inode *inode, int type,
 	size_t size = 0;
 	int error;
 
-	if (!test_opt(sbi, POSIX_ACL))
-		return 0;
-	if (S_ISLNK(inode->i_mode))
-		return -EOPNOTSUPP;
+	if (acl) {
+		error = posix_acl_valid(acl);
+		if (error < 0)
+			return error;
+	}
 
 	switch (type) {
 	case ACL_TYPE_ACCESS:
