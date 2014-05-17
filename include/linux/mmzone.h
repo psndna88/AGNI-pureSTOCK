@@ -195,9 +195,9 @@ static inline int is_unevictable_lru(enum lru_list l)
 }
 
 /* Isolate inactive pages */
-#define ISOLATE_INACTIVE	((__force isolate_mode_t)0x1)
+// #define ISOLATE_INACTIVE	((__force isolate_mode_t)0x1)
 /* Isolate active pages */
-#define ISOLATE_ACTIVE		((__force isolate_mode_t)0x2)
+// #define ISOLATE_ACTIVE		((__force isolate_mode_t)0x2)
 /* Isolate clean file */
 #define ISOLATE_CLEAN		((__force isolate_mode_t)0x4)
 /* Isolate unmapped file */
