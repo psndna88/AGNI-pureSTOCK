@@ -7,7 +7,7 @@ export ARCH=arm
 
 if [ ! -f $KERNELDIR/.config ];
 then
-  make defconfig psn_n7105_v3.9.6_defconfig
+  make defconfig psn_n7105_v3.9.7_defconfig
 fi
 
 . $KERNELDIR/.config
