@@ -1318,39 +1318,39 @@ static int get_any_page(struct page *p, unsigned long pfn, int flags)
 
 static int soft_offline_huge_page(struct page *page, int flags)
 {
-        int ret;
-        unsigned long pfn = page_to_pfn(page);
-        struct page *hpage = compound_head(page);
-        LIST_HEAD(pagelist);
+	int ret;
+	unsigned long pfn = page_to_pfn(page);
+	struct page *hpage = compound_head(page);
+	LIST_HEAD(pagelist);
 
-        ret = get_any_page(page, pfn, flags);
-        if (ret < 0)
-                return ret;
-        if (ret == 0)
-                goto done;
+	ret = get_any_page(page, pfn, flags);
+	if (ret < 0)
+		return ret;
+	if (ret == 0)
+		goto done;
 
-        if (PageHWPoison(hpage)) {
-                put_page(hpage);
-                pr_debug("soft offline: %#lx hugepage already poisoned\n", pfn);
-                return -EBUSY;
-        }
+	if (PageHWPoison(hpage)) {
+		put_page(hpage);
+		pr_debug("soft offline: %#lx hugepage already poisoned\n", pfn);
+		return -EBUSY;
+	}
 
-        /* Keep page count to indicate a given hugepage is isolated. */
+	/* Keep page count to indicate a given hugepage is isolated. */
 
-        list_add(&hpage->lru, &pagelist);
-        ret = migrate_huge_pages(&pagelist, new_page, MPOL_MF_MOVE_ALL, false,
-                                MIGRATE_SYNC);
-        if (ret) {
-                struct page *page1, *page2;
-                list_for_each_entry_safe(page1, page2, &pagelist, lru)
-                        put_page(page1);
+	list_add(&hpage->lru, &pagelist);
+	ret = migrate_huge_pages(&pagelist, new_page, MPOL_MF_MOVE_ALL, 0,
+				true);
+	if (ret) {
+		struct page *page1, *page2;
+		list_for_each_entry_safe(page1, page2, &pagelist, lru)
+			put_page(page1);
 
-                pr_debug("soft offline: %#lx: migration failed %d, type %lx\n",
-                         pfn, ret, page->flags);
-                if (ret > 0)
-                        ret = -EIO;
-                return ret;
-        }
+		pr_debug("soft offline: %#lx: migration failed %d, type %lx\n",
+			 pfn, ret, page->flags);
+		if (ret > 0)
+			ret = -EIO;
+		return ret;
+	}
 done:
         if (!PageHWPoison(hpage))
                 atomic_long_add(1 << compound_trans_order(hpage), &mce_bad_pages);
@@ -1384,12 +1384,12 @@ done:
  */
 int soft_offline_page(struct page *page, int flags)
 {
-        int ret;
-        unsigned long pfn = page_to_pfn(page);
+	int ret;
+	unsigned long pfn = page_to_pfn(page);
         struct page *hpage = compound_trans_head(page);
 
-        if (PageHuge(page))
-                return soft_offline_huge_page(page, flags);
+	if (PageHuge(page))
+		return soft_offline_huge_page(page, flags);
         if (PageTransHuge(hpage)) {
                 if (PageAnon(hpage) && unlikely(split_huge_page(hpage))) {
                         pr_info("soft offline: %#lx: failed to split THP\n",
@@ -1398,89 +1398,89 @@ int soft_offline_page(struct page *page, int flags)
                 }
         }
 
-        ret = get_any_page(page, pfn, flags);
-        if (ret < 0)
-                return ret;
-        if (ret == 0)
-                goto done;
+	ret = get_any_page(page, pfn, flags);
+	if (ret < 0)
+		return ret;
+	if (ret == 0)
+		goto done;
 
-        /*
-         * Page cache page we can handle?
-         */
-        if (!PageLRU(page)) {
-                /*
-                 * Try to free it.
-                 */
-                put_page(page);
-                shake_page(page, 1);
+	/*
+	 * Page cache page we can handle?
+	 */
+	if (!PageLRU(page)) {
+		/*
+		 * Try to free it.
+		 */
+		put_page(page);
+		shake_page(page, 1);
 
-                /*
-                 * Did it turn free?
-                 */
-                ret = get_any_page(page, pfn, 0);
-                if (ret < 0)
-                        return ret;
-                if (ret == 0)
-                        goto done;
-        }
-        if (!PageLRU(page)) {
-                pr_info("soft_offline: %#lx: unknown non LRU page type %lx\n",
-                                pfn, page->flags);
-                return -EIO;
-        }
+		/*
+		 * Did it turn free?
+		 */
+		ret = get_any_page(page, pfn, 0);
+		if (ret < 0)
+			return ret;
+		if (ret == 0)
+			goto done;
+	}
+	if (!PageLRU(page)) {
+		pr_info("soft_offline: %#lx: unknown non LRU page type %lx\n",
+				pfn, page->flags);
+		return -EIO;
+	}
 
-        lock_page(page);
-        wait_on_page_writeback(page);
+	lock_page(page);
+	wait_on_page_writeback(page);
 
-        /*
-         * Synchronized using the page lock with memory_failure()
-         */
-        if (PageHWPoison(page)) {
-                unlock_page(page);
-                put_page(page);
-                pr_info("soft offline: %#lx page already poisoned\n", pfn);
-                return -EBUSY;
-        }
+	/*
+	 * Synchronized using the page lock with memory_failure()
+	 */
+	if (PageHWPoison(page)) {
+		unlock_page(page);
+		put_page(page);
+		pr_info("soft offline: %#lx page already poisoned\n", pfn);
+		return -EBUSY;
+	}
 
-        /*
-         * Try to invalidate first. This should work for
-         * non dirty unmapped page cache pages.
-         */
-        ret = invalidate_inode_page(page);
-        unlock_page(page);
-        /*
-         * RED-PEN would be better to keep it isolated here, but we
-         * would need to fix isolation locking first.
-         */
-        if (ret == 1) {
-                put_page(page);
-                ret = 0;
-                pr_info("soft_offline: %#lx: invalidated\n", pfn);
-                goto done;
-        }
+	/*
+	 * Try to invalidate first. This should work for
+	 * non dirty unmapped page cache pages.
+	 */
+	ret = invalidate_inode_page(page);
+	unlock_page(page);
+	/*
+	 * RED-PEN would be better to keep it isolated here, but we
+	 * would need to fix isolation locking first.
+	 */
+	if (ret == 1) {
+		put_page(page);
+		ret = 0;
+		pr_info("soft_offline: %#lx: invalidated\n", pfn);
+		goto done;
+	}
 
-        /*
-         * Simple invalidation didn't work.
-         * Try to migrate to a new page instead. migrate.c
-         * handles a large number of cases for us.
-         */
-        ret = isolate_lru_page(page);
-        /*
-         * Drop page reference which is came from get_any_page()
-         * successful isolate_lru_page() already took another one.
-         */
-        put_page(page);
-        if (!ret) {
-                LIST_HEAD(pagelist);
-                inc_zone_page_state(page, NR_ISOLATED_ANON +
-                                            page_is_file_cache(page));
-                list_add(&page->lru, &pagelist);
+	/*
+	 * Simple invalidation didn't work.
+	 * Try to migrate to a new page instead. migrate.c
+	 * handles a large number of cases for us.
+	 */
+	ret = isolate_lru_page(page);
+	/*
+	 * Drop page reference which is came from get_any_page()
+	 * successful isolate_lru_page() already took another one.
+	 */
+	put_page(page);
+	if (!ret) {
+		LIST_HEAD(pagelist);
+		inc_zone_page_state(page, NR_ISOLATED_ANON +
+					    page_is_file_cache(page));
+		list_add(&page->lru, &pagelist);
 #ifndef CONFIG_DMA_CMA
-                ret = migrate_pages(&pagelist, new_page, MPOL_MF_MOVE_ALL,
-                                                                false, MIGRATE_SYNC);
+		ret = migrate_pages(&pagelist, new_page, MPOL_MF_MOVE_ALL,
+								0, true);
 #else
-                ret = migrate_pages(&pagelist, new_page, MPOL_MF_MOVE_ALL,
-                                                                false, MIGRATE_SYNC, 0);
+		ret = migrate_pages(&pagelist, new_page, MPOL_MF_MOVE_ALL,
+								0, true, 0);
 #endif
                 if (ret) {
                         putback_lru_pages(&pagelist);
