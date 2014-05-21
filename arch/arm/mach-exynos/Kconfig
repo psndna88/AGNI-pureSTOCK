@@ -720,6 +720,10 @@ config COMPACTION_RETRY_DEBUG
 	  before and after compation retrial.
 	  This should be turned off later.
 
+config SEC_DUAL_MODEM_MODE
+	bool "sec dual modem mode"
+	default n
+
 # machine support
 
 menu "EXYNOS4 Machines"
@@ -1253,10 +1257,6 @@ config TARGET_TAB3_LTE8
 config GC1_00_BD
 	bool "Galaxy Camera common Board"
 
-config T0_00_BD
-	bool "T0 Revison 00 board"
-	default n
-
 config KONA_00_BD
 	bool "KONA note8 rev00 common Board"
 	default n
@@ -1325,9 +1325,10 @@ config IPCAM_01_BD
 config GC2PD_00_BD
 	bool "Galaxy Camera 2 common Board"
 
-config SF2_CAM_REV0
-        bool "SF2 Camera Rev 0"
+config MACH_SF2
+        bool "SF2 Camera Board"
 
+source "arch/arm/mach-exynos/Kconfig.slp"
 
 config WRITEBACK_ENABLED
 	bool "Samsung Writeback Enable"
@@ -2125,6 +2126,11 @@ config CPU_FREQ_TETHERING
 	depends on QC_MODEM
 	default n
 
+config USBIRQ_BALANCING_LTE_HIGHTP
+	bool "USBIRQ_BALANCING_LTE_HIGHTP"
+	depends on QC_MODEM
+	default n
+
 config MACH_KONA_SENSOR
 	bool "KONA Sensor Enable"
 	help
@@ -2142,6 +2148,16 @@ config MACH_GD2_SENSOR
 	  K330 / STM
 	  AK8963 / AKM
 	  CM36651 / CAPELLA
+
+config GC2PD_LTE
+	bool "GC2PD LTE model"
+	help
+	  Support GC2PD LTE
+
+config GC2PD_LTE_EUR_OPEN
+	bool "GC2PD LTE EUR model"
+	help
+	  Support GC2PD LTE for EUR
 
 config USER_RESET_DEBUG
 	bool "KOR reset reason debug feature in user version"

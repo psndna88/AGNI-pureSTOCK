@@ -86,6 +86,8 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
+#include <linux/cpufreq_slp.h>
+
 ATOMIC_NOTIFIER_HEAD(migration_notifier_head);
 
 /*
@@ -4355,6 +4357,7 @@ need_resched:
 		rq->curr = next;
 		++*switch_count;
 
+		slp_store_task_history(cpu, prev);
 
 		context_switch(rq, prev, next); /* unlocks the rq */
 		/*
