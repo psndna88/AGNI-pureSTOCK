@@ -142,15 +142,11 @@ obj-$(CONFIG_IR_REMOCON)	+= irda/
 obj-$(CONFIG_BARCODE_EMUL)	+= barcode_emul/
 obj-$(CONFIG_EXTCON)		+= extcon/
 # Secure OS Mobicore
-obj-$(CONFIG_MOBICORE_SUPPORT)	+= gud/
 obj-$(CONFIG_MOBICORE_DRIVER)	+= gud20/
 
 obj-$(CONFIG_IOMMU_SUPPORT)	+= iommu/
 
 obj-$(CONFIG_FELICA) += felica/
 
-ifeq (1, $(shell if [ -d ./drivers/exfat ]; then echo 1; fi))
-obj-y	+= exfat/
-endif
-
+#obj-$(CONFIG_J4FS)		+= j4fs/
 obj-$(CONFIG_ICE4_FPGA)		+= ice4_fpga/
