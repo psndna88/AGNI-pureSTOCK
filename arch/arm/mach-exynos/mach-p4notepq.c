@@ -163,6 +163,8 @@ struct s3cfb_extdsp_lcd {
 #include <linux/ir_remote_con_mc96.h>
 #endif
 
+#include <mach/board-bluetooth-bcm.h>
+
 extern int s6c1372_panel_gpio_init(void);
 
 /* cable state */
@@ -194,6 +196,9 @@ static struct s3c2410_uartcfg smdk4212_uartcfgs[] __initdata = {
 		.ucon		= SMDK4212_UCON_DEFAULT,
 		.ulcon		= SMDK4212_ULCON_DEFAULT,
 		.ufcon		= SMDK4212_UFCON_DEFAULT,
+#if defined(CONFIG_BT_BCM4334) || defined(CONFIG_BT_BCM4335)
+		.wake_peer	= bcm_bt_lpm_exit_lpm_locked,
+#endif
 	},
 	[1] = {
 		.hwport		= 1,
