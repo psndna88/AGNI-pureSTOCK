@@ -118,13 +118,12 @@ unsigned int lpcharge;
 #if (defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) || defined(CONFIG_MACH_TAB3)) && defined(CONFIG_QC_MODEM)
 static int battery_get_lpm_state(char *str)
 {
-	if (strncmp(str, "charger", 7) == 0)
-	lpcharge = 1;
+	get_option(&str, &lpcharge);
 	pr_info("%s: Low power charging mode: %d\n", __func__, lpcharge);
 
 	return lpcharge;
 }
-__setup("androidboot.mode=", battery_get_lpm_state);
+__setup("lpcharge=", battery_get_lpm_state);
 #endif
 
 static enum power_supply_property sec_battery_properties[] = {
@@ -1338,13 +1337,8 @@ static int sec_bat_get_charging_status(struct battery_data *battery)
 {
 	switch (battery->info.charging_source) {
 	case CHARGER_BATTERY:
-	return POWER_SUPPLY_STATUS_DISCHARGING;
 	case CHARGER_USB:
-	#if !defined(CONFIG_MACH_P4NOTE)
-	return POWER_SUPPLY_STATUS_DISCHARGING;
-	#endif
-	if(!lpcharge)
-	return POWER_SUPPLY_STATUS_DISCHARGING;
+		return POWER_SUPPLY_STATUS_DISCHARGING;
 	case CHARGER_AC:
 	case CHARGER_MISC:
 	case CHARGER_DOCK:
