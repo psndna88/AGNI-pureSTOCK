@@ -49,9 +49,26 @@ static ssize_t lcdtype_show(struct device *dev, struct device_attribute *attr, c
 
 static DEVICE_ATTR(lcd_type, 0664,
 	lcdtype_show, NULL);
+	
+	static ssize_t window_type_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	char temp[15];
+
+	sprintf(temp, "%x %x %x\n", 0x0, 0x0, 0x0);
+
+	strcat(buf, temp);
+	return strlen(buf);
+}
+
+static DEVICE_ATTR(window_type, 0444,
+	window_type_show, NULL);
+
 static int nt71391_power_on(struct lcd_info *lcd)
 {
 	int ret = 0;
+	struct lcd_platform_data *pd = NULL;
+	pd = lcd->lcd_pd;
 
 	dev_info(&lcd->ld->dev, "%s\n", __func__);
 
@@ -178,10 +195,11 @@ static int __init nt71391_probe(struct device *dev)
 	}
 
 	lcd->dev = dev;
+	lcd->connected = 1;
 	lcd->dsim = (struct dsim_global *)dev_get_drvdata(dev->parent);
 	lcd->power = FB_BLANK_UNBLANK;
 
-
+	mutex_init(&lcd->lock);
 	dev_set_drvdata(dev, lcd);
 
 	dev_info(dev, "lcd panel driver has been probed.\n");
@@ -193,6 +211,10 @@ static int __init nt71391_probe(struct device *dev)
 	ret = device_create_file(&lcd->ld->dev, &dev_attr_lcd_type);
 	if (ret < 0)
 		dev_err(&lcd->ld->dev, "failed to add sysfs entries\n");
+
+	ret = device_create_file(&lcd->ld->dev, &dev_attr_window_type);
+	if (ret < 0)
+		dev_err(&lcd->ld->dev, "failed to add window_type entries\n");
 
 	return  0;
 
