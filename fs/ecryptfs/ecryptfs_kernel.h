@@ -236,12 +236,8 @@ ecryptfs_get_key_payload_data(struct key *key)
 #define ECRYPTFS_TAG_70_DIGEST_SIZE MD5_DIGEST_SIZE
 #define ECRYPTFS_FEK_ENCRYPTED_FILENAME_PREFIX "ECRYPTFS_FEK_ENCRYPTED."
 #define ECRYPTFS_FEK_ENCRYPTED_FILENAME_PREFIX_SIZE 23
-/* apply less prefix for container
 #define ECRYPTFS_FNEK_ENCRYPTED_FILENAME_PREFIX "ECRYPTFS_FNEK_ENCRYPTED."
 #define ECRYPTFS_FNEK_ENCRYPTED_FILENAME_PREFIX_SIZE 24
-*/
-#define ECRYPTFS_FNEK_ENCRYPTED_FILENAME_PREFIX "EN."
-#define ECRYPTFS_FNEK_ENCRYPTED_FILENAME_PREFIX_SIZE 3
 #define ECRYPTFS_ENCRYPTED_DENTRY_NAME_LEN (18 + 1 + 4 + 1 + 32)
 
 struct ecryptfs_key_sig {
@@ -681,9 +677,10 @@ int ecryptfs_init_crypt_ctx(struct ecryptfs_crypt_stat *crypt_stat);
 int ecryptfs_write_inode_size_to_metadata(struct inode *ecryptfs_inode);
 int ecryptfs_encrypt_page(struct page *page);
 int ecryptfs_decrypt_page(struct page *page);
-int ecryptfs_write_metadata(struct dentry *ecryptfs_dentry);
+int ecryptfs_write_metadata(struct dentry *ecryptfs_dentry,
+			    struct inode *ecryptfs_inode);
 int ecryptfs_read_metadata(struct dentry *ecryptfs_dentry);
-int ecryptfs_new_file_context(struct dentry *ecryptfs_dentry);
+int ecryptfs_new_file_context(struct inode *ecryptfs_inode);
 void ecryptfs_write_crypt_stat_flags(char *page_virt,
 				     struct ecryptfs_crypt_stat *crypt_stat,
 				     size_t *written);

@@ -42,15 +42,6 @@
 #include <mach/mdm2.h>
 #include <linux/usb/android_composite.h>
 #endif
-#ifdef CONFIG_USBIRQ_BALANCING_LTE_HIGHTP
-#include <mach/mdm2.h>
-#include <linux/cpu.h>
-#include <linux/cpufreq_pegasusq.h>
-#define dev_put devput
-#include <linux/netdevice.h>
-#undef dev_put
-#include <mach/dev.h>
-#endif
 
 #define EXTERNAL_MODEM "external_modem"
 #define EHCI_REG_DUMP
@@ -99,12 +90,6 @@ struct mdm_hsic_pm_data {
 #ifdef CONFIG_CPU_FREQ_TETHERING
 	struct notifier_block netdev_notifier;
 	struct notifier_block usb_composite_notifier;
-#endif
-#ifdef CONFIG_USBIRQ_BALANCING_LTE_HIGHTP
-	struct notifier_block rndis_notifier;
-	struct notifier_block cpu_hotplug_notifier;
-	struct delayed_work hotplug_work;
-	bool is_rndis_running;
 #endif
 
 	bool block_request;
@@ -1088,123 +1073,7 @@ static int usb_composite_notifier_event(struct notifier_block *this,
 	return NOTIFY_DONE;
 }
 #endif
-#ifdef CONFIG_USBIRQ_BALANCING_LTE_HIGHTP
-int boost_busfreq(struct device *dev, int enable)
-{
-	int ret = 0;
-	unsigned int busfreq = 440220; // T0
-	struct device *busdev = NULL;
 
-	if (dev == NULL)
-		return -ENODEV;
-
-	busdev = dev_get("exynos-busfreq");
-	if (busdev == NULL)
-		return -ENODEV;
-
-	if (enable)
-		ret = dev_lock(busdev, dev, busfreq);
-	else
-		ret = dev_unlock(busdev, dev);
-
-	return ret;
-}
-
-// only for T0 USB HOST
-int clear_cpu0_from_usbhost_irq(int enable)
-{
-	unsigned int irq = IRQ_USB_HOST;
-//	unsigned int irq = IRQ_USB_HSOTG;
-
-	cpumask_var_t new_value;
-	int err = 0;
-
-	if (!irq_can_set_affinity(irq))
-		return -EIO;
-
-	if (!alloc_cpumask_var(&new_value, GFP_KERNEL))
-		return -ENOMEM;
-
-	cpumask_setall(new_value);
-
-	if (enable) {
-		cpumask_and(new_value, new_value, cpu_online_mask);
-		cpumask_clear_cpu(0, new_value);
-	}
-
-	if (cpumask_intersects(new_value, cpu_online_mask)) {
-		err = irq_set_affinity(irq, new_value);
-	}
-
-	free_cpumask:
-	free_cpumask_var(new_value);
-	return err;
-}
-
-static int link_pm_rndis_event(struct notifier_block *this,
-				unsigned long event, void *ptr)
-{
-	struct mdm_hsic_pm_data *pm_data =
-		container_of(this, struct mdm_hsic_pm_data, rndis_notifier);
-	struct mdm_hsic_pm_platform_data *mdm_pdata = pm_data->mdm_pdata;
-	struct net_device *dev = ptr;
-
-	if (!net_eq(dev_net(dev), &init_net))
-		return NOTIFY_DONE;
-
-	if (!strncmp(dev->name, "rndis", 5)) {
-		switch (event) {
-		case NETDEV_UP:
-			if (mdm_pdata && mdm_pdata->dev)
-				boost_busfreq(mdm_pdata->dev, 1);
-			cpufreq_pegasusq_min_cpu_lock(2);
-			clear_cpu0_from_usbhost_irq(1);
-			pm_data->is_rndis_running = true;
-			pr_info("%s: %s UP\n", __func__, dev->name);
-			break;
-		case NETDEV_DOWN:
-			pm_data->is_rndis_running = false;
-			clear_cpu0_from_usbhost_irq(0);
-			cpufreq_pegasusq_min_cpu_unlock();
-			if (mdm_pdata && mdm_pdata->dev)
-				boost_busfreq(mdm_pdata->dev, 0);
-			pr_info("%s: %s DOWN\n", __func__, dev->name);
-			break;
-		}
-	}
-	return NOTIFY_DONE;
-}
-
-static void hotplug_work_start(struct work_struct *work)
-{
-	struct mdm_hsic_pm_data *pm_data =
-			container_of(work, struct mdm_hsic_pm_data,
-					hotplug_work.work);
-	clear_cpu0_from_usbhost_irq(1);
-}
-
-static int hotplug_notify_callback(struct notifier_block *this,
-		unsigned long action, void *hcpu)
-{
-	struct mdm_hsic_pm_data *pm_data =
-		container_of(this, struct mdm_hsic_pm_data, cpu_hotplug_notifier);
-
-	if (pm_data->is_rndis_running) {
-		switch (action) {
-
-		case CPU_POST_DEAD:
-			if (1 == num_online_cpus())
-			{
-				cpufreq_pegasusq_min_cpu_lock(2);
-				queue_delayed_work(pm_data->wq, &pm_data->hotplug_work,
-					msecs_to_jiffies(100));
-			}
-			break;
-		}
-	}
-	return NOTIFY_OK;
-}
-#endif
 static int mdm_hsic_pm_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -1271,16 +1140,6 @@ static int mdm_hsic_pm_probe(struct platform_device *pdev)
 	pm_data->usb_composite_notifier.notifier_call =
 		usb_composite_notifier_event;
 	register_usb_composite_notifier(&pm_data->usb_composite_notifier);
-#endif
-#ifdef CONFIG_USBIRQ_BALANCING_LTE_HIGHTP
-	pm_data->is_rndis_running = false;
-	INIT_DELAYED_WORK(&pm_data->hotplug_work, hotplug_work_start);
-
-	pm_data->rndis_notifier.notifier_call = link_pm_rndis_event;
-	register_netdevice_notifier(&pm_data->rndis_notifier);
-
-	pm_data->cpu_hotplug_notifier.notifier_call = hotplug_notify_callback;
-	register_cpu_notifier(&pm_data->cpu_hotplug_notifier);
 #endif
 
 	wake_lock_init(&pm_data->l2_wake, WAKE_LOCK_SUSPEND, pm_data->name);

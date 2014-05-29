@@ -325,9 +325,6 @@ static void suspend(struct work_struct *work)
 		if (debug_mask & DEBUG_SUSPEND)
 			pr_info("suspend: pm_suspend returned with no event\n");
 		wake_lock_timeout(&unknown_wakeup, HZ / 2);
-	} else if (ret) {
-		pr_info("PM: suspend returned(%d)\n", ret);
-		wake_lock_timeout(&unknown_wakeup, HZ / 2);
 	}
 }
 static DECLARE_WORK(suspend_work, suspend);
