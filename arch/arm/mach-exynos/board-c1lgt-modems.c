@@ -380,11 +380,9 @@ static struct modem_data umts_modem_data = {
 	.gpio_slave_wakeup = GPIO_IPC_SLAVE_WAKEUP,
 	.gpio_host_active = GPIO_ACTIVE_STATE,
 	.gpio_host_wakeup = GPIO_IPC_HOST_WAKEUP,
-	.gpio_link_switch = GPIO_AP2CMC_INT2,
+	.gpio_hub_suspend = GPIO_IPC_HUB_SUSPEND,
 
-#ifdef CONFIG_EXYNOS4_CPUFREQ
-	.gpio_cpufreq_lock = GPIO_CMC_SPI_CLK_REQ,
-#endif
+	.gpio_link_switch = GPIO_AP2CMC_INT2,
 
 	.modem_net = UMTS_NETWORK,
 	.modem_type = SEC_CMC221,
@@ -448,14 +446,12 @@ static void config_umts_modem_gpio(void)
 	unsigned gpio_phone_active = umts_modem_data.gpio_phone_active;
 	unsigned gpio_active_state = umts_modem_data.gpio_host_active;
 	unsigned gpio_host_wakeup = umts_modem_data.gpio_host_wakeup;
+	unsigned gpio_hub_suspend = umts_modem_data.gpio_hub_suspend;
 	unsigned gpio_slave_wakeup = umts_modem_data.gpio_slave_wakeup;
 	unsigned gpio_ipc_int2ap = umts_modem_data.gpio_ipc_int2ap;
 	unsigned gpio_cp_status = umts_modem_data.gpio_cp_status;
 	unsigned gpio_cp_wakeup = umts_modem_data.gpio_cp_wakeup;
 	unsigned gpio_link_switch = umts_modem_data.gpio_link_switch;
-#ifdef CONFIG_EXYNOS4_CPUFREQ
-	unsigned gpio_cpufreq_lock = umts_modem_data.gpio_cpufreq_lock;
-#endif
 
 	if (gpio_cp_on) {
 		err = gpio_request(gpio_cp_on, "CMC_ON");
@@ -534,6 +530,16 @@ static void config_umts_modem_gpio(void)
 		}
 	}
 
+	if (gpio_hub_suspend) {
+		err = gpio_request(gpio_hub_suspend, "HUB_STATE_SUSPEND");
+		if (err) {
+			mif_err("ERR: fail to request gpio %s\n", "HUB_STATE_SUSPEND");
+		} else {
+			gpio_direction_output(gpio_hub_suspend, 0);
+			s3c_gpio_setpull(gpio_hub_suspend, S3C_GPIO_PULL_NONE);
+		}
+	}
+
 	if (gpio_ipc_int2ap) {
 		err = gpio_request(gpio_ipc_int2ap, "CMC_DPRAM_INT");
 		if (err) {
@@ -580,21 +586,6 @@ static void config_umts_modem_gpio(void)
 		}
 	}
 
-#ifdef CONFIG_EXYNOS4_CPUFREQ
-	if (gpio_cpufreq_lock) {
-		err = gpio_request(gpio_cpufreq_lock, "CPUFREQ_LOCK_CNT");
-		if (err) {
-			mif_err("ERR: fail to request gpio %s\n",
-					"CPUFREQ_LOCK_CNT\n");
-		} else {
-			gpio_direction_input(gpio_cpufreq_lock);
-			s3c_gpio_setpull(gpio_cpufreq_lock,
-					S3C_GPIO_PULL_NONE);
-		}
-		s5p_register_gpio_interrupt(gpio_cpufreq_lock);
-	}
-#endif
-
 	mif_info("done\n");
 }
 
@@ -611,17 +602,15 @@ static struct modemlink_pm_data umts_link_pm_data = {
 	.gpio_link_active    = GPIO_ACTIVE_STATE,
 	.gpio_link_hostwake  = GPIO_IPC_HOST_WAKEUP,
 	.gpio_link_slavewake = GPIO_IPC_SLAVE_WAKEUP,
+	.gpio_hub_suspend    = GPIO_IPC_HUB_SUSPEND,
 
 	.port_enable = host_port_enable,
 /*
 	.link_reconnect = umts_link_reconnect,
 */
-#ifdef CONFIG_EXYNOS4_CPUFREQ
 	.freqlock = ATOMIC_INIT(0),
-	.freq_dpramlock = ATOMIC_INIT(0),
 	.freq_lock = exynos_frequency_lock,
 	.freq_unlock = exynos_frequency_unlock,
-#endif
 
 	.autosuspend_delay_ms = 2000,
 };
@@ -633,24 +622,10 @@ static int exynos_frequency_lock(struct device *dev)
 {
 	unsigned int level, cpufreq = 600; /* 200 ~ 1400 */
 	unsigned int busfreq = 400200; /* 100100 ~ 400200 */
-	int ret = 0, lock_id;
-	atomic_t *freqlock;
+	int ret = 0;
 	struct device *busdev = dev_get("exynos-busfreq");
 
-	if (!strcmp(dev->bus->name, "usb")) {
-		lock_id = DVFS_LOCK_ID_USB_IF;
-		cpufreq = 600;
-		freqlock = &umts_link_pm_data.freqlock;
-	} else if (!strcmp(dev->bus->name, "platform")) { // for dpram lock
-		lock_id = DVFS_LOCK_ID_DPRAM_IF;
-		cpufreq = 800;
-		freqlock = &umts_link_pm_data.freq_dpramlock;
-	} else {
-		mif_err("ERR: Unkown unlock ID (%s)\n", dev->bus->name);
-		goto exit;
-	}
-	
-	if (atomic_read(freqlock) == 0) {
+	if (atomic_read(&umts_link_pm_data.freqlock) == 0) {
 		/* cpu frequency lock */
 		ret = exynos_cpufreq_get_level(cpufreq * 1000, &level);
 		if (ret < 0) {
@@ -659,7 +634,7 @@ static int exynos_frequency_lock(struct device *dev)
 			goto exit;
 		}
 
-		ret = exynos_cpufreq_lock(lock_id, level);
+		ret = exynos_cpufreq_lock(DVFS_LOCK_ID_USB_IF, level);
 		if (ret < 0) {
 			mif_err("ERR: exynos_cpufreq_lock fail: %d\n", ret);
 			goto exit;
@@ -681,8 +656,8 @@ static int exynos_frequency_lock(struct device *dev)
 		/* lock minimum number of cpu cores */
 		cpufreq_pegasusq_min_cpu_lock(2);
 
-		atomic_set(freqlock, 1);
-		mif_info("level=%d, cpufreq=%d MHz, busfreq=%06d\n",
+		atomic_set(&umts_link_pm_data.freqlock, 1);
+		mif_debug("level=%d, cpufreq=%d MHz, busfreq=%06d\n",
 				level, cpufreq, busfreq);
 	}
 exit:
@@ -691,24 +666,12 @@ exit:
 
 static int exynos_frequency_unlock(struct device *dev)
 {
-	int ret = 0, lock_id;
-	atomic_t *freqlock;
+	int ret = 0;
 	struct device *busdev = dev_get("exynos-busfreq");
 
-	if (!strcmp(dev->bus->name, "usb")) {
-		lock_id = DVFS_LOCK_ID_USB_IF;
-		freqlock = &umts_link_pm_data.freqlock;
-	} else if (!strcmp(dev->bus->name, "platform")) { // for dpram lock
-		lock_id = DVFS_LOCK_ID_DPRAM_IF;
-		freqlock = &umts_link_pm_data.freq_dpramlock;
-	} else {
-		mif_err("ERR: Unkown unlock ID (%s)\n", dev->bus->name);
-		goto exit;
-	}
-
-	if (atomic_read(freqlock) == 1) {
+	if (atomic_read(&umts_link_pm_data.freqlock) == 1) {
 		/* cpu frequency unlock */
-		exynos_cpufreq_lock_free(lock_id);
+		exynos_cpufreq_lock_free(DVFS_LOCK_ID_USB_IF);
 
 		/* bus frequency unlock */
 		ret = dev_unlock(busdev, dev);
@@ -720,8 +683,8 @@ static int exynos_frequency_unlock(struct device *dev)
 		/* unlock minimum number of cpu cores */
 		cpufreq_pegasusq_min_cpu_unlock();
 
-		atomic_set(freqlock, 0);
-		mif_info("success\n");
+		atomic_set(&umts_link_pm_data.freqlock, 0);
+		mif_debug("success\n");
 	}
 exit:
 	return ret;
