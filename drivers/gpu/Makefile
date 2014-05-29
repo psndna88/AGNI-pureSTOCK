@@ -1,7 +1,7 @@
 ifeq ($(CONFIG_VITHAR_HWVER_R0P0),y)
-obj-y			+= drm/ vga/ stub/ ion/
+obj-y			+= drm/ vga/ stub/ ion/ vithar/
 else
-obj-y			+= drm/ vga/ stub/ ion/
+obj-y			+= drm/ vga/ stub/ ion/ vithar_rev0/
 endif
 
 obj-y           += mali400/r3p2/mali/
