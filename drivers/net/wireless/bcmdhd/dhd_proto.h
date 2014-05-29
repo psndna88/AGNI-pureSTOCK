@@ -4,7 +4,7 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Copyright (C) 1999-2013, Broadcom Corporation
+ * Copyright (C) 1999-2012, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -24,7 +24,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_proto.h 426380 2013-09-27 18:42:29Z $
+ * $Id: dhd_proto.h 343390 2012-07-06 22:34:19Z $
  */
 
 #ifndef _dhd_proto_h_
@@ -54,6 +54,10 @@ extern int dhd_prot_init(dhd_pub_t *dhdp);
 
 /* Stop protocol: sync w/dongle state. */
 extern void dhd_prot_stop(dhd_pub_t *dhdp);
+#ifdef PROP_TXSTATUS
+extern int dhd_wlfc_init(dhd_pub_t *dhd);
+extern void dhd_wlfc_deinit(dhd_pub_t *dhd);
+#endif /* PROP_TXSTATUS */
 
 /* Add any protocol-specific data header.
  * Caller must reserve prot_hdrlen prepend space.
@@ -83,19 +87,15 @@ extern int dhd_ioctl(dhd_pub_t * dhd_pub, dhd_ioctl_t *ioc, void * buf, uint buf
 
 extern int dhd_preinit_ioctls(dhd_pub_t *dhd);
 
+#ifdef PROP_TXSTATUS
+extern int dhd_wlfc_enque_sendq(void* state, int prec, void* p);
+extern int dhd_wlfc_commit_packets(void* state, f_commitpkt_t fcommit, void* commit_ctx);
+extern void dhd_wlfc_cleanup(dhd_pub_t *dhd);
+#endif /* PROP_TXSTATUS */
+
 extern int dhd_process_pkt_reorder_info(dhd_pub_t *dhd, uchar *reorder_info_buf,
 	uint reorder_info_len, void **pkt, uint32 *free_buf_count);
 
-#ifdef BCMPCIE
-extern int dhd_prot_process_msgbuf(dhd_pub_t *dhd);
-extern int dhd_prot_process_ctrlbuf(dhd_pub_t * dhd);
-extern bool dhd_prot_dtohsplit(dhd_pub_t * dhd);
-extern int dhd_post_dummy_msg(dhd_pub_t *dhd);
-extern int dhdmsgbuf_lpbk_req(dhd_pub_t *dhd, uint len);
-extern void dhd_prot_rx_dataoffset(dhd_pub_t *dhd, uint32 offset);
-extern int dhd_prot_txdata(dhd_pub_t *dhd, void *p, uint8 ifidx);
-extern int dhdmsgbuf_dmaxfer_req(dhd_pub_t *dhd, uint len, uint srcdelay, uint destdelay);
-#endif
 
 /********************************
  * For version-string expansion *
@@ -104,6 +104,8 @@ extern int dhdmsgbuf_dmaxfer_req(dhd_pub_t *dhd, uint len, uint srcdelay, uint d
 #define DHD_PROTOCOL "bdc"
 #elif defined(CDC)
 #define DHD_PROTOCOL "cdc"
+#elif defined(RNDIS)
+#define DHD_PROTOCOL "rndis"
 #else
 #define DHD_PROTOCOL "unknown"
 #endif /* proto */

@@ -412,8 +412,6 @@ struct m9mo_state {
 
 	int af_running;
 
-	int pinch_running;	/* added for pinch-zoom */
-
 	int lenscap_bright_min;
 	int lenscap_bright_max;
 	int log_num;
@@ -584,8 +582,6 @@ struct m9mo_state {
 #define M9MO_FD_CTL					0x00
 #define M9MO_FD_SIZE				0x01
 #define M9MO_FD_MAX					0x02
-#define M9MO_FD_X_LOCATION			0x0E
-#define M9MO_FD_FRAME_WIDTH			0x12
 #define M9MO_FD_RED_EYE				0x55
 #define M9MO_FD_RED_DET_STATUS		0x56
 #define M9MO_FD_BLINK_FRAMENO		0x59
@@ -707,8 +703,6 @@ struct m9mo_state {
 #define M9MO_PARMSET_MODE	0x1
 #define M9MO_MONITOR_MODE	0x2
 #define M9MO_STILLCAP_MODE	0x3
-#define M9MO_S2S_MON_MODE	0x4
-#define M9MO_S2S_CAP_MODE	0x5
 
 /* Interrupt Factor */
 #define M9MO_INT_SOUND		(1 << 15)

@@ -62,12 +62,10 @@ CommImpl pvtcpImpl = {
    .operations = pvtcpOperations,
    .closeNtf = PvtcpCloseNtf,
    .closeNtfData = &pvtcpImpl,
-   .ntfCenterID = {
-      {
-         .d32[0] = 2U,    /* x86 host context (vmci, only). */
-         .d32[1] = 10000 /* Default, not yet reserved, resource (vmci, only). */
-      }
-   }
+   .ntfCenterID = {{
+      .d32[0] = 2U    /* x86 host context (vmci, only). */,
+      .d32[1] = 10000 /* Default, not yet reserved, resource (vmci, only). */
+   }}
 };
 
 
@@ -81,7 +79,7 @@ const char *pvtcpVersions[] = {
 };
 
 const unsigned int pvtcpVersionsSize =
-   (sizeof(pvtcpVersions) / sizeof(pvtcpVersions[0]));
+   (sizeof pvtcpVersions / sizeof pvtcpVersions[0]);
 
 
 /*
@@ -194,10 +192,10 @@ PvtcpStateFindIf(PvtcpState *state,
       if (netif->conf.family == conf->family) {
          if ((conf->family == PF_INET &&
               !memcmp(&netif->conf.addr.in, &conf->addr.in,
-                      sizeof(conf->addr.in))) ||
+                      sizeof conf->addr.in)) ||
              (conf->family == PF_INET6 &&
               !memcmp(&netif->conf.addr.in6, &conf->addr.in6,
-                      sizeof(conf->addr.in6)))) {
+                      sizeof conf->addr.in6))) {
             return netif;
          }
       }
@@ -241,7 +239,7 @@ PvtcpStateAddIf(CommChannel channel,
       goto out; /* Already configured. */
    }
 
-   netif = CommOS_Kmalloc(sizeof(*netif));
+   netif = CommOS_Kmalloc(sizeof *netif);
    if (!netif) {
       goto out;
    }
@@ -260,13 +258,14 @@ out:
 
 
 /**
- * @brief Removes all sockets associated with the given netif.
- * @param[in,out] netif interface to remove the socket from.
- * @sideeffect Closes sockets.
+ *  @brief Removes and potentially deallocates all sockets associated with the
+ *      given netif and deallocates the latter.
+ *  @param[in,out] netif netif to deallocate
+ *  @sideeffect Closes sockets, deallocates memory
  */
 
 static void
-IfReleaseSockets(PvtcpIf *netif)
+IfFree(PvtcpIf *netif)
 {
    PvtcpSock *pvsk;
    PvtcpSock *tmp;
@@ -276,21 +275,12 @@ IfReleaseSockets(PvtcpIf *netif)
          CommOS_ListDel(&pvsk->ifLink);
          PvtcpReleaseSocket(pvsk);
       }
-   }
-}
-
-/**
- *  @brief Deallocates the given net interface.
- *  @param[in,out] netif netif to deallocate
- *  @sideeffect Deallocates memory.
- */
-
-static void
-IfFree(PvtcpIf *netif)
-{
-   if (netif) {
-      CommOS_ListDel(&netif->stateLink);
-      CommOS_Kfree(netif);
+      if ((netif->conf.family != PVTCP_PF_UNBOUND) &&
+          (netif->conf.family != PVTCP_PF_DEATH_ROW) &&
+          (netif->conf.family != PVTCP_PF_LOOPBACK_INET4)) {
+         CommOS_ListDel(&netif->stateLink);
+         CommOS_Kfree(netif);
+      }
    }
 }
 
@@ -321,15 +311,9 @@ PvtcpStateRemoveIf(CommChannel channel,
    }
 
    state = CommSvc_GetState(channel);
-   if (state) {
-      netif = PvtcpStateFindIf(state, conf);
-      if (netif && netif->state == state) {
-         IfReleaseSockets(netif);
-         if ((netif->conf.family != PVTCP_PF_UNBOUND) &&
-             (netif->conf.family != PVTCP_PF_DEATH_ROW) &&
-             (netif->conf.family != PVTCP_PF_LOOPBACK_INET4)) {
-            IfFree(netif);
-         }
+   if (state && (netif = PvtcpStateFindIf(state, conf))) {
+      if (netif->state == state) {
+         IfFree(netif);
       }
    }
 
@@ -427,7 +411,7 @@ PvtcpStateAlloc(CommChannel channel)
 {
    PvtcpState *state;
 
-   state = CommOS_Kmalloc(sizeof(*state));
+   state = CommOS_Kmalloc(sizeof *state);
    if (state) {
       state->channel = channel;
       INIT_LIST_HEAD(&state->ifList);
@@ -477,12 +461,14 @@ PvtcpStateFree(void *arg)
 
    if (state) {
       CommOS_ListForEachSafe(&state->ifList, netif, tmp, stateLink) {
-         IfReleaseSockets(netif);
          IfFree(netif);
       }
-      IfReleaseSockets(&state->ifLoopbackInet4);
-      IfReleaseSockets(&state->ifUnbound);
-      IfReleaseSockets(&state->ifDeathRow);
+      /* coverity[address_free] */
+      IfFree(&state->ifLoopbackInet4);
+      /* coverity[address_free] */
+      IfFree(&state->ifUnbound);
+      /* coverity[address_free] */
+      IfFree(&state->ifDeathRow);
       CommOS_Kfree(state);
    }
 }
@@ -535,7 +521,7 @@ PvtcpCloseNtf(void *ntfData,
    CommImpl *impl = (CommImpl *)ntfData;
 
    pvtcpClientChannel = NULL;
-   CommOS_Log(("%s: Channel was reset!\n", __func__));
+   CommOS_Log(("%s: Channel was reset!\n", __FUNCTION__));
 
    /*
     * If the impl. block owner is NULL, we're pv client: we attempt to
@@ -543,12 +529,12 @@ PvtcpCloseNtf(void *ntfData,
     */
 
    if (impl && !impl->owner && !inBH) {
-      CommOS_Log(("%s: Attempting to re-initialize channel.\n", __func__));
+      CommOS_Log(("%s: Attempting to re-initialize channel.\n", __FUNCTION__));
       impl->openAtMillis = CommOS_GetCurrentMillis();
       impl->openTimeoutAtMillis =
          CommOS_GetCurrentMillis() + PVTCP_CHANNEL_OPEN_TIMEOUT;
       if (CommSvc_Alloc(transpArgs, impl, inBH, &pvtcpClientChannel)) {
-         CommOS_Log(("%s: Failed to initialize channel!\n", __func__));
+         CommOS_Log(("%s: Failed to initialize channel!\n", __FUNCTION__));
       }
    }
 }
@@ -568,32 +554,30 @@ PvtcpSockInit(PvtcpSock *pvsk,
    PvtcpState *state;
    int rc = -1;
 
-   if (pvsk && channel) {
-      state = CommSvc_GetState(channel);
-      if (state) {
-         /* Must _not_ zero out pvsk! */
-         CommOS_MutexInit(&pvsk->inLock);
-         CommOS_MutexInit(&pvsk->outLock);
-         CommOS_SpinlockInit(&pvsk->stateLock);
-         CommOS_ListInit(&pvsk->ifLink);
-         CommOS_InitWork(&pvsk->work, PvtcpProcessAIO);
-         pvsk->netif = NULL;
-         pvsk->state = state;
-         pvsk->stateID = state->id;
-         pvsk->channel = channel;
-         pvsk->peerSock = PVTCP_PEER_SOCK_NULL;
-         pvsk->peerSockSet = 0;
-         CommOS_WriteAtomic(&pvsk->deltaAckSize,
-                            (1 << PVTCP_SOCK_SMALL_ACK_ORDER));
-         CommOS_WriteAtomic(&pvsk->rcvdSize, 0);
-         CommOS_WriteAtomic(&pvsk->sentSize, 0);
-         CommOS_WriteAtomic(&pvsk->queueSize, 0);
-         CommOS_ListInit(&pvsk->queue);
-         pvsk->rpcReply = NULL;
-         pvsk->rpcStatus = 0;
-         pvsk->err = 0;
-         rc = 0;
-      }
+   if (pvsk && channel && (state = CommSvc_GetState(channel))) {
+      /* Must _not_ zero out pvsk! */
+
+      CommOS_MutexInit(&pvsk->inLock);
+      CommOS_MutexInit(&pvsk->outLock);
+      CommOS_SpinlockInit(&pvsk->stateLock);
+      CommOS_ListInit(&pvsk->ifLink);
+      CommOS_InitWork(&pvsk->work, PvtcpProcessAIO);
+      pvsk->netif = NULL;
+      pvsk->state = state;
+      pvsk->stateID = state->id;
+      pvsk->channel = channel;
+      pvsk->peerSock = PVTCP_PEER_SOCK_NULL;
+      pvsk->peerSockSet = 0;
+      CommOS_WriteAtomic(&pvsk->deltaAckSize,
+                         (1 << PVTCP_SOCK_SMALL_ACK_ORDER));
+      CommOS_WriteAtomic(&pvsk->rcvdSize, 0);
+      CommOS_WriteAtomic(&pvsk->sentSize, 0);
+      CommOS_WriteAtomic(&pvsk->queueSize, 0);
+      CommOS_ListInit(&pvsk->queue);
+      pvsk->rpcReply = NULL;
+      pvsk->rpcStatus = 0;
+      pvsk->err = 0;
+      rc = 0;
    }
    return rc;
 }

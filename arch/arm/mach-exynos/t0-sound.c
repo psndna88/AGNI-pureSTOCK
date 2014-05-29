@@ -576,8 +576,7 @@ void __init midas_sound_init(void)
 	pr_info("%s: system rev = %d\n", __func__, system_rev);
 #ifdef CONFIG_USE_ADC_DET
 #if defined(CONFIG_MACH_T0_USA_TMO) || defined(CONFIG_MACH_T0_USA_USCC) || \
-	defined(CONFIG_MACH_T0_USA_ATT) || defined(CONFIG_MACH_T0_USA_VZW) || \
-	defined(CONFIG_MACH_T0_USA_SPR)
+	defined(CONFIG_MACH_T0_USA_ATT)
 	if (system_rev >= 11)
 		t0_sound_pdata.use_jackdet_type = 1;
 #elif defined(CONFIG_MACH_ZEST) || defined(CONFIG_MACH_GD2)
