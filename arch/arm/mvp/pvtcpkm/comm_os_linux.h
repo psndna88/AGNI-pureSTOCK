@@ -30,6 +30,10 @@
 #include <linux/types.h>
 #include <linux/version.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+#error "Kernel versions lower than 2.6.20 are not supported"
+#endif
+
 #include <linux/kernel.h>
 #include <linux/workqueue.h>
 #include <linux/sched.h>
@@ -60,7 +64,7 @@ typedef struct module *CommOSModule;
 #define CommOSSpinlock_Define DEFINE_SPINLOCK
 
 
-#define COMM_OS_DOLOG(...) pr_info(__VA_ARGS__)
+#define COMM_OS_DOLOG(...) printk(KERN_INFO __VA_ARGS__)
 
 
 /**
@@ -68,7 +72,7 @@ typedef struct module *CommOSModule;
  */
 
 #if defined(COMM_OS_DEBUG)
-   #define CommOS_Debug(args) do { COMM_OS_DOLOG args ; } while (0)
+   #define CommOS_Debug(args) COMM_OS_DOLOG args
 #else
    #define CommOS_Debug(args)
 #endif
@@ -78,7 +82,7 @@ typedef struct module *CommOSModule;
  *  @brief Logs given arguments.
  */
 
-#define CommOS_Log(args) do { COMM_OS_DOLOG args ; } while (0)
+#define CommOS_Log(args) COMM_OS_DOLOG args
 
 
 /**
@@ -86,9 +90,11 @@ typedef struct module *CommOSModule;
  */
 
 #if defined(COMM_OS_TRACE)
-#define TRACE(ptr) \
-	CommOS_Debug(("%p:%s: at [%s:%d] with arg ptr [0x%p].\n", current, \
-		      __func__, __FILE__, __LINE__, (ptr)))
+#define TRACE(ptr)                                                       \
+   do {                                                                  \
+      CommOS_Debug(("%p:%s: at [%s:%d] with arg ptr [0x%p].\n", current, \
+      __FUNCTION__, __FILE__, __LINE__, (ptr)));                         \
+   } while (0)
 #else
 #define TRACE(ptr)
 #endif
@@ -102,9 +108,9 @@ typedef struct module *CommOSModule;
 
 static inline void
 CommOS_WriteAtomic(CommOSAtomic *atomic,
-		   int val)
+                   int val)
 {
-	atomic_set(atomic, val);
+   atomic_set(atomic, val);
 }
 
 
@@ -117,7 +123,7 @@ CommOS_WriteAtomic(CommOSAtomic *atomic,
 static inline int
 CommOS_ReadAtomic(CommOSAtomic *atomic)
 {
-	return atomic_read(atomic);
+   return atomic_read(atomic);
 }
 
 
@@ -130,9 +136,9 @@ CommOS_ReadAtomic(CommOSAtomic *atomic)
 
 static inline int
 CommOS_AddReturnAtomic(CommOSAtomic *atomic,
-		       int val)
+                       int val)
 {
-	return atomic_add_return(val, atomic);
+   return atomic_add_return(val, atomic);
 }
 
 
@@ -145,9 +151,9 @@ CommOS_AddReturnAtomic(CommOSAtomic *atomic,
 
 static inline int
 CommOS_SubReturnAtomic(CommOSAtomic *atomic,
-		       int val)
+                       int val)
 {
-	return atomic_sub_return(val, atomic);
+   return atomic_sub_return(val, atomic);
 }
 
 
@@ -159,7 +165,7 @@ CommOS_SubReturnAtomic(CommOSAtomic *atomic,
 static inline void
 CommOS_SpinlockInit(CommOSSpinlock *lock)
 {
-	spin_lock_init(lock);
+   spin_lock_init(lock);
 }
 
 
@@ -171,7 +177,7 @@ CommOS_SpinlockInit(CommOSSpinlock *lock)
 static inline void
 CommOS_SpinLockBH(CommOSSpinlock *lock)
 {
-	spin_lock_bh(lock);
+   spin_lock_bh(lock);
 }
 
 
@@ -184,7 +190,7 @@ CommOS_SpinLockBH(CommOSSpinlock *lock)
 static inline int
 CommOS_SpinTrylockBH(CommOSSpinlock *lock)
 {
-	return !spin_trylock_bh(lock);
+   return !spin_trylock_bh(lock);
 }
 
 
@@ -196,7 +202,7 @@ CommOS_SpinTrylockBH(CommOSSpinlock *lock)
 static inline void
 CommOS_SpinUnlockBH(CommOSSpinlock *lock)
 {
-	spin_unlock_bh(lock);
+   spin_unlock_bh(lock);
 }
 
 
@@ -208,7 +214,7 @@ CommOS_SpinUnlockBH(CommOSSpinlock *lock)
 static inline void
 CommOS_SpinLock(CommOSSpinlock *lock)
 {
-	spin_lock(lock);
+   spin_lock(lock);
 }
 
 
@@ -221,7 +227,7 @@ CommOS_SpinLock(CommOSSpinlock *lock)
 static inline int
 CommOS_SpinTrylock(CommOSSpinlock *lock)
 {
-	return !spin_trylock(lock);
+   return !spin_trylock(lock);
 }
 
 
@@ -233,7 +239,7 @@ CommOS_SpinTrylock(CommOSSpinlock *lock)
 static inline void
 CommOS_SpinUnlock(CommOSSpinlock *lock)
 {
-	spin_unlock(lock);
+   spin_unlock(lock);
 }
 
 
@@ -245,7 +251,7 @@ CommOS_SpinUnlock(CommOSSpinlock *lock)
 static inline void
 CommOS_MutexInit(CommOSMutex *mutex)
 {
-	mutex_init(mutex);
+   mutex_init(mutex);
 }
 
 
@@ -258,7 +264,7 @@ CommOS_MutexInit(CommOSMutex *mutex)
 static inline int
 CommOS_MutexLock(CommOSMutex *mutex)
 {
-	return mutex_lock_interruptible(mutex);
+   return mutex_lock_interruptible(mutex);
 }
 
 
@@ -270,7 +276,7 @@ CommOS_MutexLock(CommOSMutex *mutex)
 static inline void
 CommOS_MutexLockUninterruptible(CommOSMutex *mutex)
 {
-	mutex_lock(mutex);
+   mutex_lock(mutex);
 }
 
 
@@ -283,7 +289,7 @@ CommOS_MutexLockUninterruptible(CommOSMutex *mutex)
 static inline int
 CommOS_MutexTrylock(CommOSMutex *mutex)
 {
-	return !mutex_trylock(mutex);
+   return !mutex_trylock(mutex);
 }
 
 
@@ -295,7 +301,7 @@ CommOS_MutexTrylock(CommOSMutex *mutex)
 static inline void
 CommOS_MutexUnlock(CommOSMutex *mutex)
 {
-	mutex_unlock(mutex);
+   mutex_unlock(mutex);
 }
 
 
@@ -307,7 +313,7 @@ CommOS_MutexUnlock(CommOSMutex *mutex)
 static inline void
 CommOS_WaitQueueInit(CommOSWaitQueue *wq)
 {
-	init_waitqueue_head(wq);
+   init_waitqueue_head(wq);
 }
 
 
@@ -330,90 +336,89 @@ CommOS_WaitQueueInit(CommOSWaitQueue *wq)
 
 static inline int
 CommOS_DoWait(CommOSWaitQueue *wq,
-	      CommOSWaitConditionFunc cond,
-	      void *condArg1,
-	      void *condArg2,
-	      unsigned long long *timeoutMillis,
-	      int interruptible)
+              CommOSWaitConditionFunc cond,
+              void *condArg1,
+              void *condArg2,
+              unsigned long long *timeoutMillis,
+              int interruptible)
 {
-	int rc;
-	DEFINE_WAIT(wait);
-	long timeout;
+   int rc;
+   DEFINE_WAIT(wait);
+   long timeout;
 #if defined(COMM_OS_LINUX_WAIT_WORKAROUND)
-	long tmpTimeout;
-	long retTimeout;
-	const unsigned int interval = 50;
+   long tmpTimeout;
+   long retTimeout;
+   const unsigned int interval = 50;
 #endif
 
-	if (!timeoutMillis)
-		return -1;
-
-	rc = cond(condArg1, condArg2);
-	if (rc != 0)
-		return rc;
+   if (!timeoutMillis) {
+      return -1;
+   }
+   if ((rc = cond(condArg1, condArg2)) != 0) {
+      return rc;
+   }
 
 #if defined(COMM_OS_LINUX_WAIT_WORKAROUND)
-	timeout = msecs_to_jiffies(interval < *timeoutMillis ?
-				       interval : (unsigned int)*timeoutMillis);
-	retTimeout = msecs_to_jiffies((unsigned int)(*timeoutMillis));
+   timeout = msecs_to_jiffies(interval < *timeoutMillis ?
+                                 interval : (unsigned int)*timeoutMillis);
+   retTimeout = msecs_to_jiffies((unsigned int)(*timeoutMillis));
 
-	for (; retTimeout >= 0; ) {
-		prepare_to_wait(wq, &wait,
-		  (interruptible ? TASK_INTERRUPTIBLE : TASK_UNINTERRUPTIBLE));
-		rc = cond(condArg1, condArg2);
-		if (rc)
-			break;
+   for (; retTimeout >= 0; ) {
+      prepare_to_wait(wq, &wait,
+                      (interruptible?TASK_INTERRUPTIBLE:TASK_UNINTERRUPTIBLE));
+      if ((rc = cond(condArg1, condArg2))) {
+         break;
+      }
+      if (interruptible && signal_pending(current)) {
+         rc = -EINTR;
+         break;
+      }
+      if ((tmpTimeout = schedule_timeout(timeout))) {
+         retTimeout -= (timeout - tmpTimeout);
+      } else {
+         retTimeout -= timeout;
+      }
+      if (retTimeout < 0) {
+         retTimeout = 0;
+      }
+   }
+   finish_wait(wq, &wait);
+   if (rc == 0) {
+      rc = cond(condArg1, condArg2);
+      if (rc && (retTimeout == 0)) {
+         retTimeout = 1;
+      }
+   }
+   *timeoutMillis = (unsigned long long)jiffies_to_msecs(retTimeout);
+#else // !defined(COMM_OS_LINUX_WAIT_WORKAROUND)
+   timeout = msecs_to_jiffies((unsigned int)(*timeoutMillis));
 
-		if (interruptible && signal_pending(current)) {
-			rc = -EINTR;
-			break;
-		}
-		tmpTimeout = schedule_timeout(timeout);
-		if (tmpTimeout)
-			retTimeout -= (timeout - tmpTimeout);
-		else
-			retTimeout -= timeout;
-
-		if (retTimeout < 0)
-			retTimeout = 0;
-	}
-	finish_wait(wq, &wait);
-	if (rc == 0) {
-		rc = cond(condArg1, condArg2);
-		if (rc && (retTimeout == 0))
-			retTimeout = 1;
-	}
-	*timeoutMillis = (unsigned long long)jiffies_to_msecs(retTimeout);
-#else /* !defined(COMM_OS_LINUX_WAIT_WORKAROUND) */
-	timeout = msecs_to_jiffies((unsigned int)(*timeoutMillis));
-
-	for (;;) {
-		prepare_to_wait(wq, &wait,
-		  (interruptible ? TASK_INTERRUPTIBLE : TASK_UNINTERRUPTIBLE));
-		rc = cond(condArg1, condArg2);
-		if (rc != 0)
-			break;
-
-		if (interruptible && signal_pending(current)) {
-			rc = -EINTR;
-			break;
-		}
-		timeout = schedule_timeout(timeout);
-		if (timeout == 0) {
-			rc = 0;
-			break;
-		}
-	}
-	finish_wait(wq, &wait);
-	if (rc == 0) {
-		rc = cond(condArg1, condArg2);
-		if (rc && (timeout == 0))
-			timeout = 1;
-	}
-	*timeoutMillis = (unsigned long long)jiffies_to_msecs(timeout);
+   for (;;) {
+      prepare_to_wait(wq, &wait,
+                      (interruptible?TASK_INTERRUPTIBLE:TASK_UNINTERRUPTIBLE));
+      if ((rc = cond(condArg1, condArg2)) != 0) {
+         break;
+      }
+      if (interruptible && signal_pending(current)) {
+         rc = -EINTR;
+         break;
+      }
+      if ((timeout = schedule_timeout(timeout)) == 0) {
+         rc = 0;
+         break;
+      }
+   }
+   finish_wait(wq, &wait);
+   if (rc == 0) {
+      rc = cond(condArg1, condArg2);
+      if (rc && (timeout == 0)) {
+         timeout = 1;
+      }
+   }
+   *timeoutMillis = (unsigned long long)jiffies_to_msecs(timeout);
 #endif
 
-	return rc;
+   return rc;
 }
 
 
@@ -435,12 +440,12 @@ CommOS_DoWait(CommOSWaitQueue *wq,
 
 static inline int
 CommOS_Wait(CommOSWaitQueue *wq,
-	    CommOSWaitConditionFunc cond,
-	    void *condArg1,
-	    void *condArg2,
-	    unsigned long long *timeoutMillis)
+            CommOSWaitConditionFunc cond,
+            void *condArg1,
+            void *condArg2,
+            unsigned long long *timeoutMillis)
 {
-	return CommOS_DoWait(wq, cond, condArg1, condArg2, timeoutMillis, 1);
+   return CommOS_DoWait(wq, cond, condArg1, condArg2, timeoutMillis, 1);
 }
 
 
@@ -461,12 +466,12 @@ CommOS_Wait(CommOSWaitQueue *wq,
 
 static inline int
 CommOS_WaitUninterruptible(CommOSWaitQueue *wq,
-			   CommOSWaitConditionFunc cond,
-			   void *condArg1,
-			   void *condArg2,
-			   unsigned long long *timeoutMillis)
+                           CommOSWaitConditionFunc cond,
+                           void *condArg1,
+                           void *condArg2,
+                           unsigned long long *timeoutMillis)
 {
-	return CommOS_DoWait(wq, cond, condArg1, condArg2, timeoutMillis, 0);
+   return CommOS_DoWait(wq, cond, condArg1, condArg2, timeoutMillis, 0);
 }
 
 
@@ -478,7 +483,7 @@ CommOS_WaitUninterruptible(CommOSWaitQueue *wq,
 static inline void
 CommOS_WakeUp(CommOSWaitQueue *wq)
 {
-	wake_up(wq);
+   wake_up(wq);
 }
 
 
@@ -491,7 +496,7 @@ CommOS_WakeUp(CommOSWaitQueue *wq)
 static inline void *
 CommOS_KmallocNoSleep(unsigned int size)
 {
-	return kmalloc(size, GFP_ATOMIC);
+   return kmalloc(size, GFP_ATOMIC);
 }
 
 
@@ -504,7 +509,7 @@ CommOS_KmallocNoSleep(unsigned int size)
 static inline void *
 CommOS_Kmalloc(unsigned int size)
 {
-	return kmalloc(size, GFP_KERNEL);
+   return kmalloc(size, GFP_KERNEL);
 }
 
 
@@ -516,7 +521,9 @@ CommOS_Kmalloc(unsigned int size)
 static inline void
 CommOS_Kfree(void *obj)
 {
-	kfree(obj);
+   if (obj) {
+      kfree(obj);
+   }
 }
 
 
@@ -527,7 +534,7 @@ CommOS_Kfree(void *obj)
 static inline void
 CommOS_Yield(void)
 {
-	cond_resched();
+   cond_resched();
 }
 
 
@@ -539,7 +546,7 @@ CommOS_Yield(void)
 static inline unsigned long long
 CommOS_GetCurrentMillis(void)
 {
-	return (unsigned long long)jiffies_to_msecs(jiffies);
+   return (unsigned long long)jiffies_to_msecs(jiffies);
 }
 
 
@@ -551,7 +558,7 @@ CommOS_GetCurrentMillis(void)
 static inline void
 CommOS_ListInit(CommOSList *list)
 {
-	INIT_LIST_HEAD(list);
+   INIT_LIST_HEAD(list);
 }
 
 
@@ -587,11 +594,11 @@ CommOS_ListInit(CommOSList *list)
  *  @param elem element to delete.
  */
 
-#define CommOS_ListDel(elem)		\
-	do {				\
-		list_del((elem));	\
-		INIT_LIST_HEAD((elem));	\
-	} while (0)
+#define CommOS_ListDel(elem)  \
+   do {                       \
+      list_del((elem));       \
+      INIT_LIST_HEAD((elem)); \
+   } while (0)
 
 
 /**
@@ -602,7 +609,7 @@ CommOS_ListInit(CommOSList *list)
  */
 
 #define CommOS_ListForEach(list, item, itemListFieldName) \
-	list_for_each_entry((item), (list), itemListFieldName)
+   list_for_each_entry((item), (list), itemListFieldName)
 
 
 /**
@@ -614,7 +621,7 @@ CommOS_ListInit(CommOSList *list)
  */
 
 #define CommOS_ListForEachSafe(list, item, tmpItem, itemListFieldName) \
-	list_for_each_entry_safe((item), (tmpItem), (list), itemListFieldName)
+   list_for_each_entry_safe((item), (tmpItem), (list), itemListFieldName)
 
 
 /**
@@ -643,7 +650,7 @@ CommOS_ListInit(CommOSList *list)
 static inline CommOSModule
 CommOS_ModuleSelf(void)
 {
-	return THIS_MODULE;
+   return THIS_MODULE;
 }
 
 
@@ -656,16 +663,17 @@ CommOS_ModuleSelf(void)
 static inline int
 CommOS_ModuleGet(CommOSModule module)
 {
-	int rc = 0;
+   int rc = 0;
 
-	if (!module)
-		goto out;
-
-	if (!try_module_get(module))
-		rc = -1;
+   if (!module) {
+      goto out;
+   }
+   if (!try_module_get(module)) {
+      rc = -1;
+   }
 
 out:
-	return rc;
+   return rc;
 }
 
 
@@ -677,8 +685,9 @@ out:
 static inline void
 CommOS_ModulePut(CommOSModule module)
 {
-	if (module)
-		module_put(module);
+   if (module) {
+      module_put(module);
+   }
 }
 
 

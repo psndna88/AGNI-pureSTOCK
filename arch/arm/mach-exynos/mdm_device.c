@@ -225,17 +225,6 @@ static int __init init_mdm_modem(void)
 		return ret;
 	}
 #endif
-#if defined(CONFIG_MACH_P4NOTE) && defined(CONFIG_QC_MODEM) \
-	&& defined(CONFIG_SIM_DETECT)
-	mdm_platform_data.sim_polarity = 0;
-#endif
-#if defined(CONFIG_MACH_KONALTE_USA_ATT) && defined(CONFIG_QC_MODEM) \
-        && defined(CONFIG_SIM_DETECT)
-	if (system_rev != 9 && system_rev >= 1)
-		mdm_platform_data.sim_polarity = 0;
-	else
-		mdm_platform_data.sim_polarity = 1;
-#endif
 	mdm_device.dev.platform_data = &mdm_platform_data;
 	ret = platform_device_register(&mdm_device);
 	if (ret < 0) {

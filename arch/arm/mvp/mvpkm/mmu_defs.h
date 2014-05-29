@@ -100,8 +100,7 @@
  * @{
  */
 #define ARM_L1D_PTR_INDX(l1dp) MVP_BITS((uint32)(l1dp), 2, ARM_L1PT_ORDER - 1)
-#define ARM_L2D_PTR_INDX(l2dp)	\
-	MVP_BITS((uint32)(l2dp), 2, ARM_L2PT_COARSE_ORDER - 1)
+#define ARM_L2D_PTR_INDX(l2dp) MVP_BITS((uint32)(l2dp), 2, ARM_L2PT_COARSE_ORDER - 1)
 /*@}*/
 
 /**
@@ -121,10 +120,8 @@
  * @name L1D entry base <-> either MA or MA of a second-level table.
  * @{
  */
-#define ARM_L1D_SUPERSECTION_BASE_ADDR(base)	\
-	((base) << ARM_L1D_SUPERSECTION_ORDER)
-#define ARM_L1D_SUPERSECTION_ADDR_BASE(addr)	\
-	((addr) >> ARM_L1D_SUPERSECTION_ORDER)
+#define ARM_L1D_SUPERSECTION_BASE_ADDR(base) ((base) << ARM_L1D_SUPERSECTION_ORDER)
+#define ARM_L1D_SUPERSECTION_ADDR_BASE(addr) ((addr) >> ARM_L1D_SUPERSECTION_ORDER)
 #define ARM_L1D_SECTION_BASE_ADDR(base) ((base) << ARM_L1D_SECTION_ORDER)
 #define ARM_L1D_SECTION_ADDR_BASE(addr) ((addr) >> ARM_L1D_SECTION_ORDER)
 #define ARM_L1D_COARSE_BASE_ADDR(base)  ((base) << ARM_L2PT_COARSE_ORDER)
@@ -209,8 +206,8 @@
 #define ARM_DOMAIN_MANAGER     3
 /*@}*/
 
-#define ARM_DOMAIN_INDEX(dacr, dom)    MVP_EXTRACT_FIELD((dacr), 2*(dom), 2)
-#define ARM_DOMAIN_ACCESS(dom, access) ((access) << (2*(dom)))
+#define ARM_DOMAIN_INDEX(dacr,dom)    MVP_EXTRACT_FIELD((dacr), 2*(dom), 2)
+#define ARM_DOMAIN_ACCESS(dom,access) ((access) << (2*(dom)))
 
 /*
  * Cache-related definitions.
@@ -218,5 +215,5 @@
 #define ARM_CACHE_LEVELS_MAX    8
 #define ARM_CACHE_LINE_SIZE_MAX 2048
 
-#endif /* _MMU_DEFS_H_ */
+#endif /// _MMU_DEFS_H_
 

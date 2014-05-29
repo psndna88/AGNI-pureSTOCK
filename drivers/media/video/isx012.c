@@ -2365,10 +2365,7 @@ static int isx012_check_wait_af_complete(struct v4l2_subdev *sd, bool cancel)
 
 static void isx012_af_worker(struct work_struct *work)
 {
-	struct isx012_state *state = container_of(work, \
-			struct isx012_state, af_work);
-
-	isx012_start_af(&state->sd);
+	isx012_start_af(&TO_STATE(work, af_work)->sd);
 }
 
 /* PX: Set focus mode */
