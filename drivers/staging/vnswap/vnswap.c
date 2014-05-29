@@ -302,8 +302,7 @@ close_file:
 	filp_close(backing_storage_file, NULL);
 
 error:
-	if (vnswap_device)
-		vnswap_device->init_success |= VNSWAP_INIT_BACKING_STORAGE_FAIL;
+	vnswap_device->init_success |= VNSWAP_INIT_BACKING_STORAGE_FAIL;
 	return ret;
 }
 
@@ -1057,9 +1056,8 @@ out_free_queue:
 
 void destroy_device(struct vnswap *vnswap)
 {
-	if (vnswap->disk)
-		sysfs_remove_group(&disk_to_dev(vnswap->disk)->kobj,
-			&vnswap_disk_attr_group);
+	sysfs_remove_group(&disk_to_dev(vnswap->disk)->kobj,
+		&vnswap_disk_attr_group);
 
 	if (vnswap->disk) {
 		del_gendisk(vnswap->disk);

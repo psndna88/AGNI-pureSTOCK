@@ -36,13 +36,13 @@
 /**
  * @brief Monitor Timer structure
  */
-struct MonTimer {
-	struct MvpkmVM *vm;         /**< Associated vm */
-	struct hrtimer  timer;      /**< Linux timer */
-};
+typedef struct {
+   struct MvpkmVM *vm;         ///< Associated vm
+   struct hrtimer  timer;      ///< Linux timer
+} MonTimer;
 
 void MonitorTimer_Setup(struct MvpkmVM *vm);
-void MonitorTimer_Request(struct MonTimer *monTimer, uint64 when64);
+void MonitorTimer_Request(MonTimer *monTimer, uint64 when64);
 
 #endif
 
