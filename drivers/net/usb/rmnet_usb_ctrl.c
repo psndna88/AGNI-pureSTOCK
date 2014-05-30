@@ -622,7 +622,7 @@ static int rmnet_usb_ctrl_write(struct rmnet_ctrl_dev *dev, char *buf,
 	udev = interface_to_usbdev(dev->intf);
 
 #if defined (CONFIG_TARGET_LOCALE_USA) && defined (CONFIG_MACH_T0_USA_VZW)
-	/* if (sec_debug_level.uint_val != 0) { */
+	if (sec_debug_level.uint_val != 0) {
 		spin_lock_irqsave(&dev->rx_lock, flag);
 
 		last_busy = ACCESS_ONCE(udev->dev.power.last_busy);
@@ -639,10 +639,10 @@ static int rmnet_usb_ctrl_write(struct rmnet_ctrl_dev *dev, char *buf,
 				dev_err(dev->devicep, "done\n");
 			else
 				dev_err(dev->devicep, "failed. usage_count : %d\n",
-						atomic_read(&udev->dev.power.usage_count));
+							atomic_read(&udev->dev.power.usage_count));
 		}
 		spin_unlock_irqrestore(&dev->rx_lock, flag);
-	/* } */
+	}
 #endif
 
 	usb_mark_last_busy(udev);
