@@ -1,12 +1,12 @@
 ################################################################################
-HOW TO BUILD KERNEL FOR GT-N7100_SWA
+HOW TO BUILD KERNEL FOR GT-N7100_ALL
 
 1. How to Build
 	- get Toolchain
-	download and install arm-eabi-4.4.3 toolchain for ARM EABI.
+	download and install arm-2010q1 toolchain for ARM EABI.
 	Extract kernel source and move into the top directory.
 
-	$ export CROSS_COMPILE=/opt/toolchains/arm-eabi-4.4.3/bin/arm-eabi-
+	$ export CROSS_COMPILE=/opt/toolchains/arm-2010q1/bin/arm-none-linux-gnueabi-
 	$ make t0_04_defconfig
 	$ make
 	
@@ -20,5 +20,5 @@ HOW TO BUILD KERNEL FOR GT-N7100_SWA
 4. How to make .tar binary for downloading into target.
 	- change current directory to Kernel/arch/arm/boot
 	- type following command
-	$ tar cvf GT-N7100_SWA.tar zImage
+	$ tar cvf GT-N7100_ALL.tar zImage
 ################################################################################

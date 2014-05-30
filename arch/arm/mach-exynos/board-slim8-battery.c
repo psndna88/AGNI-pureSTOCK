@@ -83,12 +83,13 @@ static bool sec_chg_gpio_init(void)	{ return true; }
 
 static int battery_get_lpm_state(char *str)
 {
-	get_option(&str, &lpcharge);
+	if (strncmp(str, "charger", 7) == 0)
+	lpcharge = 1;
 	pr_info("%s: Low power charging mode: %d\n", __func__, lpcharge);
 
 	return lpcharge;
 }
-__setup("lpcharge=", battery_get_lpm_state);
+__setup("androidboot.mode=", battery_get_lpm_state);
 
 static bool sec_bat_is_lpm(void)
 {
