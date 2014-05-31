@@ -720,6 +720,10 @@ config COMPACTION_RETRY_DEBUG
 	  before and after compation retrial.
 	  This should be turned off later.
 
+config SEC_DUAL_MODEM_MODE
+	bool "sec dual modem mode"
+	default n
+
 # machine support
 
 menu "EXYNOS4 Machines"
@@ -1253,10 +1257,6 @@ config TARGET_TAB3_LTE8
 config GC1_00_BD
 	bool "Galaxy Camera common Board"
 
-config T0_00_BD
-	bool "T0 Revison 00 board"
-	default n
-
 config KONA_00_BD
 	bool "KONA note8 rev00 common Board"
 	default n
@@ -1324,6 +1324,11 @@ config IPCAM_01_BD
 
 config GC2PD_00_BD
 	bool "Galaxy Camera 2 common Board"
+
+config MACH_SF2
+        bool "SF2 Camera Board"
+
+source "arch/arm/mach-exynos/Kconfig.slp"
 
 config WRITEBACK_ENABLED
 	bool "Samsung Writeback Enable"
@@ -1819,6 +1824,10 @@ endif
 if SEC_MODEM
 comment "Samsung Modem Feature"
 
+config LTE_VIA_SWITCH
+	bool
+	default n
+
 choice
 	prompt "SVNET2 version"
 	default SEC_MODEM_PRIMITIVE
@@ -2121,6 +2130,11 @@ config CPU_FREQ_TETHERING
 	depends on QC_MODEM
 	default n
 
+config USBIRQ_BALANCING_LTE_HIGHTP
+	bool "USBIRQ_BALANCING_LTE_HIGHTP"
+	depends on QC_MODEM
+	default n
+
 config MACH_KONA_SENSOR
 	bool "KONA Sensor Enable"
 	help
@@ -2142,6 +2156,30 @@ config MACH_GD2_SENSOR
 config TDSCDMA_MODEM_SPRD8803
 	bool "Samsung M0-TD MODEM SPRD8803"
 	default n
+
+config GC2PD_LTE
+	bool "GC2PD LTE model"
+	help
+	  Support GC2PD LTE
+
+config GC2PD_LTE_EUR_OPEN
+	bool "GC2PD LTE EUR model"
+	help
+	  Support GC2PD LTE for EUR
+
+config USER_RESET_DEBUG
+	bool "KOR reset reason debug feature in user version"
+	default n
+	help
+	  This option enables debugging log for B10 project.
+	  This option provides reset history log in user version.
+	  This option enable proc/reset_reason support
+	  It's only support KOR Model
+
+config PM_DEBUG_WAKEUP_RESET
+	bool "Log the Power Management debug information"
+	help
+	  This configuratoin is only for debugging the PM interrupt issue.
 
 config ABB_CONTROL
 	bool "Adaptive body bias control"
