@@ -127,7 +127,6 @@ enum m9mo_prev_frmsize {
 	M9MO_PREVIEW_VGA_DUAL,
 	M9MO_PREVIEW_QVGA_DUAL,
 	M9MO_PREVIEW_1440_1080,
-	M9MO_PREVIEW_FACTORY_TILT,
 };
 
 enum m9mo_cap_frmsize {

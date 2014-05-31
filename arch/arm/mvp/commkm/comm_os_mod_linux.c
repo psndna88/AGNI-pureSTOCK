@@ -33,7 +33,10 @@
 /* Module parameters -- passed as one 'name=value'-list string. */
 
 static char modParams[256];
-module_param_string(COMM_OS_MOD_SHORT_NAME, modParams, sizeof(modParams), 0644);
+module_param_string(COMM_OS_MOD_SHORT_NAME, modParams, sizeof modParams, 0644);
+
+extern struct mutex modules_lock;
+extern int (*commOSModStart)(void);
 
 
 /**
@@ -42,30 +45,47 @@ module_param_string(COMM_OS_MOD_SHORT_NAME, modParams, sizeof(modParams), 0644);
  *  @return zero if successful, non-zero otherwise.
  */
 
+static int
+CommOSModStart(void)
+{
+   int rc;
+
+   /* Comm is initialized. Called with modules_lock taken. */
+   commOSModStart = NULL;
+
+   if (!commOSModInit) {
+      CommOS_Log(("%s: Can't find \'init\' function for module \'" \
+                  COMM_OS_MOD_SHORT_NAME_STRING "\'.\n", __FUNCTION__));
+      return -1;
+   }
+
+   CommOS_Debug(("%s: Module parameters: [%s].\n", __FUNCTION__, modParams));
+
+   rc = (*commOSModInit)(modParams);
+   if (rc == 0) {
+      CommOS_Log(("%s: Module \'" COMM_OS_MOD_SHORT_NAME_STRING \
+                  "\' has been successfully initialized.\n", __FUNCTION__));
+   } else {
+      CommOS_Log(("%s: Module \'" COMM_OS_MOD_SHORT_NAME_STRING \
+                  "\' could not be initialized [%d].\n", __FUNCTION__, rc));
+   }
+
+   return rc > 0 ? -rc : rc;
+}
+
+
+/**
+ * @brief Called at initialization time.
+ * @return zero
+ */
 static int __init
 ModInit(void)
 {
-	int rc;
-
-	if (!commOSModInit) {
-		CommOS_Log(("%s: Can't find \'init\' function for module \'"
-			    COMM_OS_MOD_SHORT_NAME_STRING "\'.\n", __func__));
-		return -1;
-	}
-
-	CommOS_Debug(("%s: Module parameters: [%s].\n", __func__, modParams));
-
-	rc = (*commOSModInit)(modParams);
-	if (rc == 0)
-		CommOS_Log(("%s: Module \'" COMM_OS_MOD_SHORT_NAME_STRING
-			    "\' has been successfully initialized.\n",
-			    __func__));
-	else
-		CommOS_Log(("%s: Module \'" COMM_OS_MOD_SHORT_NAME_STRING
-			    "\' could not be initialized [%d].\n",
-			    __func__, rc));
-
-	return rc > 0 ? -rc : rc;
+   /* Comm will remain dormant until mvpkm is activated */
+   mutex_lock(&modules_lock);
+   commOSModStart = CommOSModStart;
+   mutex_unlock(&modules_lock);
+   return 0;
 }
 
 
@@ -77,15 +97,23 @@ ModInit(void)
 static void __exit
 ModExit(void)
 {
-	if (!commOSModExit) {
-		CommOS_Log(("%s: Can't find \'fini\' function for module \'"
-			    COMM_OS_MOD_SHORT_NAME_STRING "\'.\n", __func__));
-		return;
-	}
+   mutex_lock(&modules_lock);
+   if (commOSModStart) {
+      commOSModStart = NULL;
+      mutex_unlock(&modules_lock);
+      return;
+   }
+   mutex_unlock(&modules_lock);
 
-	(*commOSModExit)();
-	CommOS_Log(("%s: Module \'" COMM_OS_MOD_SHORT_NAME_STRING
-		    "\' has been stopped.\n", __func__));
+   if (!commOSModExit) {
+      CommOS_Log(("%s: Can't find \'fini\' function for module \'" \
+                  COMM_OS_MOD_SHORT_NAME_STRING "\'.\n", __FUNCTION__));
+      return;
+   }
+
+   (*commOSModExit)();
+   CommOS_Log(("%s: Module \'" COMM_OS_MOD_SHORT_NAME_STRING \
+               "\' has been stopped.\n", __FUNCTION__));
 }
 
 

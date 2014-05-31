@@ -68,9 +68,6 @@
 #include <linux/delay.h>
 #include <linux/bootmem.h>
 
-#if defined(CONFIG_SF2_NFC_TAG)
-#include <linux/nfc/nfc_tag.h>
-#endif
 #ifdef CONFIG_DMA_CMA
 #include <linux/dma-contiguous.h>
 #endif
@@ -3077,7 +3074,7 @@ static struct sec_keys_info sec_key_info[] = {
 		true, KEY_ACT_TYPE_LOW, EV_KEY, 10),
 	SEC_KEYS("SHUTTER1", GPIO_S1_KEY, KEY_CAMERA_FOCUS,
 		false, KEY_ACT_TYPE_LOW, EV_KEY, 10),
-	SEC_KEYS("SHUTTER2", GPIO_S2_KEY, KEY_CAMERA,
+	SEC_KEYS("SHUTTER2", GPIO_S2_KEY, KEY_CAMERA_SHUTTER,
 		false, KEY_ACT_TYPE_LOW, EV_KEY, 10),
 	SEC_KEYS("VOL_UP", GPIO_VOL_UP, KEY_VOLUMEUP,
 		false, KEY_ACT_TYPE_LOW, EV_KEY, 10),
@@ -3098,7 +3095,7 @@ static struct sec_keys_info sec_key_info01[] = {
 		true, KEY_ACT_TYPE_LOW, EV_KEY, 10),
 	SEC_KEYS("SHUTTER1", GPIO_S1_KEY, KEY_CAMERA_FOCUS,
 		false, KEY_ACT_TYPE_LOW, EV_KEY, 10),
-	SEC_KEYS("SHUTTER2", GPIO_S2_KEY, KEY_CAMERA,
+	SEC_KEYS("SHUTTER2", GPIO_S2_KEY, KEY_CAMERA_SHUTTER,
 		false, KEY_ACT_TYPE_LOW, EV_KEY, 10),
 	SEC_KEYS("VOL_UP", GPIO_VOL_UP, KEY_VOLUMEUP,
 		false, KEY_ACT_TYPE_LOW, EV_KEY, 10),
@@ -3187,7 +3184,7 @@ struct input_debug_key_state kstate[] = {
 #endif	/* CONFIG_GD2_01_BD */
 #elif defined(CONFIG_MACH_GC2PD)
 	SET_DEBUG_KEY(KEY_CAMERA_FOCUS, false),
-	SET_DEBUG_KEY(KEY_CAMERA, false),
+	SET_DEBUG_KEY(KEY_CAMERA_SHUTTER, false),
 	SET_DEBUG_KEY(KEY_POWER, false),
 	SET_DEBUG_KEY(KEY_HOMEPAGE, false),
 	SET_DEBUG_KEY(KEY_ZOOM_RING_IN, false),
@@ -3198,11 +3195,6 @@ struct input_debug_key_state kstate[] = {
 #if defined(CONFIG_FAST_BOOT)
 	SET_DEBUG_KEY(KEY_FAKE_PWR, false),
 #endif	/* CONFIG_FAST_BOOT */
-#if defined(CONFIG_MACH_SF2)
-	SET_DEBUG_KEY(KEY_POWER, false),
-	SET_DEBUG_KEY(KEY_VOLUMEUP, false),
-	SET_DEBUG_KEY(KEY_VOLUMEDOWN, false),
-#endif
 };
 
 static struct input_debug_pdata input_debug_pdata = {
@@ -3217,17 +3209,7 @@ static struct platform_device input_debug = {
 	},
 };
 #endif	/* CONFIG_SEC_DEBUG */
-#if defined(CONFIG_SF2_NFC_TAG)
-static struct nfc_tag_pdata nfc_tag_pdata ={
-	.irq_nfc = GPIO_NFC_IRQ,
-};
-static struct platform_device nfc_tag_devdata={
-	.name = "NFC_TAG",
-	.dev  = {
-              .platform_data =&nfc_tag_pdata,
-	},
-};
-#endif
+
 #ifdef CONFIG_VIDEO_FIMG2D
 static struct fimg2d_platdata fimg2d_data __initdata = {
 	.hw_ver = 0x41,
@@ -5011,10 +4993,6 @@ static void __init midas_machine_init(void)
 
 #if defined(CONFIG_SEC_DEBUG)
 	platform_device_register(&input_debug);
-#endif
-
-#if defined(CONFIG_SF2_NFC_TAG)
-      platform_device_register(&nfc_tag_devdata);
 #endif
 
 #if defined(CONFIG_S3C_DEV_I2C5)
