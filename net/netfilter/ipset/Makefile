@@ -22,6 +22,3 @@ obj-$(CONFIG_IP_SET_HASH_NETPORT) += ip_set_hash_netport.o
 
 # list types
 obj-$(CONFIG_IP_SET_LIST_SET) += ip_set_list_set.o
-
-CFLAGS_ip_set_hash_ipportip.o += -fno-loop-parallelize-all 
-CFLAGS_ip_set_hash_ipportnet.o += -fno-loop-parallelize-all
