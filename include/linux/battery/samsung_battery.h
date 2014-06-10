@@ -547,4 +547,6 @@ enum {
 };
 #endif
 
+extern bool device_charging;
+
 #endif /* __MACH_SAMSUNG_BATTERY_H */
