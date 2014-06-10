@@ -149,6 +149,10 @@ struct device *sec_touchscreen;
 static struct device *bus_dev;
 
 int touch_is_pressed = 0;
+static bool knockon_reset = false;
+#ifdef CONFIG_TOUCH_WAKE
+static bool mms_ts_suspended = false;
+#endif
 
 #if defined(CONFIG_TARGET_LOCALE_KOR)
 static int noise_mode_indicator;
@@ -425,7 +429,7 @@ static void set_dvfs_off(struct work_struct *work)
 
 	exynos_cpufreq_lock_free(DVFS_LOCK_ID_TSP);
 	info->dvfs_lock_status = false;
-	pr_debug("[TSP] DVFS Off!");
+	//pr_debug("[TSP] DVFS Off!");
 	mutex_unlock(&info->dvfs_lock);
 	}
 
@@ -461,7 +465,7 @@ static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 			if (ret < 0) {
 				pr_err("%s: dev lock failed(%d)\n",\
 							__func__, __LINE__);
-			}
+}
 
 			ret = exynos_cpufreq_lock(DVFS_LOCK_ID_TSP,
 							info->cpufreq_level);
@@ -473,7 +477,7 @@ static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 				msecs_to_jiffies(TOUCH_BOOSTER_CHG_TIME));
 
 			info->dvfs_lock_status = true;
-			pr_debug("[TSP] DVFS On![%d]", info->cpufreq_level);
+			//pr_debug("[TSP] DVFS On![%d]", info->cpufreq_level);
 		}
 	} else if (on == 2) {
 		cancel_delayed_work(&info->work_dvfs_off);
@@ -523,8 +527,9 @@ static void release_all_fingers(struct mms_ts_info *info)
 	printk(KERN_DEBUG "[TSP] %s\n", __func__);
 
 	for (i = 0; i < MAX_FINGERS; i++) {
-		if (info->finger_state[i] == 1)
+		if (info->finger_state[i] == 1) {
 			dev_notice(&client->dev, "finger %d up(force)\n", i);
+		}
 		info->finger_state[i] = 0;
 		input_mt_slot(info->input_dev, i);
 		input_mt_report_slot_state(info->input_dev, MT_TOOL_FINGER,
@@ -783,7 +788,20 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 	}
 
 #ifdef CONFIG_TOUCH_WAKE
-  touch_press();
+	if (mms_ts_suspended) {
+		if (knockon) {
+			if (touch_is_pressed == 0) {
+				if (knockon_reset) {
+					knockon_reset = false;
+					touch_press();
+				} else {
+					knockon_reset = true;
+				}
+			}
+		} else {
+			touch_press();
+		}
+	}
 #endif
 
 #if TOUCH_BOOSTER
@@ -3118,6 +3136,8 @@ static void mms_ts_early_suspend(struct early_suspend *h)
 	struct mms_ts_info *info;
 	info = container_of(h, struct mms_ts_info, early_suspend);
 	mms_ts_suspend(&info->client->dev);
+#else
+	mms_ts_suspended = true;
 #endif
 }
 
@@ -3127,6 +3147,8 @@ static void mms_ts_late_resume(struct early_suspend *h)
 	struct mms_ts_info *info;
 	info = container_of(h, struct mms_ts_info, early_suspend);
 	mms_ts_resume(&info->client->dev);
+#else
+	mms_ts_suspended = false;
 #endif
 }
 #endif
@@ -3343,10 +3365,10 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 #endif
 
 #ifdef CONFIG_TOUCH_WAKE
-  touchwake_data = info;
-    if (touchwake_data == NULL)
-    pr_err("[TOUCHWAKE] Failed to set touchwake_data\n");
-#endif  
+	touchwake_data = info;
+	if (touchwake_data == NULL)
+		pr_err("[TOUCHWAKE] Failed to set touchwake_data\n");
+#endif
 
 	sec_touchscreen = device_create(sec_class,
 					NULL, 0, info, "sec_touchscreen");
