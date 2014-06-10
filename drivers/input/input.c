@@ -30,6 +30,7 @@
 
 #ifdef CONFIG_TOUCH_WAKE
 #include <linux/touch_wake.h>
+#include <linux/telephony.h>
 #endif
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
@@ -252,13 +253,13 @@ static void input_handle_event(struct input_dev *dev,
 		    !!test_bit(code, dev->key) != value) {
 
 #ifdef CONFIG_TOUCH_WAKE
-		if (code == KEY_POWER && !device_is_suspended()) {
-			if (value == 1) {
-				powerkey_pressed();
+		if (code == KEY_POWER && !device_is_suspended() && !PSTN_ON_HOOK ) {
+        if (value == 1) {
+          powerkey_pressed();
 			} else if (value == 0) {
-				powerkey_released();
-			}
-		}
+          powerkey_released();
+        }
+      }
 #endif
 
 			if (value != 2) {
