@@ -370,9 +370,7 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Wno-format-security \
 		   -fno-delete-null-pointer-checks \
 		   -mtune=cortex-a9 -mfpu=neon -munaligned-access \
-		   -ffast-math -s -pipe -Ofast -fno-tree-vectorize \
-		   -fno-schedule-insns2 -fmodulo-sched \
-		   -fmodulo-sched-allow-regmoves -fno-inline-functions
+		   -ffast-math
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
