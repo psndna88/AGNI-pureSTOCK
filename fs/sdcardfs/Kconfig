@@ -1,7 +1,7 @@
 config SDCARD_FS
-	tristate "sdcard file system"
+	tristate "sdcard file system (Android 4.4+)"
 	depends on EXPERIMENTAL
-	default n
+	default y
 	help
 	  Sdcardfs is based on Wrapfs file system.
 
