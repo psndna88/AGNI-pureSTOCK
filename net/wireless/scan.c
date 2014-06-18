@@ -330,7 +330,7 @@ static int cmp_bss(struct cfg80211_bss *a,
 {
 	int r;
 
-#ifndef CONFIG_BCM4334
+#if !(defined(CONFIG_BCM4334) || defined(CONFIG_BCM4334_MODULE))
 	if (a->channel != b->channel)
 		return b->channel->center_freq - a->channel->center_freq;
 #endif /* CONFIG_BCM4334 */
@@ -354,7 +354,7 @@ static int cmp_bss(struct cfg80211_bss *a,
 	if (r)
 		return r;
 
-#ifdef CONFIG_BCM4334
+#if defined(CONFIG_BCM4334) || defined(CONFIG_BCM4334_MODULE)
 	if (a->channel != b->channel)
 		return b->channel->center_freq - a->channel->center_freq;
 #endif /* CONFIG_BCM4334 */
