@@ -242,6 +242,7 @@ config HID_KENSINGTON
 config HID_KK_UPGRADE
 	bool "KK Upgrade"
 	depends on USB_HID
+	default y
 	---help---
 	Feature for KK Upgrade models.
 
@@ -562,7 +563,7 @@ config SMARTJOYPLUS_FF
 config HID_SYNAPTICS_BT
 	tristate "HID Synaptics"
 	depends on HID
-	default n
+	default y
 	---help---
 	For a Bluetooth HID touchpad
 
@@ -606,6 +607,7 @@ config HID_WACOM_POWER_SUPPLY
 config HID_ZAGG
 	tristate "ZAGG InfraRed remote control or keyboards"
 	depends on (USB_HID || BT_HIDP)
+	default y
 	---help---
 	Support for ZAGG InfraRed remote control or keyboards.
 
