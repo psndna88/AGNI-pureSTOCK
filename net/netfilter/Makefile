@@ -115,6 +115,3 @@ obj-$(CONFIG_IP_SET) += ipset/
 
 # IPVS
 obj-$(CONFIG_IP_VS) += ipvs/
-
-CFLAGS_nf_conntrack_core.o += -fno-loop-parallelize-all 
-CFLAGS_xt_hashlimit.o += -fno-loop-parallelize-all
