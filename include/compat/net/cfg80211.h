@@ -1474,6 +1474,18 @@ struct cfg80211_acl_params {
  *
  * @notify_btcoex: Send BT coex WMI command.
  *
+ * @notify_btcoex_inq_status: Notify the Bluetooth inquiry status in
+ *	case of a Bleutooth co-ex device.
+ *
+ * @notify_btcoex_sco_status: Notify the Bluetooth SCO connection status in
+ *	case of a Bluetooth co-ex device.
+ *
+ * @notify_btcoex_a2dp_status: Notify the Bluetooth A2DP connection status in
+ *	case of a Bluetooth co-ex device.
+ *
+ * @notify_btcoex_acl_info: Notify the Bluetooth chip's ACL connction
+ *	information
+ *
  * @set_mac_acl: Set stations' mac address to driver's access control list in
  *	AP and P2P GO mode. Parameters are mac address of list of stations,
  *	number of entries and acl policy to be used with this list. If there
@@ -1692,6 +1704,13 @@ struct cfg80211_ops {
 	int     (*set_wow_mode)(struct wiphy *wiphy,
 				struct cfg80211_wowlan *wow);
 
+	int	(*priv_cmd)(struct wiphy *wiphy, struct net_device *dev,
+			       char *priv_cmd);
+	int	(*notify_p2p_flush)(struct wiphy *wiphy);
+	int	(*set_mac_acl)(struct wiphy *wiphy, struct net_device *dev,
+			       struct cfg80211_acl_params *params);
+	int     (*set_wow_mode)(struct wiphy *wiphy,
+				struct cfg80211_wowlan *wow);
 	int     (*clr_wow_mode)(struct wiphy *wiphy);
 };
 
@@ -3416,6 +3435,17 @@ void cfg80211_probe_status(struct net_device *dev, const u8 *addr,
 void cfg80211_report_obss_beacon(struct wiphy *wiphy,
 				 const u8 *frame, size_t len,
 				 int freq, gfp_t gfp);
+
+/*
+ * cfg80211_ch_switch_notify - update wdev channel and notify userspace
+ * @dev: the device which switched channels
+ * @freq: new channel frequency (in MHz)
+ * @type: channel type
+ *
+ * Acquires wdev_lock, so must only be called from sleepable driver context!
+ */
+void cfg80211_priv_event(struct net_device *dev, const char *priv_event,
+			   gfp_t gfp);
 
 /*
  * cfg80211_ch_switch_notify - update wdev channel and notify userspace
