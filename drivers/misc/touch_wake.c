@@ -197,9 +197,13 @@ static struct early_suspend touchwake_suspend_data =
 
 static void touchwake_touchoff(struct work_struct * touchoff_work)
 {
+#ifdef DEBUG_PRINT
 	pr_info("%s: %s +\n", __func__, "sys_sync");
+#endif
 	sys_sync();
+#ifdef DEBUG_PRINT
 	pr_info("%s: %s -\n", __func__, "sys_sync");
+#endif
 	touchwake_disable_touch();
 	wake_unlock(&touchwake_wake_lock);
 
