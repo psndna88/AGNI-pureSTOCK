@@ -543,6 +543,47 @@
  *	OLBC handling in hostapd. Beacons are reported in %NL80211_CMD_FRAME
  *	messages. Note that per PHY only one application may register.
  *
+ * @NL80211_CMD_BTCOEX_INQ: This command is used to provide WiFi driver the
+ *	Bluetooth inquiry status. The status will be available in flag
+ *	%NL80211_ATTR_BTCOEX_INQ_STATUS. This information can be used to
+ *	manage shared resources when the wireless device is a Bluetooth-Wifi
+ *	coex solution.
+ *
+ * @NL80211_CMD_BTCOEX_SCO: This command is used to give the driver the
+ *	Bluetooth SCO connection status. The SCO status is available in
+ *	%NL80211_ATTR_BTCOEX_SCO_STATUS flag. It also provide
+ *	%NL80211_ATTR_BTCOEX_TYPE_ESCO to specify if the connection is ESCO.
+ *	It also has %NL80211_ATTR_BTCOEX_ESCO_TX_INTERVAL specifing the time
+ *	between consecutive eSCO instance(Invalid for SCO).
+ *	%NL80211_ATTR_BTCOEX_ESCO_TX_PKT_LEN spedicying the the length in
+ *	bytes of the eSCO payload in transmit direction.This feature
+ *	useful for a Bluetooth-Wifi coex solution.
+ *
+ * @NL80211_CMD_BTCOEX_A2DP: This command is used to give the driver the
+ *	Bluetooth A2DP profile connection status. The A2DP profile connection
+ *	status is available in %NL80211_ATTR_BTCOEX_A2DP_STATUS flag.
+ *	This feature is typically used when the wireless device is a
+ *	Bluetooth-Wifi coex solution.
+ *
+ * @NL80211_CMD_BTCOEX_ACL_INFO: This command is used to let the wifi driver
+ *	know information regarding the ACL link. Currently supported
+ *	information includes The role as %NL80211_ATTR_BTCOEX_ACL_ROLE,
+ *	%NL80211_ATTR_BTCOEX_REMOTE_LMP_VER showing the LMP version of the
+ *	remote device. This feature is useful when the wireless device is a
+ *	Bluetooth-Wifi coex solution.
+ *
+ * @NL80211_CMD_BTCOEX_ANTENNA_CONFIG: This command is used to let the wifi
+ *	driver know information regarding the antenna configuration used
+ *	in case of a BT-coex solution. This information is provide as
+ *	%NL80211_ATTR_BTCOEX_ANTENNA_CONFIG.This feature is useful when
+ *	the wireless device is a Bluetooth-Wifi coex solution.
+ *
+ * @NL80211_CMD_BTCOEX_BT_VENDOR: This command is used to let the wifi
+ *	driver know the Bluetooth chip vendor. This would let it use
+ *	different configuration in case of different BT chip vendor
+ *	is used in BT-Coex scenario. This information is provided as
+ *	%NL80211_ATTR_BT_VENDOR_ID.This feature is useful when
+ *	the wireless device is a Bluetooth-Wifi coex solution.
  * @NL80211_CMD_CH_SWITCH_NOTIFY: An AP or GO may decide to switch channels
  *	independently of the userspace SME, send this event indicating
  *	%NL80211_ATTR_IFINDEX is now on %NL80211_ATTR_WIPHY_FREQ with
@@ -711,6 +752,15 @@ enum nl80211_commands {
 	NL80211_CMD_UNEXPECTED_4ADDR_FRAME,
 
 	NL80211_CMD_SET_NOACK_MAP, /* just to maintain ABI with CH_SWITCH_NOTIFY */
+
+	NL80211_CMD_CH_SWITCH_NOTIFY,
+
+	NL80211_CMD_CONN_FAILED,
+
+	NL80211_CMD_BTCOEX_INQ,
+	NL80211_CMD_SET_MAC_ACL,
+
+	NL80211_CMD_PRIV,
 
 	NL80211_CMD_CH_SWITCH_NOTIFY,
 
@@ -1215,6 +1265,52 @@ enum nl80211_commands {
  *	probe-response frame. The DA field in the 802.11 header is zero-ed out,
  *	to be filled by the FW.
  *
+ * @%NL80211_ATTR_BTCOEX_INQ_STATUS: A flag indicating if Bluetooth inquiry
+ *	is in progress. this flag is useful for resource management in a
+ *	bluetooth wifi combo solution.
+ *
+ * @%NL80211_ATTR_BTCOEX_SCO_STATUS: A flag indicating if Bluetooth SCO audio
+ *	connection is active. this flag is useful for resource management in a
+ *	bluetooth wifi combo solution.
+ *
+ * @%NL80211_ATTR_BTCOEX_TYPE_ESCO: A flag indicating if the audio connection
+ *	is of type ESCO. If this attribute is available, the audio connection
+ *	is of type ESCO. this information is useful for resource management
+ *	in a bluetooth wifi combo solution.
+ *
+ * @%NL80211_ATTR_BTCOEX_ESCO_TX_INTERVAL: Provides the time between two
+ *	consecutive eSCO instant, measured in slots.This attribute will be
+ *	available only in case of an eSCO connection.
+ *	this information is useful for resource management in a bluetooth
+ *	wifi combo solution.
+ *
+ * @%NL80211_ATTR_BTCOEX_ESCO_TX_PKT_LEN: Provides the length in bytes of the
+ *	eSCO payload in the receive direction. This attribute will be available
+ *	in case of an eSCO connection.
+ *	this information is useful for resource management in a bluetooth
+ *	wifi combo solution.
+ *
+ * @%NL80211_ATTR_BTCOEX_A2DP_STATUS: A flag indicating the Bluetooth
+ *	A2DP connection status. This flag is useful for resource management
+ *	in a bluetooth wifi combo solution.
+ *
+ * @%NL80211_ATTR_BTCOEX_ACL_ROLE: Indicates if Bluetooth chip's role
+ *	in an ACL connection. See &enum nl80211_btcoex_acl_role for possible
+ *	value. This flag is useful for resource management in a bluetooth
+ *	wifi combo solution.
+ *
+ * @%NL80211_ATTR_BTCOEX_REMOTE_LMP_VER: Indicates the remote device LMP version
+ *	in an ACL connection. See Link manager version parameter in Bluetooth
+ *	assigned numbers for possible value. This values is useful for resource
+ *	management in a bluetooth wifi combo solution.
+ * @%NL80211_ATTR_BTCOEX_ANTENNA_CONFIG: Indicates the Bluetooth wifi chip
+ *	configuration. See &enum nl80211_btcoex_antenna_config for possible
+ *	value. This flag is useful for resource management in a bluetooth
+ *	wifi combo solution.
+ * @%NL80211_ATTR_BT_VENDOR_ID: Indicates the Bluetooth chip
+ *	vendor name. See &enum nl80211_btcoex_vendor_list for possible
+ *	value. This flag is useful for resource management in a bluetooth
+ *	wifi combo solution.
  * @NL80211_ATTR_BG_SCAN_PERIOD: Background scan period in seconds
  *      or 0 to disable background scan.
  *
@@ -1490,6 +1586,30 @@ enum nl80211_attrs {
 	NL80211_ATTR_HT_CAPABILITY_MASK,
 
 	NL80211_ATTR_NOACK_MAP,
+
+	NL80211_ATTR_INACTIVITY_TIMEOUT,
+
+	NL80211_ATTR_RX_SIGNAL_DBM,
+
+	NL80211_ATTR_BG_SCAN_PERIOD,
+
+	NL80211_ATTR_WDEV,
+
+	NL80211_ATTR_USER_REG_HINT_TYPE,
+
+	NL80211_ATTR_CONN_FAILED_REASON,
+
+	NL80211_ATTR_STA_CAP_REQ,
+
+	NL80211_ATTR_ACS,
+
+	NL80211_ATTR_MAC_ACL,
+
+	NL80211_ATTR_MAC_ADDRS,
+
+	NL80211_ATTR_ACL_POLICY,
+
+	NL80211_ATTR_BTCOEX_DATA,
 
 	NL80211_ATTR_INACTIVITY_TIMEOUT,
 
