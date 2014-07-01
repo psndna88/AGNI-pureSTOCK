@@ -341,7 +341,8 @@ struct page *find_data_page(struct inode *inode, pgoff_t index, bool sync)
 	/* By fallocate(), there is no cached page, but with NEW_ADDR */
 	if (unlikely(dn.data_blkaddr == NEW_ADDR))
 		return ERR_PTR(-EINVAL);
-	page = grab_cache_page_write_begin(mapping, index, AOP_FLAG_NOFS);
+
+	page = grab_cache_page(mapping, index);
 	if (!page)
 		return ERR_PTR(-ENOMEM);
 	if (PageUptodate(page)) {
@@ -374,7 +375,7 @@ struct page *get_lock_data_page(struct inode *inode, pgoff_t index)
 	struct page *page;
 	int err;
 repeat:
-	page = grab_cache_page_write_begin(mapping, index, AOP_FLAG_NOFS);
+	page = grab_cache_page(mapping, index);
 	if (!page)
 		return ERR_PTR(-ENOMEM);
 	set_new_dnode(&dn, inode, NULL, NULL, 0);
