@@ -387,6 +387,9 @@ extern struct cpufreq_governor cpufreq_gov_pegasusq;
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_YANKASUSQ)
 extern struct cpufreq_governor cpufreq_gov_yankasusq;
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_yankasusq)
+#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_INTELLIACTIVE)
+extern struct cpufreq_governor cpufreq_gov_intelliactive;
+#define CPUFREQ_DEFAULT_GOVERNOR    (&cpufreq_gov_intelliactive)
 #endif
 
 
