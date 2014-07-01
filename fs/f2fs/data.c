@@ -835,6 +835,9 @@ static int f2fs_write_end(struct file *file,
 			struct page *page, void *fsdata)
 {
 	struct inode *inode = page->mapping->host;
+
+	trace_f2fs_write_end(inode, pos, len, copied);
+
 	SetPageUptodate(page);
 	set_page_dirty(page);
 	if (pos + copied > i_size_read(inode)) {
