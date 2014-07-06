@@ -74,7 +74,6 @@
 #define DEF_START_DELAY				(0)
 
 #define UP_THRESHOLD_AT_MIN_FREQ		(40)
-#define FREQ_FOR_RESPONSIVENESS			(400000)
 /* for fast decrease */
 #define UP_THRESHOLD_AT_FAST_DOWN		(95)
 #define FREQ_FOR_FAST_DOWN			(1200000)
@@ -216,7 +215,6 @@ static struct dbs_tuners {
 	unsigned int lcdfreq_kick_in_freq;
 #endif
 	unsigned int up_threshold_at_min_freq;
-	unsigned int freq_for_responsiveness;
 
 	unsigned int up_threshold_at_fast_down;
 	unsigned int freq_for_fast_down;
@@ -242,7 +240,6 @@ static struct dbs_tuners {
 	.early_suspend = -1,
 #endif
 	.up_threshold_at_min_freq = UP_THRESHOLD_AT_MIN_FREQ,
-	.freq_for_responsiveness = FREQ_FOR_RESPONSIVENESS,
 	.up_threshold_at_fast_down = UP_THRESHOLD_AT_FAST_DOWN,
 	.freq_for_fast_down = FREQ_FOR_FAST_DOWN,
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
@@ -443,7 +440,6 @@ show_one(max_cpu_lock, max_cpu_lock);
 show_one(min_cpu_lock, min_cpu_lock);
 show_one(dvfs_debug, dvfs_debug);
 show_one(up_threshold_at_min_freq, up_threshold_at_min_freq);
-show_one(freq_for_responsiveness, freq_for_responsiveness);
 show_one(up_threshold_at_fast_down, up_threshold_at_fast_down);
 show_one(freq_for_fast_down, freq_for_fast_down);
 
@@ -844,19 +840,6 @@ static ssize_t store_up_threshold_at_fast_down(struct kobject *a,
 	return count;
 }
 
-static ssize_t store_freq_for_responsiveness(struct kobject *a,
-					     struct attribute *b,
-				   	     const char *buf, size_t count)
-{
-	unsigned int input;
-	int ret;
-	ret = sscanf(buf, "%u", &input);
-	if (ret != 1)
-		return -EINVAL;
-	dbs_tuners_ins.freq_for_responsiveness = input;
-	return count;
-}
-
 static ssize_t store_freq_for_fast_down(struct kobject *a,
 					     struct attribute *b,
 				   	     const char *buf, size_t count)
@@ -1014,7 +997,6 @@ define_one_global_rw(min_cpu_lock);
 define_one_global_rw(hotplug_lock);
 define_one_global_rw(dvfs_debug);
 define_one_global_rw(up_threshold_at_min_freq);
-define_one_global_rw(freq_for_responsiveness);
 define_one_global_rw(up_threshold_at_fast_down);
 define_one_global_rw(freq_for_fast_down);
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
@@ -1064,7 +1046,6 @@ static struct attribute *dbs_attributes[] = {
 	&hotplug_rq_3_1.attr,
 	&hotplug_rq_4_0.attr,
 	&up_threshold_at_min_freq.attr,
-	&freq_for_responsiveness.attr,
 	&up_threshold_at_fast_down.attr,
 	&freq_for_fast_down.attr,
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
@@ -1460,11 +1441,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
 	}
 #endif
-	/* Check for frequency increase */
-	if (policy->cur < dbs_tuners_ins.freq_for_responsiveness)
-		up_threshold = dbs_tuners_ins.up_threshold_at_min_freq;
-	else
-		up_threshold = dbs_tuners_ins.up_threshold;
+	up_threshold = dbs_tuners_ins.up_threshold;
 
 	if (max_load_freq > up_threshold * policy->cur) {
 		int target, inc;
@@ -1565,9 +1542,6 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		down_thres = dbs_tuners_ins.up_threshold_at_min_freq
 			- dbs_tuners_ins.down_differential;
 
-		if (freq_next < dbs_tuners_ins.freq_for_responsiveness
-			&& (max_load_freq / freq_next) > down_thres)
-			freq_next = dbs_tuners_ins.freq_for_responsiveness;
 #ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
 		if(dbs_tuners_ins.lcdfreq_enable) {
 			if(dbs_tuners_ins.lcdfreq_kick_in_freq < freq_next) {
