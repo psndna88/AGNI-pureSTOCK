@@ -2556,8 +2556,9 @@ static int sec_bat_get_property(struct power_supply *psy,
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
-		if (battery->pdata->cable_check_type &
-			SEC_BATTERY_CABLE_CHECK_NOUSBCHARGE) {
+		if ((battery->pdata->cable_check_type &
+			     SEC_BATTERY_CABLE_CHECK_NOUSBCHARGE) &&
+			     !battery->pdata->is_lpm()) {
 			switch (battery->cable_type) {
 			case POWER_SUPPLY_TYPE_USB:
 			case POWER_SUPPLY_TYPE_USB_DCP:
