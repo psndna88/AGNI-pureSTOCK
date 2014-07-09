@@ -384,6 +384,9 @@ struct input_keymap_entry {
 #define KEY_F23			193
 #define KEY_F24			194
 
+#define KEY_SYM			198
+#define KEY_CENTER		199
+
 #define KEY_PLAYCD		200
 #define KEY_PAUSECD		201
 #define KEY_PROG3		202
@@ -441,6 +444,28 @@ struct input_keymap_entry {
 #define KEY_WIMAX		246
 #define KEY_RFKILL		247	/* Key that controls all radios */
 
+#define KEY_POUND		248
+#define KEY_STAR		249
+#define KEY_NETWORK		250
+
+#define KEY_FOLDER_OPEN		251  /*only use Grande CHN CTC */
+#define KEY_FOLDER_CLOSE	252  /*only use Grande CHN CTC */
+#define KEY_3G	253  /*only use Grande CHN CTC */
+
+/* Dummy touchkey code */
+#define KEY_DUMMY_HOME1		249
+#define KEY_DUMMY_HOME2		250
+#define KEY_DUMMY_MENU		251
+#define KEY_DUMMY_HOME		252
+#define KEY_DUMMY_BACK		253
+
+#define KEY_RECENT			254
+
+/* kona dummy touchkey */
+#define KEY_DUMMY_1     251
+#define KEY_DUMMY_2     252
+#define KEY_DUMMY_3     253
+
 /* Code 255 is reserved for special needs of AT keyboard driver */
 
 #define BTN_MISC		0x100
@@ -496,6 +521,7 @@ struct input_keymap_entry {
 #define BTN_MODE		0x13c
 #define BTN_THUMBL		0x13d
 #define BTN_THUMBR		0x13e
+#define BTN_GAME		0x13f	/* Add game button for samsung bluetooth keypad */
 
 #define BTN_DIGI		0x140
 #define BTN_TOOL_PEN		0x140
