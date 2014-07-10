@@ -46,6 +46,13 @@ enum {
 };
 static int state;
 
+#ifdef CONFIG_SPEEDUP_KEYRESUME
+	struct sched_param earlysuspend_s = { .sched_priority = 66 };
+	struct sched_param earlysuspend_v = { .sched_priority = 0 };
+	int earlysuspend_old_prio = 0;
+	int earlysuspend_old_policy = 0;
+#endif
+
 void register_early_suspend(struct early_suspend *handler)
 {
 	struct list_head *pos;
@@ -129,6 +136,17 @@ static void late_resume(struct work_struct *work)
 	int abort = 0;
 	char symname[KSYM_NAME_LEN];
 
+#ifdef CONFIG_SPEEDUP_KEYRESUME
+	earlysuspend_old_prio = current->rt_priority;
+	earlysuspend_old_policy = current->policy;
+
+	/* just for this write, set us real-time */
+	if (!(unlikely(earlysuspend_old_policy == SCHED_FIFO) || unlikely(earlysuspend_old_policy == SCHED_RR))) {
+		if ((sched_setscheduler(current, SCHED_RR, &earlysuspend_s)) < 0)
+			printk(KERN_ERR "late_resume: up late_resume failed\n");
+	}
+#endif
+
 	mutex_lock(&early_suspend_lock);
 	spin_lock_irqsave(&state_lock, irqflags);
 	if (state == SUSPENDED)
@@ -159,6 +177,14 @@ static void late_resume(struct work_struct *work)
 		pr_info("late_resume: done\n");
 abort:
 	mutex_unlock(&early_suspend_lock);
+
+#ifdef CONFIG_SPEEDUP_KEYRESUME
+	if (!(unlikely(earlysuspend_old_policy == SCHED_FIFO) || unlikely(earlysuspend_old_policy == SCHED_RR))) {
+		earlysuspend_v.sched_priority = earlysuspend_old_prio;
+		if ((sched_setscheduler(current, earlysuspend_old_policy, &earlysuspend_v)) < 0)
+			printk(KERN_ERR "late_resume: down late_resume failed\n");
+	}
+#endif
 }
 
 void request_suspend_state(suspend_state_t new_state)
