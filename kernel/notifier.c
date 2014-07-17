@@ -96,8 +96,8 @@ static int __kprobes notifier_call_chain(struct notifier_block **nl,
 			(*nr_calls)++;
 
 		if ((ret & NOTIFY_STOP_MASK) == NOTIFY_STOP_MASK) {
-			pr_info("notifier_call_chain : NOTIFY BAD %pf\n",
-				nb->notifier_call);
+			//pr_info("notifier_call_chain : NOTIFY BAD %pf\n",
+			//	nb->notifier_call);
 			break;
 		}
 		nb = next_nb;
