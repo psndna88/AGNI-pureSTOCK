@@ -11,6 +11,13 @@
 #include "mali_mem_validation.h"
 #include "mali_osk.h"
 #include "mali_kernel_common.h"
+/* MALI_SEC */
+#if defined(CONFIG_CPU_EXYNOS4212) || defined(CONFIG_CPU_EXYNOS4412)
+#define MALI_SEC_MEM_VALIDATION
+#include <linux/cma.h>
+#include <plat/pd.h>
+#include <linux/platform_device.h>
+#endif
 
 #define MALI_INVALID_MEM_ADDR 0xFFFFFFFF
 
@@ -20,16 +27,37 @@ typedef struct
 	u32 size;             /**< size in bytes of the memory, multiple of page size */
 } _mali_mem_validation_t;
 
+/* MALI_SEC */
+#if defined(MALI_SEC_MEM_VALIDATION)
+extern struct platform_device exynos4_device_pd[];
+#endif
+
 static _mali_mem_validation_t mali_mem_validator = { MALI_INVALID_MEM_ADDR, MALI_INVALID_MEM_ADDR };
 
 _mali_osk_errcode_t mali_mem_validation_add_range(u32 start, u32 size)
 {
+	/* MALI_SEC */
+#if defined(MALI_SEC_MEM_VALIDATION)
+	struct cma_info mem_info;
+#endif
+
 	/* Check that no other MEM_VALIDATION resources exist */
 	if (MALI_INVALID_MEM_ADDR != mali_mem_validator.phys_base)
 	{
 		MALI_PRINT_ERROR(("Failed to add frame buffer memory; another range is already specified\n"));
 		return _MALI_OSK_ERR_FAULT;
 	}
+
+	/* MALI_SEC */
+#if defined(MALI_SEC_MEM_VALIDATION)
+	if (cma_info(&mem_info, &exynos4_device_pd[PD_G3D].dev, "fimd")) {
+		MALI_PRINT_ERROR(("Failed to get framebuffer information from CMA\n"));
+		return _MALI_OSK_ERR_FAULT;
+	} else {
+		start = mem_info.lower_bound;
+		size = mem_info.total_size - mem_info.free_size;
+	}
+#endif
 
 	/* Check restrictions on page alignment */
 	if ((0 != (start & (~_MALI_OSK_CPU_PAGE_MASK))) ||

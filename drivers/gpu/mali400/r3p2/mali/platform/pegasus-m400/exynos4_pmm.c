@@ -46,6 +46,7 @@
 #define SEC_THRESHOLD 1
 
 #define CPUFREQ_LOCK_DURING_440 0
+#define CHIPID_REG		(S5P_VA_CHIPID + 0x4)
 
 static int bMaliDvfsRun = 0;
 static int needs_update = 0;
@@ -155,6 +156,7 @@ mali_dvfs_table mali_dvfs[MALI_DVFS_STEPS]={
 #ifdef EXYNOS4_ASV_ENABLED
 #define ASV_LEVEL	 12	/* ASV0, 1, 11 is reserved */
 #define ASV_LEVEL_PRIME	 13  /* ASV0, 1, 12 is reserved */
+#define ASV_LEVEL_PD	13
 #define ASV_LEVEL_4210_12	8
 #define ASV_LEVEL_4210_14	5
 
@@ -546,11 +548,11 @@ void mali_clk_set_rate(unsigned int clk, unsigned int mhz)
 	{
 		/* in Pega-prime, vpll_src_clock means ext_xtal_clock!! */
 		clk_set_parent(sclk_vpll_clock, vpll_src_clock);
+
 		clk_set_rate(fout_vpll_clock, (unsigned int)clk * GPU_MHZ);
 		clk_set_parent(vpll_src_clock, ext_xtal_clock);
 		clk_set_parent(sclk_vpll_clock, fout_vpll_clock);
 
-		clk_set_rate(fout_vpll_clock, (unsigned int)clk * GPU_MHZ);
 		clk_set_parent(mali_parent_clock, sclk_vpll_clock);
 		clk_set_parent(mali_clock, mali_parent_clock);
 	}
