@@ -137,6 +137,13 @@ config MUIC_MAX77693_SUPPORT_REMOTE_SWITCH
 	help
 	  If you say yes here you will get support for the remote switch.
 
+config MUIC_MAX77693_SUPPORT_PS_CABLE
+	bool "MUIC_MAX77693_SUPPORT_PS_CABLE"
+	depends on MFD_MAX77693 && USE_MUIC
+	default n
+	help
+	  If you say yes here you will get support for the power sharing cable.
+
 config MUIC_FSA9485
 	bool "Using FSA9485 MUIC"
 	depends on I2C && USE_MUIC

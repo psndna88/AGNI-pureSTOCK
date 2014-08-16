@@ -81,9 +81,8 @@ enum {
 	ADC_DOCK_VOL_UP		= 0x0b, /* 0x01011 17.26K ohm */
 	ADC_DOCK_PLAY_PAUSE_KEY = 0x0d,
 	ADC_SMARTDOCK		= 0x10, /* 0x10000 40.2K ohm */
-#if defined(CONFIG_MUIC_MAX77693_SUPPORT_REMOTE_SWITCH)
 	ADC_REMOTE_SWITCH	= 0x12, /* 0x10010 64.9K ohm */
-#endif /* CONFIG_MUIC_MAX77693_SUPPORT_REMOTE_SWITCH */
+	ADC_POWER_SHARING	= 0x14, /* 0x10100 102K ohm */
 	ADC_CEA936ATYPE1_CHG	= 0x17,	/* 0x10111 200K ohm */
 	ADC_JIG_USB_OFF		= 0x18, /* 0x11000 255K ohm */
 	ADC_JIG_USB_ON		= 0x19, /* 0x11001 301K ohm */
@@ -277,6 +276,10 @@ static ssize_t max77693_muic_show_device(struct device *dev,
 	case CABLE_TYPE_MHL_VB_MUIC:
 		return sprintf(buf, "mHL charging\n");
 #endif /* CONFIG_MUIC_MAX77693_SUPPORT_MHL_CABLE_DETECTION */
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	case CABLE_TYPE_POWER_SHARING_MUIC:
+		return sprintf(buf, "Power Sharing cable\n");
+#endif /* CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
 	default:
 		break;
 	}
@@ -719,6 +722,41 @@ static struct attribute *max77693_muic_attributes[] = {
 static const struct attribute_group max77693_muic_group = {
 	.attrs = max77693_muic_attributes,
 };
+
+static int max77693_muic_set_chgdeten(struct max77693_muic_info *info,
+				bool enable)
+{
+	int ret = 0, val;
+	const u8 reg = MAX77693_MUIC_REG_CDETCTRL1;
+	const u8 mask = CHGDETEN_MASK;
+	const u8 shift = CHGDETEN_SHIFT;
+	u8 cdetctrl1;
+
+	val = (enable ? 1 : 0);
+
+	ret = max77693_update_reg(info->muic, reg, (val << shift), mask);
+	if (ret)
+		pr_err("%s fail to read reg[0x%02x], ret(%d)\n",
+				__func__, reg, ret);
+
+	max77693_read_reg(info->muic, reg, &cdetctrl1);
+	pr_info("%s:%s CDETCTRL1:0x%02x\n", DEV_NAME, __func__, cdetctrl1);
+
+	return ret;
+
+}
+
+static int max77693_muic_enable_chgdet(struct max77693_muic_info *info)
+{
+	pr_info("%s:%s\n", DEV_NAME, __func__);
+	return max77693_muic_set_chgdeten(info, true);
+}
+
+static int max77693_muic_disable_chgdet(struct max77693_muic_info *info)
+{
+	pr_info("%s:%s\n", DEV_NAME, __func__);
+	return max77693_muic_set_chgdeten(info, false);
+}
 
 static int max77693_muic_set_usb_path(struct max77693_muic_info *info, int path)
 {
@@ -1233,6 +1271,17 @@ static int max77693_muic_handle_attach(struct max77693_muic_info *info,
 		}
 		break;
 #endif /* CONFIG_MUIC_MAX77693_SUPPORT_REMOTE_SWITCH */
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	case CABLE_TYPE_POWER_SHARING_MUIC:
+		if (adc != ADC_POWER_SHARING) {
+			pr_warn("%s:%s assume Power Sharing detach\n", DEV_NAME,
+				__func__);
+			info->cable_type = CABLE_TYPE_NONE_MUIC;
+			max77693_muic_set_charging_type(info, false);
+			max77693_muic_enable_chgdet(info);
+		}
+		break;
+#endif /* CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
 	default:
 		break;
 	}
@@ -1292,6 +1341,35 @@ static int max77693_muic_handle_attach(struct max77693_muic_info *info,
 			ret = max77693_muic_set_charging_type(info, false);
 		}
 		break;
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	case ADC_POWER_SHARING:
+		pr_info("%s:%s Power sharing\n", DEV_NAME, __func__);
+
+		if (chgtyp == CHGTYP_NO_VOLTAGE) {
+			if (info->cable_type == CABLE_TYPE_POWER_SHARING_MUIC) {
+				pr_info("%s:%s: duplicated(PS)\n", DEV_NAME, __func__);
+				break;
+			}
+			info->cable_type = CABLE_TYPE_POWER_SHARING_MUIC;
+			ret = max77693_muic_disable_chgdet(info);
+			if (ret)
+				pr_err("%s:%s cannot enable chgdet(%d)\n", DEV_NAME,
+					__func__, ret);
+
+			ret = max77693_muic_set_charging_type(info, false);
+			if (ret)
+				pr_err("%s:%s cannot set charging type(%d)\n", DEV_NAME,
+					__func__, ret);
+		} else if (chgtyp == CHGTYP_USB ||
+			   chgtyp == CHGTYP_DOWNSTREAM_PORT ||
+			   chgtyp == CHGTYP_DEDICATED_CHGR ||
+			   chgtyp == CHGTYP_500MA || chgtyp == CHGTYP_1A) {
+			dev_info(info->dev, "%s: PS charging pump\n",
+				 __func__);
+			ret = max77693_muic_set_charging_type(info, false);
+		}
+		break;
+#endif /* CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
 	case ADC_JIG_UART_OFF:
 		max77693_muic_handle_jig_uart(info, vbvolt);
 		mdata->jig_state(true);
@@ -1519,6 +1597,19 @@ static int max77693_muic_handle_detach(struct max77693_muic_info *info, int irq)
 			mdata->mhl_cb(MAX77693_MUIC_DETACHED);
 		break;
 #endif /* CONFIG_MUIC_MAX77693_SUPPORT_MHL_CABLE_DETECTION */
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	case CABLE_TYPE_POWER_SHARING_MUIC:
+		dev_info(info->dev, "%s: Power Sharing\n", __func__);
+		info->cable_type = CABLE_TYPE_NONE_MUIC;
+		ret = max77693_muic_set_charging_type(info, false);
+		if (ret)
+			info->cable_type = CABLE_TYPE_POWER_SHARING_MUIC;
+		ret = max77693_muic_enable_chgdet(info);
+		if (ret)
+			pr_err("%s:%s cannot enable chgdet(%d)\n", DEV_NAME,
+				__func__, ret);
+		break;
+#endif /* CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
 	case CABLE_TYPE_UNKNOWN_MUIC:
 		dev_info(info->dev, "%s: UNKNOWN\n", __func__);
 		info->cable_type = CABLE_TYPE_NONE_MUIC;
@@ -1575,12 +1666,15 @@ static int max77693_muic_filter_dev(struct max77693_muic_info *info,
 			return -1;
 		}
 		break;
-#if defined(CONFIG_MUIC_MAX77693_SUPPORT_REMOTE_SWITCH)
-	case ADC_MHL ... (ADC_REMOTE_SWITCH - 1):
-	case (ADC_REMOTE_SWITCH + 1) ... (ADC_CEA936ATYPE1_CHG - 1):
-#else
-	case ADC_MHL ... (ADC_CEA936ATYPE1_CHG - 1):
-#endif /* CONFIG_MUIC_MAX77693_SUPPORT_REMOTE_SWITCH */
+	case ADC_MHL ... (ADC_SMARTDOCK + 1):
+#if !defined(CONFIG_MUIC_MAX77693_SUPPORT_REMOTE_SWITCH)
+	case ADC_REMOTE_SWITCH:
+#endif /* !CONFIG_MUIC_MAX77693_SUPPORT_REMOTE_SWITCH */
+	case ADC_POWER_SHARING - 1:
+#if !defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	case ADC_POWER_SHARING:
+#endif /* !CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
+	case (ADC_POWER_SHARING + 1) ... (ADC_CEA936ATYPE1_CHG - 1):
 	case ADC_DESKDOCK:
 	case ADC_JIG_UART_ON ... (ADC_OPEN - 1):
 		dev_warn(info->dev, "%s: unsupported ADC(0x%02x)\n",
@@ -1601,6 +1695,9 @@ static int max77693_muic_filter_dev(struct max77693_muic_info *info,
 				 chgtyp == CHGTYP_1A) {
 				switch (info->cable_type) {
 				case CABLE_TYPE_OTG_MUIC:
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+				case CABLE_TYPE_POWER_SHARING_MUIC:
+#endif /* CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
 					intr = INT_DETACH;
 					break;
 				default:
