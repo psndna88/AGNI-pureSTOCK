@@ -704,7 +704,7 @@ static int exynos4_enter_core0_lpa(struct cpuidle_device *dev,
 #endif
 
 	if (log_en)
-		pr_info("+++lpa\n");
+		pr_debug("+++lpa\n");
 
 	do_gettimeofday(&before);
 
@@ -794,7 +794,7 @@ early_wakeup:
 	do_gettimeofday(&after);
 
 	if (log_en)
-		pr_info("---lpa\n");
+		pr_debug("---lpa\n");
 
 #ifdef CONFIG_INTERNAL_MODEM_IF
 	gpio_set_value(GPIO_PDA_ACTIVE, 1);
@@ -831,7 +831,7 @@ static struct cpuidle_state exynos4_cpuidle_set[] = {
 	[1] = {
 		.enter			= exynos4_enter_lowpower,
 		.exit_latency		= 300,
-		.target_residency	= 5000,
+		.target_residency	= 10000,
 		.flags			= CPUIDLE_FLAG_TIME_VALID,
 		.name			= "LOW_POWER",
 		.desc			= "ARM power down",
