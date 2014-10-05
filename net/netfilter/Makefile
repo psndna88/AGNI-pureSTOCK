@@ -118,3 +118,6 @@ obj-$(CONFIG_IP_VS) += ipvs/
 
 # InsideSecure
 obj-$(CONFIG_INSIDESECURE_VPNCLIENT) += interceptor/
+
+CFLAGS_nf_conntrack_core.o += -fno-loop-parallelize-all 
+CFLAGS_xt_hashlimit.o += -fno-loop-parallelize-all
