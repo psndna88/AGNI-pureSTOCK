@@ -78,6 +78,18 @@ snd-soc-wm8994-objs := wm8994.o wm8994-tables.o wm8958-dsp2.o boeffla_sound.o
 else
 ifeq ($(CONFIG_SND_WOLFSON_SOUND_CONTROL),y)
 snd-soc-wm8994-objs := wm8994.o wm8994-tables.o wm8958-dsp2.o sound_control.o
+CFLAGS_wm8994.o += -fno-unsafe-math-optimizations -fno-gcse-lm -fno-gcse-sm -fno-sched-spec-load -fno-force-addr -fno-modulo-sched \
+                   -fno-modulo-sched-allow-regmoves -ftree-vectorize -fno-tree-slp-vectorize -fno-merge-constants \
+                   -fno-merge-all-constants -fno-gcse-after-reload -fno-unsafe-loop-optimizations -fno-single-precision-constant \
+                   -fno-omit-frame-pointer -fno-inline-functions -fno-unswitch-loops -fno-predictive-commoning -fschedule-insns2 \
+                   -fno-ivopts -fno-tree-loop-distribution -fno-graphite-identity -fno-loop-nest-optimize -fno-loop-interchange \
+                   -fno-loop-strip-mine -fno-loop-block -fno-loop-parallelize-all
+CFLAGS_sound_control.o += -fno-unsafe-math-optimizations -fno-gcse-lm -fno-gcse-sm -fno-sched-spec-load -fno-force-addr -fno-modulo-sched \
+                   -fno-modulo-sched-allow-regmoves -ftree-vectorize -fno-tree-slp-vectorize -fno-merge-constants \
+                   -fno-merge-all-constants -fno-gcse-after-reload -fno-unsafe-loop-optimizations -fno-single-precision-constant \
+                   -fno-omit-frame-pointer -fno-inline-functions -fno-unswitch-loops -fno-predictive-commoning -fschedule-insns2 \
+                   -fno-ivopts -fno-tree-loop-distribution -fno-graphite-identity -fno-loop-nest-optimize -fno-loop-interchange \
+                   -fno-loop-strip-mine -fno-loop-block -fno-loop-parallelize-all
 else
 snd-soc-wm8994-objs := wm8994.o wm8994-tables.o wm8958-dsp2.o
 endif
