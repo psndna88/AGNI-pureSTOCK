@@ -532,7 +532,7 @@ static int s3c24xx_i2c_doxfer(struct s3c24xx_i2c *i2c,
 	unsigned long iicstat, timeout;
 	int spins = 20;
 	int ret;
-#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GC2)
+#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GC2PD)
 	unsigned int cur_slave_addr;
 #endif
 #ifdef CONFIG_VIDEO_ISX012
@@ -590,7 +590,7 @@ static int s3c24xx_i2c_doxfer(struct s3c24xx_i2c *i2c,
 	dev_dbg(i2c->dev, "waiting for bus idle\n");
 
 	/* first, try busy waiting briefly */
-#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GC2)
+#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GC2PD)
 	iicstat = readl(i2c->regs + S3C2410_IICSTAT);
 	cur_slave_addr = readl(i2c->regs + S3C2410_IICADD);
 	if (cur_slave_addr == 0x1F) {
@@ -620,7 +620,7 @@ static int s3c24xx_i2c_doxfer(struct s3c24xx_i2c *i2c,
 	spin_lock_irq(&i2c->lock);
 
 	if (iicstat & S3C2410_IICSTAT_BUSBUSY) {
-#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GC2)
+#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GC2PD)
 		if (cur_slave_addr == 0x1F) {
 			dev_err(i2c->dev, "timeout waiting for bus idle\n");
 			dump_i2c_register(i2c);

@@ -344,6 +344,10 @@ struct max77693_dev {
 	int irq_masks_cur[MAX77693_IRQ_GROUP_NR];
 	int irq_masks_cache[MAX77693_IRQ_GROUP_NR];
 
+#if defined(CONFIG_MUIC_MAX77693_RESET_WA)
+	struct work_struct *muic_init_work;
+#endif
+
 #ifdef CONFIG_HIBERNATION
 	/* For hibernation */
 	u8 reg_pmic_dump[MAX77693_PMIC_REG_END];
@@ -407,6 +411,9 @@ enum cable_type_muic {
 #if defined(CONFIG_MUIC_MAX77693_SUPPORT_REMOTE_SWITCH)
 	CABLE_TYPE_REMOTE_SWITCH_MUIC,
 #endif /* CONFIG_MUIC_MAX77693_SUPPORT_REMOTE_SWITCH */
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	CABLE_TYPE_POWER_SHARING_MUIC,
+#endif /* CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
 #if defined(CONFIG_MUIC_DET_JACK)
 	CABLE_TYPE_EARJACK_MUIC,
 #endif

@@ -176,7 +176,7 @@ fw-shipped-$(CONFIG_EPEN_WACOM_G9PM) += epen/W9001_B746.bin epen/W9001_B713.bin 
 			epen/W9001_B746S.bin epen/W9001_B746L.bin \
 			epen/W9001_B746JD.bin \
 			epen/W9001_B746VZW.bin epen/W9001_B746USC.bin \
-			epen/W9001_0700.bin
+			epen/W9001_0702.bin epen/W9001_1103.bin
 fw-shipped-$(CONFIG_EPEN_WACOM_G9PL) += epen/W9002_B781.bin
 fw-shipped-$(CONFIG_KEYBOARD_TC370L_TOUCHKEY) += coreriver/tc370.fw
 

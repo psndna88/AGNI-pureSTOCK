@@ -118,12 +118,13 @@ unsigned int lpcharge;
 #if (defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) || defined(CONFIG_MACH_TAB3)) && defined(CONFIG_QC_MODEM)
 static int battery_get_lpm_state(char *str)
 {
-	get_option(&str, &lpcharge);
+	if (strncmp(str, "charger", 7) == 0)
+	lpcharge = 1;
 	pr_info("%s: Low power charging mode: %d\n", __func__, lpcharge);
 
 	return lpcharge;
 }
-__setup("lpcharge=", battery_get_lpm_state);
+__setup("androidboot.mode=", battery_get_lpm_state);
 #endif
 
 static enum power_supply_property sec_battery_properties[] = {
@@ -511,7 +512,11 @@ enum charger_type sec_get_dedicted_charger_type(struct battery_data *battery)
 	}
 #endif
 	/* ADC check margin (300~500ms) */
-	msleep(150);
+	#if defined(P4_CHARGING_FEATURE_01)
+		msleep(150);
+	#else
+		msleep(300);
+	#endif
 
 	usb_switch_lock();
 	usb_switch_set_path(USB_PATH_ADCCHECK);
@@ -741,6 +746,8 @@ static int sec_get_bat_level(struct power_supply *bat_ps)
 #if !((defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE)) && \
 	defined(CONFIG_TARGET_LOCALE_USA))
 	recover_flag = fg_check_cap_corruption();
+#elif defined(CONFIG_MACH_P4NOTE)
+	recover_flag = fg_check_cap_corruption_p4();
 #endif
 
 	/* check VFcapacity every five minutes */
@@ -850,6 +857,10 @@ static int sec_get_bat_level(struct power_supply *bat_ps)
 				fg_soc = get_fuelgauge_value(FG_LEVEL);
 				battery->abs_timer_status |=
 				ABS_CHARGING_PROP_PRE_FULL_CHARGING;
+				#if defined(P4_CHARGING_FEATURE_01) && defined(CONFIG_TARGET_LOCALE_USA)
+					if (lpcharge)
+						wake_lock_timeout( &battery->vbus_wake_lock, 5 * HZ);
+				#endif
 			} else if (battery->info.batt_is_recharging &&
 				!battery->abs_timer_status &&
 				battery->full_check_flag >= 2 && fg_soc > 99) {
@@ -859,6 +870,10 @@ static int sec_get_bat_level(struct power_supply *bat_ps)
 				ABS_CHARGING_PROP_PRE_FULL_CHARGING;
 				pr_info("%s: fully charged by abs timer\n",
 				__func__);
+				#if defined(P4_CHARGING_FEATURE_01) && defined(CONFIG_TARGET_LOCALE_USA)
+					if (lpcharge)
+						wake_lock_timeout( &battery->vbus_wake_lock, 5 * HZ);
+				#endif
 			} else if (battery->full_check_flag < 2)
 				pr_info("%s: full_check_flag (%d)", __func__,
 					battery->full_check_flag);
@@ -1337,8 +1352,13 @@ static int sec_bat_get_charging_status(struct battery_data *battery)
 {
 	switch (battery->info.charging_source) {
 	case CHARGER_BATTERY:
+	return POWER_SUPPLY_STATUS_DISCHARGING;
 	case CHARGER_USB:
-		return POWER_SUPPLY_STATUS_DISCHARGING;
+	#if !defined(CONFIG_MACH_P4NOTE)
+	return POWER_SUPPLY_STATUS_DISCHARGING;
+	#endif
+	if(!lpcharge)
+	return POWER_SUPPLY_STATUS_DISCHARGING;
 	case CHARGER_AC:
 	case CHARGER_MISC:
 	case CHARGER_DOCK:
@@ -1547,6 +1567,8 @@ static struct device_attribute sec_battery_attrs[] = {
 	SEC_BATTERY_ATTR(batt_current_now),
 	SEC_BATTERY_ATTR(siop_activated),
 	SEC_BATTERY_ATTR(batt_read_raw_soc),
+	SEC_BATTERY_ATTR(batt_current_ua_now),
+	SEC_BATTERY_ATTR(batt_current_ua_avg),
 #ifdef CONFIG_SAMSUNG_LPM_MODE
 	SEC_BATTERY_ATTR(batt_lp_charging),
 	SEC_BATTERY_ATTR(voltage_now),
@@ -1594,6 +1616,8 @@ enum {
 	BATT_CURRENT_NOW,
 	SIOP_ACTIVATED,
 	BATT_READ_RAW_SOC,
+	BATT_CURRENT_UA_NOW,
+	BATT_CURRENT_UA_AVG,
 #ifdef CONFIG_SAMSUNG_LPM_MODE
 	BATT_LP_CHARGING,
 	VOLTAGE_NOW,
@@ -1711,6 +1735,14 @@ static ssize_t sec_bat_show_property(struct device *dev,
 	case BATT_READ_RAW_SOC:
 		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
 		get_fuelgauge_value(FG_RAW_LEVEL));
+		break;
+	case BATT_CURRENT_UA_NOW:
+		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
+		get_fuelgauge_value(FG_CURRENT)*1000);
+		break;
+	case BATT_CURRENT_UA_AVG:
+		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
+		get_fuelgauge_value(FG_CURRENT_AVG)*1000);
 		break;
 #ifdef CONFIG_SAMSUNG_LPM_MODE
 	case BATT_LP_CHARGING:
@@ -2136,7 +2168,14 @@ static int sec_cable_status_update(struct battery_data *battery, int status)
 
 	if (source == CHARGER_USB || source == CHARGER_AC || \
 		source == CHARGER_MISC  || source == CHARGER_DOCK) {
-		wake_lock(&battery->vbus_wake_lock);
+		#if defined(P4_CHARGING_FEATURE_01) && defined(CONFIG_TARGET_LOCALE_USA)
+			if (lpcharge)
+				wake_lock_timeout(&battery->vbus_wake_lock, 2 * HZ);
+			else
+				wake_lock(&battery->vbus_wake_lock);
+		#else
+			wake_lock(&battery->vbus_wake_lock);
+		#endif
 	} else {
 		/* give userspace some time to see the uevent and update
 		* LED state or whatnot...
@@ -2163,11 +2202,16 @@ static void sec_bat_status_update(struct power_supply *bat_ps)
 				struct battery_data, psy_battery);
 
 	int old_level, old_temp, old_health, old_is_full, charging_status = 0;
+	static int initial_check = 0;
 
 	if (!battery->sec_battery_initial)
 		return;
 
 	mutex_lock(&battery->work_lock);
+	if (initial_check == 0) {
+		initial_check = 1;
+		battery->info.level = sec_get_bat_level(bat_ps);
+	}
 	old_temp = battery->info.batt_temp;
 	old_health = battery->info.batt_health;
 	old_level = battery->info.level;
@@ -2317,6 +2361,28 @@ static int sec_bat_suspend(struct device *dev)
 {
 	struct battery_data *battery = dev_get_drvdata(dev);
 	pr_info("%s start\n", __func__);
+	
+	#if defined(P4_CHARGING_FEATURE_01) && defined(CONFIG_TARGET_LOCALE_USA)
+		if (lpcharge) {
+			battery->last_poll = alarm_get_elapsed_realtime();
+
+			if (!get_charger_status(battery)) {
+				sec_program_alarm(battery, SLOW_POLL);
+				battery->slow_poll = 1;
+			} else
+			sec_program_alarm(battery, FAST_POLL);
+		} else {
+			if (!get_charger_status(battery)) {
+				sec_program_alarm(battery, SLOW_POLL);
+				battery->slow_poll = 1;
+			}
+		}
+	#else
+		if (!get_charger_status(battery)) {
+			sec_program_alarm(battery, SLOW_POLL);
+			battery->slow_poll = 1;
+		}
+	#endif
 
 	if (!get_charger_status(battery)) {
 		sec_program_alarm(battery, SLOW_POLL);
@@ -2660,7 +2726,7 @@ static int __devinit sec_bat_probe(struct platform_device *pdev)
 	debug_batterydata = battery;
 
 	battery->present = 1;
-	battery->info.level = 100;
+	battery->info.level = 50;
 	battery->info.charging_source = CHARGER_BATTERY;
 	battery->info.batt_health = POWER_SUPPLY_HEALTH_GOOD;
 	battery->info.abstimer_is_active = 0;

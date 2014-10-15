@@ -64,6 +64,9 @@
 #include "rndis.c"
 #include "f_diag.c"
 #include "f_dm.c"
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_SIDESYNC
+#include "f_conn_gadget.c"
+#endif
 
 MODULE_AUTHOR("Mike Lockwood");
 MODULE_DESCRIPTION("Android Composite USB Driver");
@@ -148,6 +151,15 @@ static char serial_string[256];
 #include "u_composite_notifier.c"
 #endif
 #include "u_ether.c"
+
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+int g_rndis;
+int is_rndis_use(void)
+{
+	return g_rndis;
+}
+EXPORT_SYMBOL_GPL(is_rndis_use);
+#endif
 
 /* String Table */
 static struct usb_string strings_dev[] = {
@@ -313,6 +325,44 @@ static struct android_usb_function adb_function = {
 	.cleanup	= adb_function_cleanup,
 	.bind_config	= adb_function_bind_config,
 };
+
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_SIDESYNC
+struct conn_gadget_data {
+	bool opened;
+	bool enabled;
+};
+
+static int
+conn_gadget_function_init(struct android_usb_function *f,
+		struct usb_composite_dev *cdev)
+{
+	f->config = kzalloc(sizeof(struct conn_gadget_data), GFP_KERNEL);
+	if (!f->config)
+		return -ENOMEM;
+
+	return conn_gadget_setup();
+}
+
+static void conn_gadget_function_cleanup(struct android_usb_function *f)
+{
+	conn_gadget_cleanup();
+	kfree(f->config);
+}
+
+static int
+conn_gadget_function_bind_config(struct android_usb_function *f,
+		struct usb_configuration *c)
+{
+	return conn_gadget_bind_config(c);
+}
+
+static struct android_usb_function conn_gadget_function = {
+	.name = "conn_gadget",
+	.init = conn_gadget_function_init,
+	.cleanup = conn_gadget_function_cleanup,
+	.bind_config = conn_gadget_function_bind_config,
+};
+#endif
 
 static void adb_ready_callback(void)
 {
@@ -1118,6 +1168,9 @@ static struct android_usb_function *supported_functions[] = {
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	&ncm_function,
 #endif
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_SIDESYNC
+	&conn_gadget_function,
+#endif
 	&mass_storage_function,
 	&accessory_function,
 	&diag_function,
@@ -1273,6 +1326,10 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 	char buf[256], *b;
 	int err;
 
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+	g_rndis = 0;
+#endif
+
 	mutex_lock(&dev->mutex);
 
 	if (dev->enabled) {
@@ -1313,6 +1370,9 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 					pr_err(
 					"android_usb: Cannot enable '%s'",
 					name);
+			}
+			if (!strcmp(name,"rndis")) {
+				g_rndis = 1;
 			}
 #endif
 		}
@@ -1364,13 +1424,25 @@ static ssize_t enable_store(struct device *pdev, struct device_attribute *attr,
 				/* Samsung KIES needs fixed bcdDevice number */
 				cdev->desc.bcdDevice = cpu_to_le16(0x0400);
 			}
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_SIDESYNC
+			if (!strcmp(f->name, "conn_gadget")) {
+				if(cdev->desc.bcdDevice == cpu_to_le16(0x0400))	{
+					printk(KERN_DEBUG "usb: conn_gadget + kies (bcdDevice=0xC00)\n");
+					cdev->desc.bcdDevice = cpu_to_le16(0x0C00);
+				} else {
+					printk(KERN_DEBUG "usb: conn_gadget only (bcdDevice=0x800)\n");
+					cdev->desc.bcdDevice = cpu_to_le16(0x0800);
+				}
+			}
+#endif
 			if (is_ncm_ready(f->name))
 				set_ncm_device_descriptor(&cdev->desc);
 		}
 		strncpy(manufacturer_string, "SAMSUNG",
-				sizeof(manufacturer_string) - 1);
+			 sizeof(manufacturer_string) - 1);
 		strncpy(product_string, "SAMSUNG_Android",
-				sizeof(product_string) - 1);
+			sizeof(product_string) - 1);
+
 #endif
 		cdev->desc.bDeviceSubClass = device_desc.bDeviceSubClass;
 		cdev->desc.bDeviceProtocol = device_desc.bDeviceProtocol;

@@ -2000,7 +2000,7 @@ static int __devinit mxt_sysfs_init_for_ATMELDBG(struct mxt_data *data)
 
 	sysfs_bin_attr_init(&mem_access_attr);
 	mem_access_attr.attr.name = "mem_access";
-	mem_access_attr.attr.mode = S_IRUGO | S_IWUGO;
+	mem_access_attr.attr.mode = S_IRUGO | S_IWUSR | S_IWGRP;
 	mem_access_attr.read = mem_atmeldbg_access_read;
 	mem_access_attr.write = mem_atmeldbg_access_write;
 	mem_access_attr.size = 65535;

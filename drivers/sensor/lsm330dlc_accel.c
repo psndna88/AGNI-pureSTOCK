@@ -153,6 +153,10 @@ static int lsm330dlc_accel_read_raw_xyz(struct lsm330dlc_accel_data *data,
 	acc->y = acc->y >> 4;
 	acc->z = acc->z >> 4;
 
+#if defined(CONFIG_MACH_M3_JPN_DCM)
+	acc->y = -acc->y;
+#endif
+
 	return 0;
 }
 

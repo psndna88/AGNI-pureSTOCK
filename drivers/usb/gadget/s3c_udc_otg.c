@@ -322,6 +322,9 @@ int s3c_vbus_enable(struct usb_gadget *gadget, int is_active)
 {
 	unsigned long flags;
 	struct s3c_udc *dev = container_of(gadget, struct s3c_udc, gadget);
+	#if defined(CONFIG_MACH_GC2PD) && (  defined(CONFIG_TARGET_LOCALE_USA) || defined(CONFIG_TARGET_LOCALE_EUR) )
+		struct usb_composite_dev *cdev = get_gadget_data(gadget);
+	#endif
 	mutex_lock(&dev->mutex);
 
 	if (dev->is_usb_ready) {
@@ -342,6 +345,12 @@ int s3c_vbus_enable(struct usb_gadget *gadget, int is_active)
 			printk(KERN_DEBUG "usb: %s is_active=%d(udc_disable)\n",
 					__func__, is_active);
 			spin_lock_irqsave(&dev->lock, flags);
+	#if defined(CONFIG_MACH_GC2PD) && (  defined(CONFIG_TARGET_LOCALE_USA) || defined(CONFIG_TARGET_LOCALE_EUR) )
+			if(cdev){
+				cdev->mute_switch = 0;
+				cdev->force_disconnect = 1;
+			}
+	#endif
 			stop_activity(dev, dev->driver);
 			spin_unlock_irqrestore(&dev->lock, flags);
 			udc_disable(dev);

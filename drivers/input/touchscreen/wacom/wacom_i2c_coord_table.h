@@ -37,6 +37,9 @@
 #include "table-t0uscc.h"
 #elif defined(CONFIG_MACH_T0_CHN_CTC)
 #include "table-t0chnctc.h"
+#elif defined(CONFIG_MACH_T0_CHN_OPEN_DUOS) \
+	|| defined(CONFIG_MACH_T0_CHN_CU_DUOS)
+#include "table-t0chnduos.h"
 #else
 /*CONFIG_MACH_T0_EUR_OPEN*/
 #include "table-t03g.h"

@@ -25,7 +25,12 @@ void s3c_i2c0_cfg_gpio(struct platform_device *dev)
 	if (soc_is_exynos5210() || soc_is_exynos5250())
 		s3c_gpio_cfgall_range(EXYNOS5_GPB3(0), 2,
 			S3C_GPIO_SFN(2), S3C_GPIO_PULL_UP);
-	else
+	else {
 		s3c_gpio_cfgall_range(EXYNOS4_GPD1(0), 2,
 			S3C_GPIO_SFN(2), S3C_GPIO_PULL_UP);
+#if defined(CONFIG_TARGET_TAB3_3G8) || defined(CONFIG_TARGET_TAB3_LTE8)
+		s5p_gpio_set_drvstr(EXYNOS4_GPD1(0), S5P_GPIO_DRVSTR_LV3);
+		s5p_gpio_set_drvstr(EXYNOS4_GPD1(1), S5P_GPIO_DRVSTR_LV3);
+#endif
+	}
 }

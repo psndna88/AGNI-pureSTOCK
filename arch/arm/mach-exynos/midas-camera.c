@@ -3141,13 +3141,41 @@ static int m9mo_get_i2c_busnum(void)
 	return 0;
 }
 
+#if defined(CONFIG_MACH_GC2PD) && defined(CONFIG_VIDEO_M9MO_SPI)
+void m9mo_spi_port_init(void)
+{
+	unsigned int gpio;
+
+	printk("%s", __func__);
+
+	s3c_gpio_cfgpin(EXYNOS4_GPB(4), S3C_GPIO_SFN(2));
+	s3c_gpio_cfgpin(EXYNOS4_GPB(7), S3C_GPIO_SFN(2));
+	s3c_gpio_setpull(EXYNOS4_GPB(4), S3C_GPIO_PULL_UP);
+	s3c_gpio_setpull(EXYNOS4_GPB(7), S3C_GPIO_PULL_UP);
+
+	for (gpio = EXYNOS4_GPB(4); gpio < EXYNOS4_GPB(8); gpio++)
+		s5p_gpio_set_drvstr(gpio, S5P_GPIO_DRVSTR_LV3);
+}
+
+void m9mo_spi_port_deinit(void)
+{
+	unsigned int gpio;
+
+	printk("%s", __func__);
+
+	for (gpio = EXYNOS4_GPB(4); gpio < EXYNOS4_GPB(8); gpio++)
+	{
+		s3c_gpio_cfgpin(gpio, S3C_GPIO_INPUT);
+		s3c_gpio_setpull(gpio, S3C_GPIO_PULL_NONE);
+		s5p_gpio_set_drvstr(gpio, S5P_GPIO_DRVSTR_LV1);
+	}
+}
+#endif
 static int m9mo_power_on(void)
 {
 	struct regulator *regulator;
 	int ret = 0;
-
 	printk(KERN_DEBUG "%s: in\n", __func__);
-
 	ret = gpio_request(GPIO_ISP_CORE_EN, "GPM0");
 	if (ret) {
 		printk(KERN_ERR "faile to request gpio(GPIO_ISP_CORE_EN)\n");
@@ -3190,6 +3218,10 @@ static int m9mo_power_on(void)
 	ret = regulator_enable(regulator);
 	regulator_put(regulator);
 	CAM_CHECK_ERR_RET(ret, "enable cam_sensor_1.8v");
+	#if defined(CONFIG_MACH_GC2PD) && defined(CONFIG_VIDEO_M9MO_SPI)
+	udelay(200);
+	m9mo_spi_port_init();
+	#endif
 
 	/* CAM_SENSOR_2.8V (CIS 2.8V) => LDO25*/
 	regulator = regulator_get(NULL, "cam_sensor_2.8v");
@@ -3234,6 +3266,9 @@ static int m9mo_power_down(void)
 	int ret = 0;
 
 	printk(KERN_DEBUG "%s: in\n", __func__);
+	#if defined(CONFIG_MACH_GC2PD) && defined(CONFIG_VIDEO_M9MO_SPI)
+	m9mo_spi_port_deinit();
+	#endif
 
 #ifdef CONFIG_MACH_GC2PD
 	ret = gpio_request(GPIO_MOT_EN, "GPM0");

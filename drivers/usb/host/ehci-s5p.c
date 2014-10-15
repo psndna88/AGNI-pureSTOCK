@@ -130,7 +130,9 @@ int s5p_ehci_port_control(struct platform_device *pdev, int port, int enable)
 	return 0;
 }
 #endif
-
+#ifdef CONFIG_SEC_DUAL_MODEM_MODE
+extern int cp_boot_flag;
+#endif
 #if defined(CONFIG_SEC_MODEM_V2)
 static void s5p_wait_for_cp_resume(struct platform_device *pdev,
 	struct usb_hcd *hcd) { do { } while(0); }
@@ -143,7 +145,12 @@ static void s5p_wait_for_cp_resume(struct platform_device *pdev,
 	struct s5p_ehci_platdata *pdata = pdev->dev.platform_data;
 	u32 __iomem	*portsc ;
 	u32 val32, retry_cnt = 0;
-
+#ifdef CONFIG_SEC_DUAL_MODEM_MODE
+	if(cp_boot_flag != 2) {
+		pr_err("mif: cp boot flag is %d, so ap doesn't need to wait for cp resume\n", cp_boot_flag);
+		return;
+	}
+#endif
 #if !defined(CONFIG_MDM_HSIC_PM)
 	/* when use usb3503 hub, need not wait cp resume */
 	if (modem_using_hub())
@@ -764,13 +771,14 @@ static int __devinit s5p_ehci_probe(struct platform_device *pdev)
 		register_cpu_notifier(&s5p_ehci_cpu_notifier);
 	}
 #endif
-
+#if !defined(CONFIG_MACH_T0_CHN_CMCC)
 #if defined(CONFIG_LINK_DEVICE_HSIC) || defined(CONFIG_LINK_DEVICE_USB)
 	/* for cp enumeration */
 	pm_runtime_forbid(&pdev->dev);
 	/*HSIC IPC control the ACTIVE_STATE*/
 	if (pdata && pdata->noti_host_states)
 		pdata->noti_host_states(pdev, S5P_HOST_ON);
+#endif
 #endif
 
 	return 0;

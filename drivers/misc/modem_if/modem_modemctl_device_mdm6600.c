@@ -427,11 +427,7 @@ static int mdm6600_boot_on(struct modem_ctl *mc)
 {
 	struct regulator *regulator;
 	struct link_device *ld = get_current_link(mc->iod);
-#if defined(CONFIG_LINK_DEVICE_PLD)
 	struct pld_link_device *dpld = to_pld_link_device(ld);
-#elif defined(CONFIG_LINK_DEVICE_DPRAM)
-	struct dpram_link_device *dpld = to_dpram_link_device(ld);
-#endif
 
 	pr_info("[MSM] <%s>\n", __func__);
 

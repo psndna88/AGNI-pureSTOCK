@@ -150,7 +150,11 @@ static unsigned int get_nr_run_avg(void)
 #define DEF_FREQUENCY_MIN_SAMPLE_RATE		(10000)
 #define MIN_FREQUENCY_UP_THRESHOLD		(11)
 #define MAX_FREQUENCY_UP_THRESHOLD		(100)
+#if defined(CONFIG_MACH_T0_CHN_OPEN_DUOS) || defined(CONFIG_MACH_T0_CHN_CU_DUOS) || defined(CONFIG_MACH_T0_CHN_CTC)
+#define DEF_SAMPLING_RATE			(200000)
+#else
 #define DEF_SAMPLING_RATE			(50000)
+#endif
 #define MIN_SAMPLING_RATE			(10000)
 #define MAX_HOTPLUG_RATE			(40u)
 

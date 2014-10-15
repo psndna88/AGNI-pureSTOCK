@@ -538,6 +538,17 @@ static struct platform_device *t0_sound_devices[] __initdata = {
 #endif
 };
 
+static void midas_sound_i2c_set_platdata(void)
+{
+	struct s3c2410_platform_i2c *pd;
+
+	pd = &default_i2c_data;
+	pd->bus_num = 4;
+	pd->frequency = 100 * 1000;
+
+	s3c_i2c4_set_platdata(pd);
+}
+
 void __init midas_sound_init(void)
 {
 	pr_info("Sound: start %s\n", __func__);
@@ -565,7 +576,8 @@ void __init midas_sound_init(void)
 	pr_info("%s: system rev = %d\n", __func__, system_rev);
 #ifdef CONFIG_USE_ADC_DET
 #if defined(CONFIG_MACH_T0_USA_TMO) || defined(CONFIG_MACH_T0_USA_USCC) || \
-	defined(CONFIG_MACH_T0_USA_ATT)
+	defined(CONFIG_MACH_T0_USA_ATT) || defined(CONFIG_MACH_T0_USA_VZW) || \
+	defined(CONFIG_MACH_T0_USA_SPR)
 	if (system_rev >= 11)
 		t0_sound_pdata.use_jackdet_type = 1;
 #elif defined(CONFIG_MACH_ZEST) || defined(CONFIG_MACH_GD2)
@@ -587,7 +599,7 @@ void __init midas_sound_init(void)
 		i2c_wm1811[0].irq = IRQ_EINT(25);
 #endif
 
-	SET_PLATDATA_CODEC(NULL);
+	midas_sound_i2c_set_platdata();
 	i2c_register_board_info(I2C_NUM_CODEC, i2c_wm1811,
 					ARRAY_SIZE(i2c_wm1811));
 

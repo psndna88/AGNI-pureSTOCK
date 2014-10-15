@@ -214,8 +214,6 @@ static ssize_t factory_show_property(struct device *dev,
 			info->battery_error_test);
 		break;
 	case SIOP_ACTIVATED:
-		val = info->siop_state;
-		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", val);
 		break;
 	case SIOP_LEVEL:
 		val = info->siop_lv;
@@ -317,17 +315,13 @@ static ssize_t factory_store_property(struct device *dev,
 		}
 		break;
 	case SIOP_ACTIVATED:
-		if (sscanf(buf, "%d\n", &x) == 1) {
-			info->siop_state = x;
-			pr_info("%s: SIOP %s\n", __func__,
-				(info->siop_state ?
-				"activated" : "deactivated"));
-			ret = count;
-		}
 		break;
 	case SIOP_LEVEL:
 		if (sscanf(buf, "%d\n", &x) == 1) {
-			info->siop_lv = x;
+			if(x >= 0 && x <=100)
+				info->siop_lv = x;
+			else
+				info->siop_lv = 100;
 			pr_info("%s: SIOP level %d\n", __func__, info->siop_lv);
 			ret = count;
 		}

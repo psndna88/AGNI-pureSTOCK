@@ -28,6 +28,10 @@
 #include <linux/mfd/max77686.h>
 #include <linux/mfd/max77693.h>
 
+#if defined(CONFIG_SEC_GPIO_DVS)
+#include <linux/secgpio_dvs.h>
+#endif
+
 #if defined(CONFIG_REGULATOR_S5M8767)
 #include <linux/mfd/s5m87xx/s5m-pmic.h>
 #include <linux/mfd/s5m87xx/s5m-core.h>
@@ -414,6 +418,14 @@ struct max77686_platform_data exynos4_max77686_info = {
 void midas_power_init(void)
 {
 	printk(KERN_INFO "%s\n", __func__);
+#if defined(CONFIG_SEC_GPIO_DVS)
+ 	/************************ Caution !!! ****************************/
+	/* This function must be located in an appropriate position for INIT state
+ 	 * in accordance with the specification of each BB vendor.
+ 	 */
+ 	/************************ Caution !!! ****************************/
+ 	gpio_dvs_check_initgpio();
+#endif
 }
 #endif /* CONFIG_REGULATOR_MAX77686 */
 
@@ -820,6 +832,14 @@ struct s5m_platform_data exynos4_s5m8767_info = {
 void midas_power_init(void)
 {
 	printk(KERN_INFO "%s\n", __func__);
+#if defined(CONFIG_SEC_GPIO_DVS)
+ 	/************************ Caution !!! ****************************/
+	/* This function must be located in an appropriate position for INIT state
+ 	 * in accordance with the specification of each BB vendor.
+ 	 */
+ 	/************************ Caution !!! ****************************/
+ 	gpio_dvs_check_initgpio();
+#endif
 }
 
 /* End of S5M8767 */

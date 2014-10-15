@@ -2356,7 +2356,11 @@ unsigned long try_to_free_pages(struct zonelist *zonelist, int order,
 		.nr_to_reclaim = SWAP_CLUSTER_MAX,
 		.may_unmap = 1,
 		.may_swap = 1,
+#ifdef CONFIG_ZSWAP
+		.swappiness = vm_swappiness / 2,
+#else
 		.swappiness = vm_swappiness,
+#endif
 		.order = order,
 		.mem_cgroup = NULL,
 		.nodemask = nodemask,
@@ -3154,6 +3158,7 @@ long rtcc_reclaim_pages(long nr_to_reclaim)
 	struct task_struct *p = current;
 	unsigned long nr_reclaimed;
 
+	printk("RTCC, start reclaim!\n");
 	p->flags |= PF_MEMALLOC;
 	lockdep_set_current_reclaim_state(sc.gfp_mask);
 	reclaim_state.reclaimed_slab = 0;

@@ -33,13 +33,24 @@
 #include <linux/device.h>
 
 /* definitions */
-#define	SEC_SIZEOF_POWER_SUPPLY_TYPE	13
+#if defined (CONFIG_CHARGER_MAX77693_BAT)
+#define	SEC_SIZEOF_POWER_SUPPLY_TYPE	14
+#else
+#define	SEC_SIZEOF_POWER_SUPPLY_TYPE	15
+#endif
 
 enum sec_battery_voltage_mode {
 	/* average voltage */
 	SEC_BATTEY_VOLTAGE_AVERAGE = 0,
 	/* open circuit voltage */
 	SEC_BATTEY_VOLTAGE_OCV,
+};
+
+enum sec_battery_current_mode {
+	/* uA */
+	SEC_BATTEY_CURRENT_UA = 0,
+	/* mA */
+	SEC_BATTEY_CURRENT_MA,
 };
 
 enum sec_battery_capacity_mode {

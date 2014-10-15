@@ -357,7 +357,7 @@ static int mxt_write_config_from_pdata(struct mxt_data *data)
 #define MXT_GR_GDC_STATUS_WAITTING	1
 #define MXT_GR_GDC_STATUS_GETTING	2
 #define MXT_GR_GDC_STATUS_AQUIRED	3
-#define	MXT_GR_GDC_STATUS_FINISH		4
+#define	MXT_GR_GDC_STATUS_FINISH	4
 
 static const char * const GF_GDC_STATUS[] = {
 	"Init",
@@ -442,8 +442,8 @@ static void mxt_gdc_init_config(struct mxt_data *data)
 	mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 13, 1);//0613
 	mxt_write_object(data, MXT_TOUCH_MULTITOUCHSCREEN_T9, 44, 70);//0614
 	mxt_write_object(data, MXT_PROCI_STYLUS_T47, 1, 60);//0616
-	mxt_write_object(data, MXT_PROCI_LENSBENDING_T65, 1, 0);//0614
-	mxt_write_object(data, MXT_PROCI_LENSBENDING_T65, 10, 0);//0614
+	mxt_write_object(data, MXT_PROCI_LENSBENDING_T65, 1, 6);//0801
+	mxt_write_object(data, MXT_PROCI_LENSBENDING_T65, 10, 3);//0801
 	mxt_write_object(data, MXT_PROCG_NOISESUPPRESSION_T72, 0, 0xFF);//0615
 
 	mxt_t61_timer_set(data, 1,
@@ -463,13 +463,13 @@ static void mxt_gdc_acquired_config(struct mxt_data *data)
     data->GoldenBadCheckCnt = 0;
 
     mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 2, 5);//0608
-    mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 3, 1);//0608
+    mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 3, 2);//0708
     mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 4, 0);//0615
     mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 6, 1);//0609
     mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 7, 60);//0609
 #if NO_GR_MODE
     mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 8, 1);//0616#2
-    mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 9, 0);//0616#2
+    mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 9, 226);//0708
     mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 13, 1);//0615
 #else
     mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 8, 1);//0616#2
@@ -483,7 +483,6 @@ static void mxt_gdc_acquired_config(struct mxt_data *data)
 	mxt_t61_timer_set(data, 1,
 	MXT_T61_TIMER_ONESHOT,
 	MXT_T61_TIMER_CMD_START, 400);
-	data->Wakeup_Reset_Check_Press = 1;
 }
 
 static void mxt_gdc_finish_config(struct mxt_data *data)
@@ -507,21 +506,20 @@ static void mxt_GR_Caputre_Prime_Process(struct mxt_data *data)
 {
 #if NO_GR_MODE
     mxt_gdc_acquired_config(data);
-    mxt_write_object(data, MXT_PROCG_NOISESUPPRESSION_T72, 0, 0xFD);//0616#3 T72message disable 
-	/* Go to waiting */
-	dev_info(&data->client->dev, "But T72 status was not Stabel, Goto MXT_GR_GDC_STATUS_WAITTING \n");
-	mxt_set_gdc_status(data, MXT_GR_GDC_STATUS_WAITTING);
-	data->GoodStep1_AllReleased = 0;
+    mxt_write_object(data, MXT_PROCG_NOISESUPPRESSION_T72, 0, 0xFD);//0616#3 T72message disable
 #else
     mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 8, 1);//0616(Forced thr)
     mxt_write_object(data, MXT_GEN_ACQUISITIONCONFIG_T8, 9, 0);//0616(Forced Ratio)
 
     if((data->T72_State== 0x02) ) {
        /* Time Out && All release Status */
-        data->GoodStep1_AllReleased = 0x03;
+		mxt_write_object(data, MXT_PROCG_NOISESUPPRESSION_T72, 40, 8);//0620 Stable to Noisy Auto transaction disable
+		mxt_write_object(data, MXT_PROCG_NOISESUPPRESSION_T72, 60, 8);//0620 Noisy to Very Noisy Auto transaction disable
+
+        data->GoodStep1_AllReleased = 0x02;//0617
 		mxt_write_object(data, MXT_PROCG_NOISESUPPRESSION_T72, 0, 0xFD);//0615
 		mxt_write_object(data, MXT_SPT_GOLDENREFERENCES_T66,
-			0, MXT_FCALCMD(MXT_FCALCMD_PRIME) | data->T66_CtrlVal|0x03);//0614
+			0, MXT_FCALCMD(MXT_FCALCMD_PRIME) | data->T66_CtrlVal|0x83);//0614
 
     } else {
 		/* Go to waiting */
@@ -616,37 +614,7 @@ static int mxt_write_config(struct mxt_fw_info *fw_info)
 			cfg_data->instance, index, cfg_length);
 
 		reg = object->start_address + object->size * cfg_data->instance;
-#if NO_GR_MODE
-		if (data->charging_mode){
-			if(cfg_data->type == 66){
-				*(cfg_data->register_val + 0) = 0;
-			}
-			if(cfg_data->type == 72){
-				*(cfg_data->register_val + 2) = 0x81;
-				*(cfg_data->register_val + 3) = 0x81;
-			}
-		}else{
-			if(cfg_data->type == 66){
-				*(cfg_data->register_val + 0) = 0;
-			}
-			if(cfg_data->type == 72){
-				*(cfg_data->register_val + 2) = 0x81;
-				*(cfg_data->register_val + 3) = 0x81;
-			}
-		}
-#endif
-#if CHECK_ANTITOUCH_MCAM
-		if(cfg_data->type == 8){
-			*(cfg_data->register_val + 13) = 0;
-		}
-		if(cfg_data->type == 9){
-			*(cfg_data->register_val + 44) = 70;
-		}
-		if(cfg_data->type == 65){
-			*(cfg_data->register_val + 1) = 1;
-			*(cfg_data->register_val + 10) = 1;
-		}
-#endif
+
 		/* Write register values of each object */
 		ret = mxt_write_mem(data, reg, cfg_data->size,
 					 cfg_data->register_val);
@@ -967,31 +935,33 @@ static int set_charger_config(struct mxt_data *data)
 	}
 #if CHECK_ANTITOUCH_MCAM
     switch (data->GoodConditionStep) {
-    case(MXT_GR_GDC_STATUS_INIT) :
-    case(MXT_GR_GDC_STATUS_WAITTING) :
-    case(MXT_GR_GDC_STATUS_GETTING) :
-		dev_info(&data->client->dev, "set_charger_ <<<MXT_GR_GDC_STATUS_AQUIRED\n");
-		mxt_gdc_init_config(data);//0615_
+    case MXT_GR_GDC_STATUS_INIT:
+    case MXT_GR_GDC_STATUS_WAITTING:
+    case MXT_GR_GDC_STATUS_GETTING:
+		dev_info(&data->client->dev, "set_charger_ <<<MXT_GR_GDC_STATUS_AQUIRED(0x%02x)\n",data->FcalSeqdoneNum);//0801
+		mxt_gdc_init_config(data);
 		mxt_command_calibration(data);
-        break;
-    case(MXT_GR_GDC_STATUS_AQUIRED) :
-    case(MXT_GR_GDC_STATUS_FINISH) :
-		dev_info(&data->client->dev, "set_charger_ >>>>MXT_GR_GDC_STATUS_AQUIRED\n");
-		if ((data->WakeupPowerOn == 1 )&& (data->Exist_Stylus != 0)) {//0613
+		break;
+    case MXT_GR_GDC_STATUS_AQUIRED:
+    case MXT_GR_GDC_STATUS_FINISH:
+		dev_info(&data->client->dev, "set_charger_ >>>>MXT_GR_GDC_STATUS_AQUIRED(0x%02x)\n", data->FcalSeqdoneNum);//0801
+		dev_info(&data->client->dev, "data->WakeupPowerOn = %d, data->Exist_Stylus = %d \n", data->WakeupPowerOn, data->Exist_Stylus);//0809
+		if ((data->WakeupPowerOn == 1 ) && (data->Exist_Stylus != 0) && (data->Exist_Stylus < 100)) {//0808
 			dev_info(&data->client->dev, "set_charger_ Existed Stylus touch when phone had gone sleep\n");
 			data->Exist_Stylus = 0;
 			mxt_gdc_init_config(data);//0615_
-			mxt_command_calibration(data);
+			data->FcalSeqdoneNum = (data->FcalSeqdoneNum | 0x10);//0801
 		} else {
 			mxt_gdc_acquired_config(data);
 #if NO_GR_MODE
 			mxt_set_golden_reference(data, false);
-			mxt_command_calibration(data);
 #endif
 		}
-    default:
-        break;
+			mxt_command_calibration(data);//0708
+	default :
+		break;
     }
+    data->WakeupPowerOn = 0; //0812
 #endif
 	return ret;
 }
@@ -1001,6 +971,9 @@ static void inform_charger(struct mxt_callbacks *cb,
 {
 	struct mxt_data *data = container_of(cb,
 			struct mxt_data, callbacks);
+
+	if (!data->mxt_enabled)
+		return;
 
 	cancel_delayed_work_sync(&data->noti_dwork);
 	data->charging_mode = en;
@@ -1035,7 +1008,6 @@ static void mxt_report_input_data(struct mxt_data *data)
 	int i;
 	int count = 0;
 	int report_count = 0;
-	int area_cnt = 0;
 
 	for (i = 0; i < MXT_MAX_FINGER; i++) {
 		if (data->fingers[i].state == MXT_STATE_INACTIVE)
@@ -1110,56 +1082,76 @@ static void mxt_report_input_data(struct mxt_data *data)
 	}
 
 #if CHECK_ANTITOUCH_MCAM
-	data->Report_touch_number = 0;
-	for (i = 0; i < MXT_MAX_FINGER; i++) {
-		if ((data->fingers[i].state != \
-			MXT_STATE_INACTIVE) &&
-			(data->fingers[i].state != \
-			MXT_STATE_RELEASE)) {
-				data->Report_touch_number++;
-			if((data->fingers[i].x < 20) || (data->fingers[i].x > (539-20)) || \
-				(data->fingers[i].y < 20) || (data->fingers[i].y > (959-20))) {
-				if(data->fingers[i].stylus > 15){
-					data->Exist_EdgeTouch++;
-					if(data->Exist_EdgeTouch > 4) {
-						data->Exist_EdgeTouch = 0;
-						if (data->GoodConditionStep < MXT_GR_GDC_STATUS_AQUIRED) {
-							mxt_gdc_init_config(data);
-							mxt_command_calibration(data);
+	if (data->WakeupPowerOn != 2) {//0822
+		data->Report_touch_number = 0;
+
+		if((data->WakeupPowerOn == 0) && (data->Exist_Stylus != 100)) { //0812
+			data->Exist_Stylus = 0;
+		}
+
+		for (i = 0; i < MXT_MAX_FINGER; i++) {
+			if ((data->fingers[i].state != \
+				MXT_STATE_INACTIVE) &&
+				(data->fingers[i].state != \
+				MXT_STATE_RELEASE)) {
+					data->Report_touch_number++;
+				if((data->fingers[i].y < 20) || (data->fingers[i].y > (959-20))) {
+					if(data->fingers[i].stylus > 15){
+						data->Exist_EdgeTouch++;
+						if (data->Exist_EdgeTouch > 4) {
+							data->Exist_EdgeTouch = 0;
+							if (data->GoodConditionStep < MXT_GR_GDC_STATUS_AQUIRED) {
+								dev_info(&data->client->dev, "Report_input_ touched in wakeup\n");//0731
+								mxt_gdc_init_config(data);
+								data->FcalSeqdoneNum = (data->FcalSeqdoneNum | 0x20);//0801
+								mxt_command_calibration(data);
+							}
 						}
 					}
 				}
+				if ((data->fingers[i].stylus == 0) && (data->Exist_Stylus != 100)){//0808
+					data->Exist_Stylus++;
+				}
 			}
 		}
-	}
+		if ((data->Exist_Stylus > 1) && (data->Exist_Stylus != 100)) {//0808
+			data->Exist_Stylus = 100; //for one time set T47, T9
+			mxt_write_object(data, MXT_PROCI_STYLUS_T47, 2, 1);
+			mxt_write_object(data, MXT_TOUCH_MULTITOUCHSCREEN_T9, 7, 50);
+		}
 
-	if (data->Report_touch_number){
-		data->GoodStep1_AllReleased  = 0;/*re-touched*/
-		data->Exist_EdgeTouch = 0;//0615
-	} else {
-		if ((data->Wakeup_Reset_Check_Press == 1) && (data->mxt_enabled == 1)) {
-			dev_info(&data->client->dev, "[GDC] Sequence is finished by Released all finger\n");
-			data->Wakeup_Reset_Check_Press = 2;
-			data->GoldenBadCheckCnt = 0;
-			mxt_set_gdc_status(data, MXT_GR_GDC_STATUS_FINISH);
-			mxt_t61_timer_set(data, 1, MXT_T61_TIMER_ONESHOT,
-				  MXT_T61_TIMER_CMD_START, 2000);
+		if (data->Report_touch_number){
+			data->GoodStep1_AllReleased  = 0;/*re-touched*/
+			data->Exist_EdgeTouch = 0;//0615
+		} else {
+			if (data->Wakeup_Reset_Check_Press == 1) {//0822
+				dev_info(&data->client->dev, "[GDC] Sequence is finished by Released all finger\n");
+				data->Wakeup_Reset_Check_Press = 2;
+				data->GoldenBadCheckCnt = 0;
+				mxt_set_gdc_status(data, MXT_GR_GDC_STATUS_FINISH);
+				mxt_t61_timer_set(data, 1, MXT_T61_TIMER_ONESHOT,
+					  MXT_T61_TIMER_CMD_START, 2000);
+			}
+			if (data->Exist_Stylus == 100) {//0808
+				data->Exist_Stylus = 0;
+				mxt_write_object(data, MXT_PROCI_STYLUS_T47, 2, 145);
+				mxt_write_object(data, MXT_TOUCH_MULTITOUCHSCREEN_T9, 7, 40);
+			}
 		}
 	}
 #endif
 
 #if (TSP_USE_SHAPETOUCH || TSP_BOOSTER)
-	/* all fingers are released */
-	if (count == 0) {
+	if (!data->booster.dvfs_lock_status && !!count) {
+		mxt_set_dvfs(data, TOUCH_BOOSTER_ON);
+	}
+	else if (count == 0) {
 #if TSP_USE_SHAPETOUCH
 		data->sumsize = 0;
 #endif
-#if TSP_BOOSTER
 		mxt_set_dvfs(data, TOUCH_BOOSTER_DELAY_OFF);
-#endif
 	}
 #endif
-
 	data->finger_mask = 0;
 }
 
@@ -1168,16 +1160,19 @@ static void mxt_release_all_finger(struct mxt_data *data)
 	int i;
 	int count = 0;
 
-	data->Exist_Stylus = 0;
+	if (data->Exist_Stylus != 100) {
+		data->Exist_Stylus = 0;
+	}
+
 	for (i = 0; i < MXT_MAX_FINGER; i++) {
 #if CHECK_ANTITOUCH_MCAM
-		if (data->mxt_enabled == false) {
+		if (data->WakeupPowerOn == 2) {
 			if ((data->fingers[i].state != \
 				MXT_STATE_INACTIVE) &&
 				(data->fingers[i].state != \
 				MXT_STATE_RELEASE)&&
-				data->fingers[i].stylus== 0){
-					data->Exist_Stylus ++;
+				(data->fingers[i].stylus == 0) && (data->Exist_Stylus != 100)) {//0809
+					data->Exist_Stylus++;
 			}
 		}
 #endif
@@ -1233,9 +1228,11 @@ static void mxt_treat_T6_object(struct mxt_data *data,
 						MXT_T61_TIMER_CMD_START, 1200);
 			}
 			data->GoldenBadCheckCnt ++;
-			if (data->GoldenBadCheckCnt >= 4) {
-				dev_info(&data->client->dev, "T6 Disable GR Because Cal 4 times \n");
+			if (data->GoldenBadCheckCnt >= 6) {
+				dev_info(&data->client->dev, "T6 Disable GR Because Cal 6 times \n");
 				mxt_gdc_init_config(data);
+				data->FcalSeqdoneNum = (data->FcalSeqdoneNum | 0x40);//0801
+				mxt_command_calibration(data);//0617
 			}
             break;
         default:
@@ -1282,10 +1279,6 @@ static void mxt_treat_T9_object(struct mxt_data *data,
 		data->fingers[id].w = msg[4];
 		data->fingers[id].stylus =msg[4];
 		data->fingers[id].state = MXT_STATE_RELEASE;
-#if CHECK_PALM
-		if (data->PalmFlag == 0)
-#endif
-		mxt_report_input_data(data);
 	} else if ((msg[0] & MXT_DETECT_MSG_MASK)
 		&& (msg[0] & (MXT_PRESS_MSG_MASK | MXT_MOVE_MSG_MASK| MXT_VECTOR_MSG_MASK))) {
 		data->fingers[id].x = (msg[1] << 4) | (msg[3] >> 4);
@@ -1308,29 +1301,29 @@ static void mxt_treat_T9_object(struct mxt_data *data,
 			data->fingers[id].mcount = 0;
 #if CHECK_ANTITOUCH_MCAM
             switch (data->GoodConditionStep) {
-            case(MXT_GR_GDC_STATUS_INIT) :
+            case MXT_GR_GDC_STATUS_INIT:
 				if (data->check_after_wakeup) {
 					mxt_t61_timer_set(data, 1, MXT_T61_TIMER_ONESHOT,
 						  MXT_T61_TIMER_CMD_START, 900);
 					 data->check_after_wakeup = 0;
 				}
 				break;
-            case(MXT_GR_GDC_STATUS_WAITTING) :
+            case MXT_GR_GDC_STATUS_WAITTING:
 				if (data->TimerSet == 0) {
 					mxt_t61_timer_set(data, 1, MXT_T61_TIMER_ONESHOT,
 						  MXT_T61_TIMER_CMD_START, 600);
 					data->TimerSet = 1;
 				}
 				break;
-            case(MXT_GR_GDC_STATUS_GETTING) :
+            case MXT_GR_GDC_STATUS_GETTING:
+					break;
+            case MXT_GR_GDC_STATUS_AQUIRED:
+            case MXT_GR_GDC_STATUS_FINISH:
 				if (data->Wakeup_Reset_Check_Press == 1) {
 					dev_info(&data->client->dev, "T9 Press Press \n");
 					mxt_t61_timer_set(data, 1, MXT_T61_TIMER_ONESHOT,
 						  MXT_T61_TIMER_CMD_STOP, 0);
 				}
-                break;
-            case (MXT_GR_GDC_STATUS_AQUIRED):
-            case (MXT_GR_GDC_STATUS_FINISH):
                 break;
             default:
                 break;
@@ -1342,10 +1335,6 @@ static void mxt_treat_T9_object(struct mxt_data *data,
 		} else if (msg[0] & MXT_MOVE_MSG_MASK) {
 			data->fingers[id].mcount += 1;
 		}
-
-#if TSP_BOOSTER
-		mxt_set_dvfs(data, TOUCH_BOOSTER_ON);
-#endif
 	} else if ((msg[0] & MXT_SUPPRESS_MSG_MASK)
 		&& (data->fingers[id].state != MXT_STATE_INACTIVE)) {
 		data->fingers[id].z = 0;
@@ -1361,6 +1350,14 @@ static void mxt_treat_T9_object(struct mxt_data *data,
 			dev_err(&data->client->dev, "Unknown state %#02x %#02x\n",
 				msg[0], msg[1]);
 	}
+#if CHECK_PALM
+	if ((data->PalmFlag == 0) || (data->PressEventCheck ==1)) {
+		data->PressEventCheck = 0;
+		mxt_report_input_data(data);
+	}
+#else
+		mxt_report_input_data(data);
+#endif
 }
 
 static void mxt_treat_T42_object(struct mxt_data *data,
@@ -1439,11 +1436,10 @@ static void mxt_treat_T57_object(struct mxt_data *data,
 #if  MaxStartup_Set /* 20130403 */
 	    if (data->Report_touch_number == 0) {
 			if ((tch_area == 0) && (atch_area == 0)) {
-                data->GoodStep1_AllReleased = 2;
 		        dev_info(&data->client->dev, "T57 : All Touch Released at MXT_GR_GDC_STATUS_GETTING \n");
                 dev_info(&data->client->dev, "T66 Start Golden References in T57 0x%x \n", data->T66_CtrlVal);
                 mxt_GR_Caputre_Prime_Process(data);
-			} else if (data->GoodStep1_AllReleased  < 3) { /* Befor PRIME Command */
+			} else if (data->GoodStep1_AllReleased  < 2) { /* Befor PRIME Command */
 				dev_info(&data->client->dev, "Not Good Status Retry!! \n");
 				mxt_set_gdc_status(data, MXT_GR_GDC_STATUS_WAITTING);
 				data->GoodStep1_AllReleased = 0;
@@ -1454,6 +1450,7 @@ static void mxt_treat_T57_object(struct mxt_data *data,
 #endif
         break;
     case MXT_GR_GDC_STATUS_AQUIRED:
+    case MXT_GR_GDC_STATUS_FINISH:
 #if CHECK_PALM
 	if (data->PalmFlag == 0) {
 		if ((total_area > 110) && (data->Report_touch_number >= 3)) {
@@ -1469,10 +1466,11 @@ static void mxt_treat_T57_object(struct mxt_data *data,
 	}
 #endif
 	if ((data->Report_touch_number==1) && (data->Wakeup_Reset_Check_Press < 3)) {
-		if ((total_area > 40 && tch_area < 5) || (tch_area > 40 && atch_area < 5) \
-			|| (tch_area < 5 && atch_area > 40)) {
+		if ((total_area > 40 && tch_area < 3) || (tch_area > 40 && atch_area < 3) \
+			|| (tch_area < 3 && atch_area > 40)) {
 			dev_info(&data->client->dev, "T57 Disable GR Because size information \n");
 			mxt_gdc_init_config(data);
+			data->FcalSeqdoneNum = (data->FcalSeqdoneNum | 0x80);//0801
 			mxt_command_calibration(data);
 		}
 	 }
@@ -1492,8 +1490,6 @@ static void mxt_treat_T57_object(struct mxt_data *data,
 			mxt_command_calibration(data);
 	}
 #endif
-        break;
-    case MXT_GR_GDC_STATUS_FINISH:
         break;
     default:
         break;
@@ -1528,12 +1524,8 @@ static void mxt_treat_T61_object(struct mxt_data *data,
 			    data->check_antitouch = 0;
 			    data->TimerSet = 0;
 			    mxt_set_gdc_status(data, MXT_GR_GDC_STATUS_GETTING);
-			    break;
-			case MXT_GR_GDC_STATUS_GETTING:
-			    data->check_antitouch = 0;
-			    data->TimerSet = 0;
+
 	            if (data->GoodStep1_AllReleased == 1) {/* already all released status */
-	                data->GoodStep1_AllReleased = 2;
                     dev_info(&data->client->dev, "T61 : All Touch Released at MXT_GR_GDC_STATUS_WAITTING \n");
                     dev_info(&data->client->dev, "T66 Start Golden References in T61 0x%x \n", data->T66_CtrlVal);
                     mxt_GR_Caputre_Prime_Process(data);
@@ -1563,6 +1555,7 @@ static void mxt_treat_T61_object(struct mxt_data *data,
 	} else if (message->reportid == 16) {
 	    switch (data->GoodConditionStep) {
         case MXT_GR_GDC_STATUS_AQUIRED:
+		case MXT_GR_GDC_STATUS_FINISH:
 			if ((message->message[0] & 0xa0) == 0xa0)
 				data->GoldenBadCheckCnt = 0;
 			break;
@@ -1585,6 +1578,8 @@ static void mxt_treat_T66_object(struct mxt_data *data,
 
 	switch (MXT_FCALSTATE(message->message[0])) {
 	case MXT_FCALSTATE_IDLE:
+		mxt_write_object(data, MXT_PROCG_NOISESUPPRESSION_T72, 40, 9);//0801 Stable to Noisy Auto transaction Enable
+		mxt_write_object(data, MXT_PROCG_NOISESUPPRESSION_T72, 60, 9);//0801 Noisy to Very Noisy Auto transaction Enable
 		if (message->message[0] & MXT_FCALSTATUS_SEQTO) {
 			dev_info(&data->client->dev, "Sequence Timeout:[0x%x]\n", message->message[0]);
 		}
@@ -1595,13 +1590,18 @@ static void mxt_treat_T66_object(struct mxt_data *data,
 			dev_info(&data->client->dev, "Sequence Done:[0x%x]\n", message->message[0]);
 			if (data->GoodConditionStep == MXT_GR_GDC_STATUS_GETTING) {
 				mxt_gdc_acquired_config(data);
+				if ((data->FcalSeqdoneNum & 0x0F) == 0x0F) {//0801
+					data->FcalSeqdoneNum = (data->FcalSeqdoneNum & 0xF0);
+				} else {
+					data->FcalSeqdoneNum++;
+				}
 			}
 		}
 		break;
 	case MXT_FCALSTATE_PRIMED:
 		dev_info(&data->client->dev, "data->T66_CtrlVal[0x%x]\n", data->T66_CtrlVal);
 		mxt_write_object(data, MXT_SPT_GOLDENREFERENCES_T66,
-				0, MXT_FCALCMD(MXT_FCALCMD_GENERATE) | data->T66_CtrlVal|0x03);
+				0, MXT_FCALCMD(MXT_FCALCMD_GENERATE) | data->T66_CtrlVal|0x83);
 		if (error) {
 			dev_err(&data->client->dev, "Failed to write FALCMD_GENERATE\n");
 		}
@@ -1624,14 +1624,11 @@ static void mxt_treat_T66_object(struct mxt_data *data,
 static void mxt_treat_T72_object(struct mxt_data *data,
                                 struct mxt_message *message)
 {
-    u8 new_state= 0x00;
 	u8 *msg = message->message;
 
     dev_info(&data->client->dev, "T72 MSG: %02X %02X %02X \n",
 		msg[0], msg[1], msg[2]);
-
-	new_state =  message->message[1] & 0x0F;
-    data->T72_State = new_state;
+	data->T72_State =  message->message[1] & 0x0F;
 }
 
 static void mxt_treat_T100_object(struct mxt_data *data,
@@ -1833,17 +1830,6 @@ static irqreturn_t mxt_irq_thread(int irq, void *ptr)
 		}
 	} while (!data->pdata->read_chg());
 
-#if CHECK_PALM //0615
-	if ((data->PalmFlag == 0) || (data->PressEventCheck ==1)) {
-		data->PressEventCheck = 0;
-		if (data->finger_mask)
-			mxt_report_input_data(data);
-	}
-#else
-	if (data->finger_mask)
-		mxt_report_input_data(data);
-#endif
-
 end:
 	return IRQ_HANDLED;
 }
@@ -2013,11 +1999,6 @@ int mxt_verify_fw(struct mxt_fw_info *fw_info, const struct firmware *fw)
 
 		/* Get the address of firmware data */
 		fw_info->fw_raw_data = fw_img->data + fw_info->cfg_len;
-#if SUPPORT_CONFIG_VER
-		memcpy(data->fw_config_ver, &(data->batt_cfg_raw_data[3]), 8);
-		data->ic_config_ver[8] = '\0';
-		dev_info(dev, "fw_config_ver =%s\n", data->fw_config_ver);
-#endif
 #if TSP_SEC_FACTORY
 		data->fdata->fw_ver = fw_info->fw_ver;
 		data->fdata->build_ver = fw_info->build_ver;
@@ -2435,6 +2416,7 @@ static int mxt_start(struct mxt_data *data)
 {
 	int error = 0;
 
+	dev_err(&data->client->dev,"%s \n", __func__); //0809
 	if (data->mxt_enabled) {
 		dev_err(&data->client->dev,
 			"%s. but touch already on\n", __func__);
@@ -2470,12 +2452,15 @@ static int mxt_stop(struct mxt_data *data)
 	}
 	disable_irq(data->client->irq);
 
+	data->WakeupPowerOn = 2; //0812 1 = mxt_start, 2= mxt_stop
+	mxt_release_all_finger(data);
+
 	error = mxt_power_off(data);
 	if (error) {
 		dev_err(&data->client->dev, "Fail to stop touch\n");
 		goto err_power_off;
 	}
-	mxt_release_all_finger(data);
+
 #if TSP_BOOSTER
 	mxt_set_dvfs(data, TOUCH_BOOSTER_QUICK_OFF);
 #endif
@@ -2586,6 +2571,7 @@ static int mxt_touch_finish_init(struct mxt_data *data)
 	return 0;
 
 err_req_irq:
+	disable_irq(client->irq);
 	return error;
 }
 
@@ -2624,10 +2610,6 @@ err_free_mem:
 static int mxt_enter_bootloader(struct mxt_data *data)
 {	int error;
 
-#if SUPPORT_CONFIG_VER
-	error = mxt_command_reset(data, MXT_BOOT_VALUE);
-	return error;
-#else
 	struct device *dev = &data->client->dev;
 
 	data->objects = kcalloc(data->info.object_num,
@@ -2656,63 +2638,13 @@ err_free_mem:
 
 out:
 	return error;
-#endif
 }
-
-#if SUPPORT_CONFIG_VER
-static int check_config_ver(struct mxt_data *data)
-{
-	struct device *dev = &data->client->dev;
-	int error;
-	struct mxt_object *user_object;
-
-	data->objects = kcalloc(data->info.object_num,
-				     sizeof(struct mxt_object),
-				     GFP_KERNEL);
-	if (!data->objects) {
-		dev_err(dev, "%s Failed to allocate memory\n",
-			__func__);
-		error = -ENOMEM;
-		goto out;
-	}
-
-	/* Get object table information*/
-	error = mxt_get_object_table(data);
-	if (error)
-		goto err_free_mem;
-
-	/* Get the config version from userdata */
-	user_object = mxt_get_object(data, MXT_SPT_USERDATA_T38);
-	if (!user_object) {
-		dev_err(dev, "T38 fail to get object_info\n");
-		error = -EINVAL;
-		goto err_free_mem;
-	}
-
-	error = mxt_read_mem(data, user_object->start_address,
-			8, data->ic_config_ver);
-	data->ic_config_ver[8] = '\0';
-	dev_info(dev, "ic_config_ver = %s\n",data->ic_config_ver);
-	if (error)
-		goto err_free_mem;
-	else
-		return 0;
-
-err_free_mem:
-	kfree(data->objects);
-	data->objects = NULL;
-
-out:
-	return error;
-}
-#endif
 
 static int mxt_flash_fw_on_probe(struct mxt_fw_info *fw_info)
 {
 	struct mxt_data *data = fw_info->data;
 	struct device *dev = &data->client->dev;
 	int error;
-
 	error = mxt_read_id_info(data);
 
 	if (error) {
@@ -2726,26 +2658,7 @@ static int mxt_flash_fw_on_probe(struct mxt_fw_info *fw_info)
 		dev_info(dev, "Updating firmware from boot-mode\n");
 		goto load_fw;
 	}
-
 	/* compare the version to verify necessity of firmware updating */
-#if SUPPORT_CONFIG_VER
-	error = check_config_ver(data);
-	if (error) {
-		dev_err(dev, "failed check config ver\n");
-		goto out;
-	}
-
-	if (data->info.version == fw_info->fw_ver && data->info.build == fw_info->build_ver) {
-		if ((strcmp(data->ic_config_ver, data->fw_config_ver)) < 0)
-			dev_info(dev, "config version need update!!!\n");
-		else {
-			dev_info(dev, "config version is latest !!!\n");
-			kfree(data->objects);
-			data->objects = NULL;
-			goto out;
-		}
-	} else
-#endif
 	if (data->info.version > fw_info->fw_ver ||
 		(data->info.version == fw_info->fw_ver && data->info.build >= fw_info->build_ver)) {
 		dev_info(dev, "Firmware version is latest. FW update does not need!!!\n");
@@ -2772,10 +2685,9 @@ out:
 	return error;
 }
 
-static void mxt_request_firmware_work(const struct firmware *fw,
-		void *context)
+static int mxt_touch_init_firmware(const struct firmware *fw,
+		struct mxt_data *data)
 {
-	struct mxt_data *data = context;
 	struct mxt_fw_info fw_info;
 	int error;
 
@@ -2805,6 +2717,13 @@ out:
 #if FW_UPDATE_ENABLE
 	release_firmware(fw);
 #endif
+	return error;
+}
+static void mxt_request_firmware_work(const struct firmware *fw,
+		void *context)
+{
+	struct mxt_data *data = context;
+	mxt_touch_init_firmware(fw, data);
 }
 
 static bool mxt_tsp_is_connected(struct mxt_data *data)
@@ -2824,12 +2743,95 @@ static bool mxt_tsp_is_connected(struct mxt_data *data)
 	return true;
 }
 
+#if TSP_CHANGE_CONFIG_FOR_INPUT
+static ssize_t set_tsp_for_inputmethod_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+	     data->is_inputmethod);
+}
+
+static ssize_t set_tsp_for_inputmethod_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size)
+{
+	u8 jump_limit = 0;
+	u8 mrgthr = 0;
+	struct mxt_data *data = dev_get_drvdata(dev);
+
+	if (!data->mxt_enabled) {
+		printk(KERN_ERR
+			   "[TSP ]set_tsp_for_inputmethod_store. "
+			   "mxt_enabled is 0\n");
+		return 1;
+	}
+/*
+	ret = mxt_read_object(data, MXT_TOUCH_MULTITOUCHSCREEN_T9,
+		 16, &mrgthr);
+	ret = mxt_read_object(data, MXT_TOUCH_MULTITOUCHSCREEN_T9,
+		 30, &jump_limit);
+	dev_info(&(data->input_dev->dev),
+		"%s: read T9, mrgthr(%d),jump_limit(%d)\n",
+		__func__,mrgthr,jump_limit);
+*/
+
+	if (*buf == '1' && (!data->is_inputmethod)) {
+	    dev_info(&(data->input_dev->dev),
+	        "%s: Set TSP inputmethod IN\n",
+	        __func__);
+		jump_limit = 10;
+		mrgthr = 5;
+	    data->is_inputmethod = true;
+	} else if (*buf == '0' && (data->is_inputmethod)) {
+	    dev_info(&(data->input_dev->dev),
+	        "%s: Set TSP inputmethod OUT\n",
+	        __func__);
+		jump_limit = 20;
+		mrgthr = 35;
+		data->is_inputmethod = false;
+	}
+	else{
+	    dev_info(&(data->input_dev->dev),
+	        "%s: err in argument for inputmethod\n",
+	        __func__);
+		return 1;
+	}
+
+	mxt_write_object(data, MXT_TOUCH_MULTITOUCHSCREEN_T9, 16, mrgthr);
+	mxt_write_object(data, MXT_TOUCH_MULTITOUCHSCREEN_T9, 30, jump_limit);
+/*
+	 ret = mxt_read_object(data, MXT_TOUCH_MULTITOUCHSCREEN_T9,
+		  16, &mrgthr);
+	 ret = mxt_read_object(data, MXT_TOUCH_MULTITOUCHSCREEN_T9,
+		  30, &jump_limit);
+	 dev_info(&(data->input_dev->dev),
+		 "%s: read T9, mrgthr(%d),jump_limit(%d)\n",
+		 __func__,mrgthr,jump_limit);
+*/
+	return 1;
+}
+#endif
+
+
+#if TSP_CHANGE_CONFIG_FOR_INPUT
+static ssize_t set_tsp_for_inputmethod_show(struct device *dev,
+        struct device_attribute *attr, char *buf);
+
+static ssize_t set_tsp_for_inputmethod_store(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t size);
+
+static DEVICE_ATTR(set_tsp_for_inputmethod, S_IRUGO | S_IWUSR | S_IWGRP,
+	set_tsp_for_inputmethod_show, set_tsp_for_inputmethod_store); /* For 3x4 Input Method, Drumming changed API */
+#endif
+
 static int __devinit mxt_touch_init(struct mxt_data *data, bool nowait)
 {
 	struct i2c_client *client = data->client;
 	const char *firmware_name =
 		 data->pdata->firmware_name ?: MXT_DEFAULT_FIRMWARE_NAME;
 	int ret = 0;
+	int retry = 0;
 
 #if defined(CONFIG_MACH_GC2PD)
 	ret = mxt_tsp_is_connected(data);
@@ -2865,6 +2867,14 @@ static int __devinit mxt_touch_init(struct mxt_data *data, bool nowait)
 	}
 #endif
 
+#if TSP_CHANGE_CONFIG_FOR_INPUT
+	/* sec_touchscreen has to be creasted. */
+	if (device_create_file(data->booster.sec_touchscreen, &dev_attr_set_tsp_for_inputmethod) < 0)
+		dev_err(&client->dev,
+				"%s: Failed to create device file(%s)\n",
+				__func__, dev_attr_set_tsp_for_inputmethod.attr.name);
+#endif
+
 	if (nowait) {
 		const struct firmware *fw;
 		char fw_path[MXT_MAX_FW_PATH];
@@ -2876,15 +2886,24 @@ static int __devinit mxt_touch_init(struct mxt_data *data, bool nowait)
 
 		dev_err(&client->dev, "%s\n", fw_path);
 
+		do {
 #if FW_UPDATE_ENABLE
-		ret = request_firmware(&fw, fw_path, &client->dev);
-		if (ret) {
-			dev_err(&client->dev,
-				"error requesting built-in firmware\n");
-			goto out;
-		}
+			ret = request_firmware(&fw, fw_path, &client->dev);
+			if (ret) {
+				dev_err(&client->dev,
+					"error requesting built-in firmware\n");
+				goto out;
+			}
 #endif
-		mxt_request_firmware_work(fw, data);
+			ret = mxt_touch_init_firmware(fw, data);
+			if (ret) {
+				if (retry++ == 2)
+					break;
+				mxt_power_off(data);
+				msleep(20);
+				mxt_power_on(data);
+			}
+		} while (ret);
 	} else {
 		ret = request_firmware_nowait(THIS_MODULE, true, firmware_name,
 				      &client->dev, GFP_KERNEL,
@@ -2922,7 +2941,9 @@ static void mxt_late_resume(struct early_suspend *h)
 	struct mxt_data *data = container_of(h, struct mxt_data,
 								early_suspend);
 	mutex_lock(&data->input_dev->mutex);
-
+#if TSP_CHANGE_CONFIG_FOR_INPUT
+	data->is_inputmethod = false;
+#endif
 	mxt_start(data);
 
 	mutex_unlock(&data->input_dev->mutex);
@@ -3000,6 +3021,9 @@ static int __devinit mxt_probe(struct i2c_client *client,
 	data->client = client;
 	data->input_dev = input_dev;
 	data->pdata = pdata;
+#if TSP_CHANGE_CONFIG_FOR_INPUT
+	data->is_inputmethod = false;
+#endif
 
 	set_bit(EV_ABS, input_dev->evbit);
 	set_bit(INPUT_PROP_DIRECT, input_dev->propbit);
@@ -3074,16 +3098,15 @@ static int __devinit mxt_probe(struct i2c_client *client,
 
 #if CHECK_ANTITOUCH_MCAM
 	dev_info(&data->client->dev, "Mxt 336S Probed\n");
-    mxt_gdc_init_config(data);//0615_
-#if NO_GR_MODE
-	mxt_write_object(data, MXT_PROCG_NOISESUPPRESSION_T72, 2, 0x81);
-	mxt_write_object(data, MXT_PROCG_NOISESUPPRESSION_T72, 3, 0x81);
-#endif
+    mxt_gdc_init_config(data);
 	mxt_command_calibration(data);
+	data->FcalSeqdoneNum = 0;//0801
 #endif
 	return 0;
 
 err_touch_init:
+	data->pdata->register_cb(NULL);
+	free_irq(client->irq, data);
 	mxt_power_off(data);
 err_power_on:
 	mxt_sysfs_remove(data);

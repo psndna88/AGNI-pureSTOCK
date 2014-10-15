@@ -695,11 +695,11 @@ static void __init smdk4212_usbgadget_init(void)
 	s5p_usbgadget_set_platdata(pdata);
 	pdata = s3c_device_usbgadget.dev.platform_data;
 
-#if defined(CONFIG_TARGET_TAB3_WIFI8)
+#if defined(CONFIG_MACH_TAB3)
 	if (pdata) {
-			/* Squelch Threshold Tune [13:11] (110 : -15%) */
+			/* Squelch Threshold Tune [13:11] (101 : -10%) */
 			pdata->phy_tune_mask |= (0x7 << 11);
-			pdata->phy_tune |= (0x6 << 11);
+			pdata->phy_tune |= (0x5 << 11);
 			printk(KERN_DEBUG "usb: %s tune_mask=0x%x, tune=0x%x\n",
 				__func__, pdata->phy_tune_mask, pdata->phy_tune);
 		}
@@ -1057,9 +1057,11 @@ static struct i2c_board_info i2c_devs21_emul[] __initdata = {
 static void irda_wake_en(bool onoff)
 {
 	gpio_direction_output(GPIO_IRDA_WAKE, onoff);
-#if 0
-	printk(KERN_ERR "%s: irda_wake_en : %d\n", __func__, onoff);
-#endif
+}
+
+static void irled_ldo_onoff(bool onoff)
+{
+	gpio_direction_output(GPIO_IR_LED_EN, onoff);
 }
 
 static void irda_device_init(void)
@@ -1081,7 +1083,7 @@ static void irda_device_init(void)
 	gpio_request(GPIO_IRDA_IRQ, "irda_irq");
 	gpio_direction_input(GPIO_IRDA_IRQ);
 	gpio_request(GPIO_IR_LED_EN, "ir_led_en");
-	gpio_direction_output(GPIO_IR_LED_EN, 1);
+	gpio_direction_output(GPIO_IR_LED_EN, 0);
 
 	return;
 }
@@ -1125,6 +1127,7 @@ struct platform_device s3c_device_i2c22 = {
 static struct mc96_platform_data mc96_pdata = {
 	.ir_wake_en = irda_wake_en,
 	.ir_vdd_onoff = irda_vdd_onoff,
+	.irled_ldo_onoff = irled_ldo_onoff,
 };
 
 static struct i2c_board_info i2c_devs22_emul[] __initdata = {

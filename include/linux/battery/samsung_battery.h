@@ -57,6 +57,7 @@ struct battery_info {
 	struct power_supply psy_bat;
 	struct power_supply psy_usb;
 	struct power_supply psy_ac;
+	struct power_supply psy_ps;
 
 	/* charger, fuelgauge psy depends on machine */
 	struct power_supply *psy_charger;
@@ -130,7 +131,6 @@ struct battery_info {
 	unsigned int health_state;
 
 	/* SIOP */
-	unsigned int siop_state;
 	unsigned int siop_charge_current;
 	unsigned int siop_lv;
 
@@ -170,6 +170,11 @@ struct battery_info {
 
 	/* factory mode */
 	bool factory_mode;
+
+	/* wearable charging */
+	int ps_enable;
+	int ps_status;
+	int ps_changed;
 
 #if defined(CONFIG_TARGET_LOCALE_KOR)
 	/* error test charging off mode */

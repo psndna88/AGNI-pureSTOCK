@@ -94,12 +94,6 @@ config LINK_DEVICE_SPI
 	depends on SEC_MODEM
 	default n
 
-config WORKQUEUE_FRONT
-	bool "IPC: SPI workqueue front"
-	depends on SEC_MODEM
-	default n
-
-
 config BOOT_DEVICE_SPI
 	bool "modem driver boot device SPI"
 	depends on SEC_MODEM
