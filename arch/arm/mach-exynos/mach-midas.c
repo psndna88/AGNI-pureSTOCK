@@ -191,6 +191,10 @@ struct s3cfb_extdsp_lcd {
 #include <linux/i2c/tc370-touchkey.h>
 #endif
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+#include <asm/kexec.h>
+#endif
+
 #if defined(CONFIG_MACH_GC1)
 #include <mach/gc1-jack.h>
 #endif
@@ -2347,6 +2351,10 @@ static int __init setup_ram_console_mem(char *str)
 		pr_err("%s: %x at %llx\n", __func__, size, base);
 	}
 	return 0;
+
+#ifdef CONFIG_KEXEC_HARDBOOT
+	memblock_remove(KEXEC_HB_PAGE_ADDR, SZ_4K);
+#endif
 }
 
 __setup("ram_console=", setup_ram_console_mem);
