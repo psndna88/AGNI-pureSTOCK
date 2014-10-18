@@ -37,4 +37,10 @@
 #define is_pfn_hole(pfn) 0
 #endif
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+#ifdef CONFIG_MACH_MIDAS
+#define KEXEC_HB_PAGE_ADDR 0x40000000
+#endif
+#endif
+
 #endif /* __ASM_ARCH_MEMORY_H */
