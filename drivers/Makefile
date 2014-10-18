@@ -152,3 +152,6 @@ obj-$(CONFIG_FELICA) += felica/
 obj-$(CONFIG_ICE4_FPGA)		+= ice4_fpga/
 
 obj-$(CONFIG_AUTHENTEC_VPNCLIENT_INTERCEPTOR) += interceptor/
+
+# SecFilter Driver
+obj-$(CONFIG_SEC_NET_FILTER)	+= secfilter/

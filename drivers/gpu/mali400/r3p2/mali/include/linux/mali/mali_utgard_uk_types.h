@@ -762,8 +762,7 @@ typedef struct
 } _mali_uk_get_api_version_s;
 /** @} */ /* end group _mali_uk_getapiversion_s */
 
-/** @defgroup _mali_uk_get_user_settings_s Get user space settings
- *  @{ */
+/** @defgroup _mali_uk_get_user_settings_s Get user space settings */
 
 /** @brief struct to keep the matching values of the user space settings within certain context
  *

@@ -555,7 +555,65 @@ static int m3_wm1811_aif3_hw_params(struct snd_pcm_substream *substream,
 	return 0;
 }
 
+static bool playback_stream_status;
+static bool capture_stream_status;
+
+static int m3_wm1811_aif3_startup(struct snd_pcm_substream *substream)
+{
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_codec *codec = rtd->codec;
+	struct wm8994_priv *wm8994 = snd_soc_codec_get_drvdata(codec);
+	struct wm8994_pdata *pdata = wm8994->pdata;
+	int base = WM8994_GPIO_8 - WM8994_GPIO_1;
+	int i;
+
+	pr_err("%s: enter\n", __func__);
+
+	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
+		capture_stream_status = 1;
+	else
+		playback_stream_status = 1;
+
+	for (i = 0; i < 4; i++) {
+		if (pdata->gpio_defaults[base + i]) {
+			snd_soc_update_bits(wm8994->codec, WM8994_GPIO_8 + i,
+						0xffff,
+						pdata->gpio_defaults[base + i]);
+		}
+	}
+	return 0;
+}
+
+static void m3_wm1811_aif3_shutdown(struct snd_pcm_substream *substream)
+{
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_codec *codec = rtd->codec;
+	struct wm8994_priv *wm8994 = snd_soc_codec_get_drvdata(codec);
+	int i;
+
+	pr_err("%s: enter, stream=%d\n", __func__, substream->stream);
+
+	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
+		capture_stream_status = 0;
+	else
+		playback_stream_status = 0;
+
+	if (playback_stream_status || capture_stream_status)
+		return;
+
+	pr_info("%s: set input gpios for AIF3\n", __func__);
+
+	for (i = 0; i < 4; i++) {
+		snd_soc_update_bits(wm8994->codec, WM8994_GPIO_8 + i,
+						0xffff,
+						0xA101);
+	}
+	return;
+}
+
 static struct snd_soc_ops m3_wm1811_aif3_ops = {
+	.startup = m3_wm1811_aif3_startup,
+	.shutdown = m3_wm1811_aif3_shutdown,
 	.hw_params = m3_wm1811_aif3_hw_params,
 };
 

@@ -88,6 +88,7 @@
 #define CMD_GET_JITTER	0X46
 #define CMD_GET_INTEN	0x70
 #define CMD_GET_INTEN_KEY	0x71
+#define CMD_GET_CMDELTA_KEY	0x4A
 #define CMD_RESULT_SZ	0XAE
 #define CMD_RESULT		0XAF
 
@@ -143,13 +144,13 @@ int touch_is_pressed;
 
 /* ILJIN panel */
 #define BOOT_VERSION_IJ 0x1
-#define CORE_VERSION_IJ 0x73
-#define FW_VERSION_IJ 0x16
+#define CORE_VERSION_IJ 0x75
+#define FW_VERSION_IJ 0x19
 
 /* EELY panel */
 #define BOOT_VERSION_EL 0x1
-#define CORE_VERSION_EL 0x73
-#define FW_VERSION_EL 0x16
+#define CORE_VERSION_EL 0x75
+#define FW_VERSION_EL 0x19
 
 #define MAX_FW_PATH 255
 #define TSP_FW_FILENAME "melfas_fw.bin"
@@ -247,6 +248,8 @@ struct mms_ts_info {
 #if defined(SEC_TSP_FACTORY_TEST)
 	int menu_s;
 	int back_s;
+	int menu_delta;
+	int back_delta;
 #endif
 #endif
 
@@ -1912,11 +1915,11 @@ static void get_config_ver(void *device_data)
 	else if (info->panel == WINTEC)
 		snprintf(buff, sizeof(buff), "T311_Me_0401_WT");
 	else if (info->panel == ILJIN)
-		snprintf(buff, sizeof(buff), "T311_Me_0608_IJ");
+		snprintf(buff, sizeof(buff), "T311_Me_1231_IJ");
 	else if (info->panel == EELY)
-		snprintf(buff, sizeof(buff), "T311_Me_0608_EL");
+		snprintf(buff, sizeof(buff), "T311_Me_1231_EL");
 	else
-		snprintf(buff, sizeof(buff), "T311_Me_0608_UN");
+		snprintf(buff, sizeof(buff), "T311_Me_1231_UN");
 
 	set_cmd_result(info, buff, strnlen(buff, sizeof(buff)));
 	info->cmd_state = 2;
@@ -2447,6 +2450,151 @@ static ssize_t touchkey_threshold_show(struct device *dev,
 	return sprintf(buf, "%d %d\n", r_buf[0], r_buf[1]);
 }
 
+static void get_cmdelta_key(struct mms_ts_info *info)
+{
+	u8 w_buf[4];
+	u8 r_buf;
+	u8 read_buffer[2] = {0};
+	int i;
+	int ret;
+	u16 raw_data;
+	int data;
+	int retry;
+	int gpio = info->pdata->gpio_int;
+
+	if (!info->enabled) {
+		info->menu_delta = 0;
+		info->back_delta = 0;
+		return;
+	}
+
+	disable_irq(info->irq);
+
+	ret = i2c_smbus_write_byte_data(info->client,
+			ADDR_UNIV_CMD, CMD_ENTER_TEST);
+	if (ret < 0)
+		goto err_i2c;
+
+	retry = 1;
+	while (retry) {
+		while (gpio_get_value(gpio))
+			udelay(100);
+
+		ret = i2c_smbus_read_i2c_block_data(info->client,
+			0x0F, 1, &r_buf);
+		if (ret < 0)
+			goto err_i2c;
+
+		ret = i2c_smbus_read_i2c_block_data(info->client,
+			0x10, 1, &r_buf);
+		if (ret < 0)
+			goto err_i2c;
+
+		dev_info(&info->client->dev, "event type = 0x%x\n", r_buf);
+		if (r_buf == 0x0C)
+			retry = 0;
+	}
+
+	w_buf[0] = ADDR_UNIV_CMD;
+	w_buf[1] = CMD_CM_DELTA;
+	ret = i2c_smbus_write_i2c_block_data(info->client,
+		 w_buf[0], 1, &w_buf[1]);
+	if (ret < 0)
+		goto err_i2c;
+	while (gpio_get_value(gpio))
+		udelay(100);
+
+	ret = i2c_smbus_read_i2c_block_data(info->client,
+		CMD_RESULT_SZ, 1, &r_buf);
+	if (ret < 0)
+		goto err_i2c;
+	ret = i2c_smbus_read_i2c_block_data(info->client,
+		CMD_RESULT, 1, &r_buf);
+	if (ret < 0)
+		goto err_i2c;
+
+	if (r_buf == 1)
+		dev_info(&info->client->dev, "PASS\n");
+	else
+		dev_info(&info->client->dev, "FAIL\n");
+
+	for (i = 0; i < 2; i++) {
+		w_buf[0] = ADDR_UNIV_CMD;
+		w_buf[1] = CMD_GET_CMDELTA_KEY;
+		w_buf[2] = i;
+		w_buf[3] = 0;
+
+		ret = i2c_smbus_write_i2c_block_data(info->client,
+			w_buf[0], 3, &w_buf[1]);
+		if (ret < 0)
+			goto err_i2c;
+		usleep_range(1, 5);
+
+		ret = i2c_smbus_read_i2c_block_data(info->client,
+			CMD_RESULT_SZ, 1, &r_buf);
+		if (ret < 0)
+			goto err_i2c;
+
+		ret = get_data(info, CMD_RESULT, r_buf, read_buffer);
+		if (ret < 0)
+			goto err_i2c;
+
+		raw_data = read_buffer[0] | (read_buffer[1] << 8);
+
+		if (raw_data < 32767)
+			data = (int)raw_data;
+		else
+			data = -(65536 - raw_data);
+
+		if (i == 0)
+			info->menu_delta = data;
+		if (i == 1)
+			info->back_delta = data;
+	}
+	ret = i2c_smbus_write_byte_data(info->client,
+		ADDR_UNIV_CMD, CMD_EXIT_TEST);
+
+	touch_is_pressed = 0;
+	release_all_fingers(info);
+	mms_reset(info);
+
+	enable_irq(info->irq);
+
+	return;
+
+err_i2c:
+	dev_err(&info->client->dev, "%s: fail to i2c (cmd=%d)\n",
+		__func__, CMD_GET_CMDELTA_KEY);
+
+	info->menu_s = 0;
+	info->back_s = 0;
+
+	release_all_fingers(info);
+	mms_reset(info);
+
+	enable_irq(info->irq);
+}
+
+static ssize_t menu_cmdelta_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct mms_ts_info *info = dev_get_drvdata(dev);
+
+	get_cmdelta_key(info);
+
+	return sprintf(buf, "%d\n", info->menu_delta);
+}
+
+static ssize_t back_cmdelta_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct mms_ts_info *info = dev_get_drvdata(dev);
+
+	get_cmdelta_key(info);
+
+	return sprintf(buf, "%d\n", info->back_delta);
+}
+
 static void get_intensity_key(struct mms_ts_info *info)
 {
 	u8 w_buf[4];
@@ -2505,7 +2653,7 @@ static void get_intensity_key(struct mms_ts_info *info)
 
 err_i2c:
 	dev_err(&info->client->dev, "%s: fail to i2c (cmd=%d)\n",
-		__func__, MMS_VSC_CMD_INTENSITY);
+		__func__, CMD_GET_INTEN_KEY);
 
 	info->menu_s = 0;
 	info->back_s = 0;
@@ -2515,7 +2663,6 @@ err_i2c:
 
 	enable_irq(info->irq);
 }
-
 
 static ssize_t touchkey_menu_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
@@ -2669,6 +2816,8 @@ static DEVICE_ATTR(cmd_result, S_IRUGO, show_cmd_result, NULL);
 static DEVICE_ATTR(touchkey_threshold, S_IRUGO, touchkey_threshold_show, NULL);
 static DEVICE_ATTR(touchkey_menu, S_IRUGO, touchkey_menu_show, NULL);
 static DEVICE_ATTR(touchkey_back, S_IRUGO, touchkey_back_show, NULL);
+static DEVICE_ATTR(touchkey_menu_cmdelta, S_IRUGO, menu_cmdelta_show, NULL);
+static DEVICE_ATTR(touchkey_back_cmdelta, S_IRUGO, back_cmdelta_show, NULL);
 #endif
 #ifdef ESD_DEBUG
 static DEVICE_ATTR(intensity_logging_on, S_IRUGO, show_intensity_logging_on,
@@ -2704,6 +2853,8 @@ static struct attribute *sec_touchkey_attributes[] = {
 	&dev_attr_touchkey_threshold.attr,
 	&dev_attr_touchkey_menu.attr,
 	&dev_attr_touchkey_back.attr,
+	&dev_attr_touchkey_menu_cmdelta.attr,
+	&dev_attr_touchkey_back_cmdelta.attr,
 #endif
 	NULL,
 };

@@ -643,6 +643,9 @@ static void wacom_i2c_early_suspend(struct early_suspend *h)
 #ifdef WACOM_STATE_CHECK
 	cancel_delayed_work_sync(&wac_i2c->wac_statecheck_work);
 #endif
+#ifdef WACOM_CHECK_SUSPEND_ENTER
+	wac_i2c->suspend_enter = true;
+#endif
 	wac_i2c->pwr_flag = false;
 	wacom_power_off(wac_i2c);
 }
@@ -723,6 +726,9 @@ static void wacom_i2c_late_resume(struct early_suspend *h)
 	struct wacom_i2c *wac_i2c =
 	    container_of(h, struct wacom_i2c, early_suspend);
 
+#ifdef WACOM_CHECK_SUSPEND_ENTER
+	wac_i2c->suspend_enter = false;
+#endif
 	wac_i2c->pwr_flag = true;
 	wacom_power_on(wac_i2c);
 }
@@ -1216,7 +1222,15 @@ static ssize_t epen_saving_mode_store(struct device *dev,
 		if (wac_i2c->pen_insert)
 			wacom_power_off(wac_i2c);
 	} else
+#ifdef WACOM_CHECK_SUSPEND_ENTER
+	{	
+		printk(KERN_DEBUG "epen:%s : %d\n", __func__, wac_i2c->suspend_enter);
+		if(!wac_i2c->suspend_enter)
+			wacom_power_on(wac_i2c);
+	}
+#else
 		wacom_power_on(wac_i2c);
+#endif
 	return count;
 }
 #endif
@@ -1318,7 +1332,7 @@ static void wacom_init_abs_params(struct wacom_i2c *wac_i2c)
 	pressure = wac_i2c->wac_feature->pressure_max;
 	max_x = wac_i2c->wac_feature->x_max;
 	max_y = wac_i2c->wac_feature->y_max;
-#ifdef CONFIG_MACH_P4NOTE
+#if defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_KONA)
 	min_x = WACOM_POSX_OFFSET;
 	min_y = WACOM_POSY_OFFSET;
 	pressure = WACOM_MAX_PRESSURE;
@@ -1470,6 +1484,11 @@ static int wacom_i2c_probe(struct i2c_client *client,
 	wac_i2c->wac_pdata->resume_platform_hw();
 	msleep(200);
 #endif
+
+#ifdef WACOM_CHECK_SUSPEND_ENTER
+	wac_i2c->suspend_enter = false;
+#endif
+
 	wac_i2c->power_enable = true;
 	wac_i2c->pwr_flag = true;
 

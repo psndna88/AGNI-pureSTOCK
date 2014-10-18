@@ -78,9 +78,14 @@ char Firmware_checksum[] = { 0x1F, 0x85, 0x70, 0x07, 0xF9, };
 
 /*CHN*/
 #elif defined(CONFIG_MACH_T0_CHN_CTC)
-unsigned int Firmware_version_of_file = 0x700;
-unsigned char *firmware_name = "epen/W9001_0700.bin";
-char Firmware_checksum[] = { 0x1F, 0xD4, 0xD1, 0x5A, 0x91, };
+unsigned int Firmware_version_of_file = 0x702; 
+unsigned char *firmware_name = "epen/W9001_0702.bin"; 
+char Firmware_checksum[] = { 0x1F, 0x4A, 0x71, 0x3E, 0x3D, }; 
+
+#elif defined(CONFIG_MACH_T0_CHN_CU_DUOS) || defined(CONFIG_MACH_T0_CHN_OPEN_DUOS)
+unsigned int Firmware_version_of_file = 0x1103; 
+unsigned char *firmware_name = "epen/W9001_1103.bin"; 
+char Firmware_checksum[] = { 0x1F, 0x36, 0x03, 0x23, 0xE2, }; 
 
 /*EUR3G/EURLTE/ATT/TMO/CMCC*/
 #else

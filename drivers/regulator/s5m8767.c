@@ -1037,6 +1037,38 @@ static int __devexit s5m8767_pmic_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#if defined(CONFIG_S5M8767_OSC)
+static int s5m_regulator_resume(struct device *dev)
+{
+	struct s5m8767_info *s5m8767 = dev_get_drvdata(dev);
+	u8 val;
+
+	s5m_reg_write(s5m8767->iodev->i2c, 0x2f, 0x0);
+	s5m_reg_read(s5m8767->iodev->i2c, 0x2f, &val);
+	pr_info("%s after resume set OSC = 0x%02x\n", __func__, val);
+
+	return 0;
+}
+
+static int s5m_regulator_suspend(struct device *dev)
+{
+	struct s5m8767_info *s5m8767 = dev_get_drvdata(dev);
+	u8 val;
+
+	s5m_reg_write(s5m8767->iodev->i2c, 0x2f, 0x40);
+	s5m_reg_read(s5m8767->iodev->i2c, 0x2f, &val);
+	pr_info("%s after suspend set OSC = 0x%02x\n", __func__, val);
+
+	return 0;
+}
+
+
+static const struct dev_pm_ops s5m_regulator_pm_ops = {
+	.resume = s5m_regulator_resume,
+	.suspend = s5m_regulator_suspend,
+};
+#endif
+
 static const struct platform_device_id s5m8767_pmic_id[] = {
 	{ "s5m8767-pmic", 0},
 	{ },
@@ -1047,6 +1079,9 @@ static struct platform_driver s5m8767_pmic_driver = {
 	.driver = {
 		.name = "s5m8767-pmic",
 		.owner = THIS_MODULE,
+#if defined(CONFIG_S5M8767_OSC)
+		.pm	= &s5m_regulator_pm_ops,
+#endif
 	},
 	.probe = s5m8767_pmic_probe,
 	.remove = __devexit_p(s5m8767_pmic_remove),

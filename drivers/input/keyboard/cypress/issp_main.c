@@ -393,7 +393,12 @@ unsigned int iChecksumTarget;
 	defined(CONFIG_MACH_M3)
 #include "touchkey_fw_M0.h"
 #elif defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_GD2)
+#if defined(CONFIG_MACH_T0_CHN_CU_DUOS)\
+	|| defined(CONFIG_MACH_T0_CHN_OPEN_DUOS)
+#include "touchkey_fw_T0_duos.h"
+#else
 #include "touchkey_fw_T0.h"
+#endif
 #elif defined(CONFIG_MACH_SUPERIOR_KOR_SKT)
 #include "touchkey_fw_SUPERIOR.h"
 #elif defined(CONFIG_MACH_U1_KOR_LGT)
@@ -947,7 +952,7 @@ this data should come from the HEX output of PSoC Designer.*/
 	if ((unsigned short)(iChecksumTarget & 0xffff) !=
 	    (unsigned short)(iChecksumData & 0xffff)) {
 		ErrorTrap(VERIFY_ERROR);
-		return fIsError;
+		return VERIFY_ERROR;
 	}
 	/*printk(KERN_DEBUG"Doing Checksum END\n");*/
 

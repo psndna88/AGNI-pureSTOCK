@@ -112,6 +112,13 @@ int synaptics_ts_write_block(struct synaptics_drv_data *data,
 	if (synaptics_ts_set_page(data, addr))
 		return -EAGAIN;
 
+/*fixed invalid block size kernel panic */
+	if (count >= 256)
+	{
+		pr_err("[TSP] failed to get firmware block size = %d \n",count);
+		return -ENOMEM;
+	}
+
 	buf[0] = addr & 0xff;
 
 	for (i  = 1; i <= count; i++)

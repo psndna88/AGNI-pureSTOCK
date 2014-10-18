@@ -2355,8 +2355,17 @@ unsigned long try_to_free_pages(struct zonelist *zonelist, int order,
 		.may_writepage = !laptop_mode,
 		.nr_to_reclaim = SWAP_CLUSTER_MAX,
 		.may_unmap = 1,
+//#if defined(CONFIG_ZRAM_FOR_ANDROID) || defined(CONFIG_DIRECT_RECLAIM_FILE_PAGES_ONLY)
+//		.may_swap = 0,
+//#else
 		.may_swap = 1,
+//#endif /* CONFIG_ZRAM_FOR_ANDROID */
 		.swappiness = vm_swappiness,
+#ifdef CONFIG_ZSWAP
+		.swappiness = vm_swappiness / 2,
+#else
+		.swappiness = vm_swappiness,
+#endif
 		.order = order,
 		.mem_cgroup = NULL,
 		.nodemask = nodemask,

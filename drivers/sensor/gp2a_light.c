@@ -911,7 +911,6 @@ static void lightsensor_shutdown(struct platform_device *pdev)
 		cancel_delayed_work_sync(&data->work);
 		flush_workqueue(data->wq);
 		destroy_workqueue(data->wq);
-		input_unregister_device(data->input_dev);
 		kfree(data);
 	}
 }

@@ -456,15 +456,15 @@ int synaptics_fw_updater(struct synaptics_drv_data *data, u8 *fw_data)
 			data->firm_version[2],data->firm_version[3]);
 
 		/* update firm > tsp */
-		/*
+		
 		if (strcmp(data->firm_version, buf) > 0) {
 			printk(KERN_DEBUG "[TSP] update!\n");
 			update = true;
 		}
-		*/
+		
 		/* update if firm != tsp */
-		if (strncmp(data->firm_version, buf, 4) != 0)
-			update = true;
+	/*	if (strncmp(data->firm_version, buf, 4) != 0)
+			update = true; */
 	} else {
 		fw->fw_data = fw_data;
         update = true;

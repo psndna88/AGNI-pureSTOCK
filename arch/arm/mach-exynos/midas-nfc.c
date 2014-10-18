@@ -61,7 +61,8 @@ static inline void nfc_setup_gpio(void)
 	int array_size = ARRAY_SIZE(nfc_gpio_table);
 	u32 i, gpio;
 
-#if defined(CONFIG_MACH_GC2PD)
+//#if defined(CONFIG_MACH_GC2PD)
+#if 0
 	/* for EMUL board NFC_LDO_EN supporting */
 	pr_info("%s, set NFC_LDO_EN pin to high", __func__);
 	s3c_gpio_cfgpin(EXYNOS4_GPY4(5), S3C_GPIO_OUTPUT);

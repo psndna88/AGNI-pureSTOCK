@@ -170,4 +170,6 @@ source "drivers/ice4_fpga/Kconfig"
 #Authentec 2.0.6
 source "drivers/interceptor/Kconfig"
 
+source "drivers/secfilter/Kconfig"
+
 endmenu

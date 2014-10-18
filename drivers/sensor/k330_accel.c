@@ -125,6 +125,7 @@ struct k330_accel_data {
 
 	axes_func_s16 convert_axes;
 	axes_func_s16 (*select_func) (u8);
+	bool shutdown;
 };
 
 static int k330_acc_i2c_write(struct k330_accel_data *data,
@@ -139,6 +140,8 @@ static int k330_accel_read_raw_xyz(struct k330_accel_data *data,
 	/* read from OUT_X_L to OUT_Z_H by auto-inc */
 	s8 reg = OUT_X_L | K330ACCEL_AC;
 	u8 acc_data[6];
+	if (data->shutdown)
+		return -EFAULT;
 
 	err = i2c_smbus_read_i2c_block_data(data->client, reg,
 					    sizeof(acc_data), acc_data);
@@ -434,6 +437,8 @@ static long k330_accel_ioctl(struct file *file,
 	static int count;
 	u8 reg_data;
 
+	if (data->shutdown)
+		return -EFAULT;
 	/* cmd mapping */
 	switch (cmd) {
 	case K330_ACCEL_IOCTL_SET_ENABLE:
@@ -845,81 +850,68 @@ static ssize_t k330_accel_reg_read(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct k330_accel_data *data = dev_get_drvdata(dev);
-	u8 reg1, reg2, reg3, odr_data, fs_data, src1, src2;
-	u8 mask1, mask2, thresh1, thresh2, sm1_s0, sm1_s1, sm2_s0, sm2_s1;
+	u8 read_buf[60] = {0,};
+	u8 reg = K330ACCEL_AC | K330ACCEL_CTRL_REG4;
+	int err;
 
-	reg1 = (u8)i2c_smbus_read_byte_data(data->client,
-		K330ACCEL_CTRL_REG1);
-	if (reg1 < 0)
-		pr_err("%s, read CTRL_REG1 failed\n", __func__);
-	reg2 = (u8)i2c_smbus_read_byte_data(data->client,
-		K330ACCEL_CTRL_REG2);
-	if (reg2 < 0)
-		pr_err("%s, read CTRL_REG2 failed\n", __func__);
-	reg3 = (u8)i2c_smbus_read_byte_data(data->client,
-		K330ACCEL_CTRL_REG3);
-	if (reg3 < 0)
-		pr_err("%s, read CTRL_REG3 failed\n", __func__);
-
+	err = i2c_smbus_read_i2c_block_data(data->client, reg,
+					    sizeof(u8) * 6, read_buf);
+	if (err != 6) {
+		pr_err("%s : failed to read 6 bytes for ctrl reg(%d)\n",
+		       __func__, err);
+		return -EIO;
+	}
+	reg = K330ACCEL_AC | 0x30;
+	err = i2c_smbus_read_i2c_block_data(data->client, reg,
+					    sizeof(u8) * 16, &read_buf[6]);
+	if (err != 16) {
+		pr_err("%s : failed to read 0x30 16 bytes for ctrl reg(%d)\n",
+		       __func__, err);
+		return -EIO;
+	}
+	reg = K330ACCEL_AC | 0x40;
+	err = i2c_smbus_read_i2c_block_data(data->client, reg,
+					    sizeof(u8) * 16, &read_buf[22]);
+	if (err != 16) {
+		pr_err("%s : failed to read 0x40 16 bytes for ctrl reg(%d)\n",
+		       __func__, err);
+		return -EIO;
+	}
 	/* read output data rate & operation mode */
-	odr_data = (u8)i2c_smbus_read_byte_data(data->client,
-		K330ACCEL_CTRL_REG4);
-	if (odr_data < 0)
-		pr_err("%s, read CTRL_REG4 failed\n", __func__);
 
 	/* read band width and full scale setting */
-	fs_data = (u8)i2c_smbus_read_byte_data(data->client,
-		K330ACCEL_CTRL_REG5);
-	if (fs_data < 0)
-		pr_err("%s, read CTRL_REG5 failed\n", __func__);
+	reg = K330ACCEL_AC | 0x50;
 
-	src1 = (u8)i2c_smbus_read_byte_data(data->client,
-		INT1_SRC);
-	if (src1 < 0)
-		pr_err("%s, read INT1_SRC failed\n", __func__);
-	src2 = (u8)i2c_smbus_read_byte_data(data->client,
-		INT2_SRC);
-	if (src2 < 0)
-		pr_err("%s, read INT2_SRC failed\n", __func__);
-	mask1 = (u8)i2c_smbus_read_byte_data(data->client,
-		MASKA_1);
-	if (mask1 < 0)
-		pr_err("%s, read MASKA_1 failed\n", __func__);
-	mask2 = (u8)i2c_smbus_read_byte_data(data->client,
-		MASKA_2);
-	if (mask2 < 0)
-		pr_err("%s, read MASKA_2 failed\n", __func__);
-	thresh1 = (u8)i2c_smbus_read_byte_data(data->client,
-		THRS1_1);
-	if (thresh1 < 0)
-		pr_err("%s, read THRS1_1 failed\n", __func__);
-	thresh2 = (u8)i2c_smbus_read_byte_data(data->client,
-		THRS1_2);
-	if (thresh2 < 0)
-		pr_err("%s, read THRS1_2 failed\n", __func__);
-	sm1_s0 = (u8)i2c_smbus_read_byte_data(data->client,
-		SM1_S0);
-	if (sm1_s0 < 0)
-		pr_err("%s, read SM1_S0 failed\n", __func__);
-	sm1_s1 = (u8)i2c_smbus_read_byte_data(data->client,
-		SM1_S1);
-	if (sm1_s1 < 0)
-		pr_err("%s, read SM1_S1 failed\n", __func__);
-	sm2_s0 = (u8)i2c_smbus_read_byte_data(data->client,
-		SM2_S0);
-	if (sm2_s0 < 0)
-		pr_err("%s, read SM2_S0 failed\n", __func__);
-	sm2_s1 = (u8)i2c_smbus_read_byte_data(data->client,
-		SM2_S1);
-	if (sm2_s1 < 0)
-		pr_err("%s, read SM2_S1 failed\n", __func__);
+	err = i2c_smbus_read_i2c_block_data(data->client, reg,
+					    sizeof(u8) * 16, &read_buf[38]);
+	if (err != 16) {
+		pr_err("%s : failed to read 0x50 16 bytes for ctrl reg(%d)\n",
+		       __func__, err);
+		return -EIO;
+	}
 
-	return sprintf(buf, "reg1:0x%x,reg2:0x%x,reg3:0x%x,odr:0x%x,fs:0x%x\n"\
-		"src1:0x%x,src2:0x%x,mask1:0x%x,mask2:0x%x,thresh1:0x%x,thresh2:0x%x\n"\
-		"sm1_s0:0x%x,sm1_s1:0x%x,sm2_s0:0x%x,sm2_s1:0x%x, irq:%d\n",
-		reg1, reg2, reg3, odr_data, fs_data,
-		src1, src2, mask1, mask2, thresh1, thresh2,
-		sm1_s0, sm1_s1, sm2_s0, sm2_s1, gpio_get_value(GPIO_ACC_INT));
+	return sprintf(buf, "reg1:0x%x, reg2:0x%x, reg3:0x%x, reg4:0x%x,"\
+		"reg5:0x%x, reg6:0x%x,\n"\
+		"0x30:0x%x, 0x31:0x%x, 0x32:0x%x, 0x33:0x%x, 0x34:0x%x,\n"\
+		"0x35:0x%x, 0x36:0x%x, 0x37:0x%x, 0x38:0x%x, 0x39:0x%x, 0x3A:0x%x,\n"\
+		"0x3B:0x%x, 0x3C:0x%x, 0x3D:0x%x, 0x3E:0x%x, 0x3F:0x%x,\n"\
+		"0x40:0x%x, 0x41:0x%x, 0x42:0x%x, 0x43:0x%x, 0x44:0x%x,\n"\
+		"0x45:0x%x, 0x46:0x%x, 0x47:0x%x, 0x48:0x%x, 0x49:0x%x, 0x4A:0x%x,\n"\
+		"0x4B:0x%x, 0x4C:0x%x, 0x4D:0x%x, 0x4E:0x%x, 0x4F:0x%x,\n"\
+		"0x50:0x%x, 0x51:0x%x, 0x52:0x%x, 0x53:0x%x, 0x54:0x%x,\n"\
+		"0x55:0x%x, 0x56:0x%x, 0x57:0x%x, 0x58:0x%x, 0x59:0x%x, 0x5A:0x%x,\n"\
+		"0x5B:0x%x, 0x5C:0x%x, 0x5D:0x%x, 0x5E:0x%x, 0x5F:0x%x,\n",
+		read_buf[1], read_buf[2], read_buf[3], read_buf[0], read_buf[4],
+		read_buf[5], read_buf[6], read_buf[7], read_buf[8], read_buf[9],
+		read_buf[10], read_buf[11], read_buf[12], read_buf[13], read_buf[14],
+		read_buf[15], read_buf[16], read_buf[17], read_buf[18], read_buf[19],
+		read_buf[20], read_buf[21], read_buf[22], read_buf[23], read_buf[24],
+		read_buf[25], read_buf[26], read_buf[27], read_buf[28], read_buf[29],
+		read_buf[30], read_buf[31], read_buf[32], read_buf[33], read_buf[33],
+		read_buf[35], read_buf[36], read_buf[37], read_buf[38], read_buf[39],
+		read_buf[40], read_buf[41], read_buf[42], read_buf[43], read_buf[44],
+		read_buf[45], read_buf[46], read_buf[47], read_buf[48], read_buf[49],
+		read_buf[50], read_buf[51], read_buf[52], read_buf[53]);
 }
 
 static ssize_t
@@ -1018,6 +1010,7 @@ void k330_accel_shutdown(struct i2c_client *client)
 	int res;
 	struct k330_accel_data *data = i2c_get_clientdata(client);
 
+	data->shutdown = true;
 	accel_dbgmsg("is called.\n");
 	res = i2c_smbus_write_byte_data(data->client,
 					K330ACCEL_CTRL_REG4, PM_OFF);

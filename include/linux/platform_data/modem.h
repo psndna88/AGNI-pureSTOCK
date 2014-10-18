@@ -91,6 +91,91 @@ enum sipc_ver {
 	MAX_SIPC_VER
 };
 
+enum sipc_ch_id {
+	SIPC_CH_ID_RAW_0 = 0,	/*reserved*/
+	SIPC_CH_ID_CS_VT_DATA,
+	SIPC_CH_ID_CS_VT_CONTROL,
+	SIPC_CH_ID_CS_VT_AUDIO,
+	SIPC_CH_ID_CS_VT_VIDEO,
+	SIPC_CH_ID_RAW_5,	/*reserved*/
+	SIPC_CH_ID_RAW_6,	/*reserved*/
+	SIPC_CH_ID_CDMA_DATA,
+	SIPC_CH_ID_PCM_DATA,
+	SIPC_CH_ID_TRANSFER_SCREEN,
+
+	SIPC_CH_ID_PDP_0,	/*ID:10*/
+	SIPC_CH_ID_PDP_1,
+	SIPC_CH_ID_PDP_2,
+	SIPC_CH_ID_PDP_3,
+	SIPC_CH_ID_PDP_4,
+	SIPC_CH_ID_PDP_5,
+	SIPC_CH_ID_PDP_6,
+	SIPC_CH_ID_PDP_7,
+	SIPC_CH_ID_PDP_8,
+	SIPC_CH_ID_PDP_9,
+	SIPC_CH_ID_PDP_10,
+	SIPC_CH_ID_PDP_11,
+	SIPC_CH_ID_PDP_12,
+	SIPC_CH_ID_PDP_13,
+	SIPC_CH_ID_PDP_14,
+
+	SIPC_CH_ID_BT_DUN,	/*ID:25*/
+	SIPC_CH_ID_CIQ_DATA,
+	SIPC_CH_ID_PDP_18,	/*reserved*/
+	SIPC_CH_ID_CPLOG1,	/*ID:28*/
+	SIPC_CH_ID_CPLOG2,	/*ID:29*/
+	SIPC_CH_ID_LOOPBACK1,
+	SIPC_CH_ID_LOOPBACK2,
+
+	/* 32~214 are reserved */
+
+	SIPC5_CH_ID_BOOT_0 = 215,
+	SIPC5_CH_ID_BOOT_1,
+	SIPC5_CH_ID_BOOT_2,
+	SIPC5_CH_ID_BOOT_3,
+	SIPC5_CH_ID_BOOT_4,
+	SIPC5_CH_ID_BOOT_5,
+	SIPC5_CH_ID_BOOT_6,
+	SIPC5_CH_ID_BOOT_7,
+	SIPC5_CH_ID_BOOT_8,
+	SIPC5_CH_ID_BOOT_9,
+
+	SIPC5_CH_ID_DUMP_0 = 225,
+	SIPC5_CH_ID_DUMP_1,
+	SIPC5_CH_ID_DUMP_2,
+	SIPC5_CH_ID_DUMP_3,
+	SIPC5_CH_ID_DUMP_4,
+	SIPC5_CH_ID_DUMP_5,
+	SIPC5_CH_ID_DUMP_6,
+	SIPC5_CH_ID_DUMP_7,
+	SIPC5_CH_ID_DUMP_8,
+	SIPC5_CH_ID_DUMP_9,
+
+	SIPC5_CH_ID_FMT_0 = 235,
+	SIPC5_CH_ID_FMT_1,
+	SIPC5_CH_ID_FMT_2,
+	SIPC5_CH_ID_FMT_3,
+	SIPC5_CH_ID_FMT_4,
+	SIPC5_CH_ID_FMT_5,
+	SIPC5_CH_ID_FMT_6,
+	SIPC5_CH_ID_FMT_7,
+	SIPC5_CH_ID_FMT_8,
+	SIPC5_CH_ID_FMT_9,
+
+	SIPC5_CH_ID_RFS_0 = 245,
+	SIPC5_CH_ID_RFS_1,
+	SIPC5_CH_ID_RFS_2,
+	SIPC5_CH_ID_RFS_3,
+	SIPC5_CH_ID_RFS_4,
+	SIPC5_CH_ID_RFS_5,
+	SIPC5_CH_ID_RFS_6,
+	SIPC5_CH_ID_RFS_7,
+	SIPC5_CH_ID_RFS_8,
+	SIPC5_CH_ID_RFS_9,
+
+	SIPC5_CH_ID_MAX,
+};
+
 /**
  * struct modem_io_t - declaration for io_device
  * @name:	device name
@@ -304,7 +389,6 @@ struct modem_data {
 	int irq_host_wakeup;
 	unsigned gpio_host_active;
 	unsigned gpio_slave_wakeup;
-	unsigned gpio_hub_suspend;
 
 	unsigned gpio_cp_dump_int;
 	unsigned gpio_ap_dump_int;
