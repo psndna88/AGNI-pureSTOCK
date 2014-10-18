@@ -321,7 +321,7 @@ static irqreturn_t s3c_csis_irq(int irq, void *dev_id)
 	}
 
 
-#if !defined(CONFIG_MACH_U1) && !defined(CONFIG_MACH_PX) && !defined(CONFIG_MACH_ZEST)
+#if !defined(CONFIG_MACH_U1) && !defined(CONFIG_MACH_PX) && !defined(CONFIG_MACH_ZEST) && !defined(CONFIG_MACH_KONA)
 	/* Error Handling. If there is an error, we will reset camera sensor as if electric shock comes to the sensor,*/
 	if (unlikely(cfg & S3C_CSIS_INTSRC_ERR_LOST_FS) ||
 		unlikely(cfg & S3C_CSIS_INTSRC_ERR_LOST_FE)) {

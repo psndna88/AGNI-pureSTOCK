@@ -425,7 +425,7 @@ static struct lcd_platform_data panel_platform_data = {
 #if defined(CONFIG_MACH_TAB3)
 	.pdata		= "SMD_LTL101AL06"
 #else
-	.pdata		= "SEC_LTL101AL01-002/003"
+	.pdata		= "SMD_S6C1372" /* As per KK Android OS onwards this name should be used for Note10 LCD Panel */
 #endif
 };
 

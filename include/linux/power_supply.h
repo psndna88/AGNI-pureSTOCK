@@ -132,7 +132,7 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_MANUFACTURER,
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
-#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2)
+#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2) || defined(CONFIG_GC2PD_LTE)
 	POWER_SUPPLY_PROP_RCOMP,
 #endif
 #if defined(CONFIG_MACH_GD2)
@@ -168,6 +168,7 @@ enum power_supply_type {
         POWER_SUPPLY_TYPE_UARTOFF,
         POWER_SUPPLY_TYPE_OTG,
 #endif
+	POWER_SUPPLY_TYPE_POWER_SHARING, /* power sharing cable */
 };
 
 enum {

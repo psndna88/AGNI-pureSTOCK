@@ -28,6 +28,7 @@
 #define SHM_4M_FMT_RX_BUFF_SZ	4096
 #define SHM_4M_RAW_TX_BUFF_SZ	2084864
 #define SHM_4M_RAW_RX_BUFF_SZ	2097152
+#define SHM_4M_MAX_UPLINK_SIZE	(16*1024)
 
 struct shmem_4mb_phys_map {
 	u32 magic;
@@ -96,8 +97,6 @@ struct shmem_link_device {
 	u8 __iomem *base;	/* virtual address of the "start" */
 
 	/* SHMEM GPIO & IRQ */
-	unsigned gpio_pda_active;
-
 	unsigned gpio_ap_wakeup;
 	int irq_ap_wakeup;
 	unsigned gpio_ap_status;
@@ -141,12 +140,13 @@ struct shmem_link_device {
 
 	/* for efficient RX process */
 	struct tasklet_struct rx_tsk;
-	struct delayed_work ipc_rx_dwork;
+	struct delayed_work msg_rx_dwork;
 	struct delayed_work udl_rx_dwork;
 	struct io_device *iod[MAX_SIPC5_DEV];
 
 	/* for logging SHMEM status */
-	struct mem_status_queue stat_list;
+	struct mem_status_queue tx_msq;
+	struct mem_status_queue rx_msq;
 
 	/* for logging SHMEM dump */
 	struct trace_data_queue trace_list;
@@ -157,7 +157,6 @@ struct shmem_link_device {
 
 	/* to hold/release "cp_wakeup" for PM (power-management) */
 	struct delayed_work cp_sleep_dwork;
-	struct delayed_work link_off_dwork;
 	atomic_t ref_cnt;
 	spinlock_t pm_lock;
 };
@@ -457,7 +456,7 @@ static inline void reset_rxq_circ(struct shmem_link_device *shmd, int dev)
  *
  * Returns whether or not IPC via the shmem_link_device instance is possible.
  */
-static bool ipc_active(struct shmem_link_device *shmd)
+static inline bool ipc_active(struct shmem_link_device *shmd)
 {
 	struct link_device *ld = &shmd->ld;
 	u32 magic = get_magic(shmd);
@@ -480,6 +479,13 @@ static bool ipc_active(struct shmem_link_device *shmd)
 	return true;
 }
 
+static inline bool all_rxq_empty(struct shmem_link_device *shmd,
+				 struct mem_status *mst)
+{
+	return ((mst->head[IPC_FMT][RX] == mst->tail[IPC_FMT][RX])
+		&& (mst->head[IPC_RAW][RX] == mst->tail[IPC_RAW][RX]));
+}
+
 /**
  * get_rxq_rcvd
  * @shmd: pointer to an instance of shmem_link_device structure
@@ -492,8 +498,8 @@ static bool ipc_active(struct shmem_link_device *shmd)
  *
  * Returns an error code.
  */
-static int get_rxq_rcvd(struct shmem_link_device *shmd, int dev,
-			struct mem_status *mst, struct circ_status *circ)
+static inline int get_rxq_rcvd(struct shmem_link_device *shmd, int dev,
+			       struct mem_status *mst, struct circ_status *circ)
 {
 	struct link_device *ld = &shmd->ld;
 
@@ -527,8 +533,8 @@ static int get_rxq_rcvd(struct shmem_link_device *shmd, int dev,
  *
  * Returns the size of free space in the buffer or an error code.
  */
-static int get_txq_space(struct shmem_link_device *shmd, int dev,
-			struct circ_status *circ)
+static inline int get_txq_space(struct shmem_link_device *shmd, int dev,
+				struct circ_status *circ)
 {
 	struct link_device *ld = &shmd->ld;
 	int cnt = 0;
@@ -583,8 +589,8 @@ static int get_txq_space(struct shmem_link_device *shmd, int dev,
  *
  * Returns an error code.
  */
-static int get_txq_saved(struct shmem_link_device *shmd, int dev,
-			struct circ_status *circ)
+static inline int get_txq_saved(struct shmem_link_device *shmd, int dev,
+				struct circ_status *circ)
 {
 	struct link_device *ld = &shmd->ld;
 	int cnt = 0;
@@ -633,7 +639,7 @@ static int get_txq_saved(struct shmem_link_device *shmd, int dev,
  *
  * Clears all pointers in every circular queue.
  */
-static void clear_shmem_map(struct shmem_link_device *shmd)
+static inline void clear_shmem_map(struct shmem_link_device *shmd)
 {
 	set_txq_head(shmd, IPC_FMT, 0);
 	set_txq_tail(shmd, IPC_FMT, 0);
@@ -652,7 +658,7 @@ static void clear_shmem_map(struct shmem_link_device *shmd)
  *
  * Reset SHMEM with IPC map.
  */
-static void reset_shmem_ipc(struct shmem_link_device *shmd)
+static inline void reset_shmem_ipc(struct shmem_link_device *shmd)
 {
 	set_access(shmd, 0);
 
@@ -673,7 +679,7 @@ static void reset_shmem_ipc(struct shmem_link_device *shmd)
  *
  * Initializes IPC via SHMEM.
  */
-static int init_shmem_ipc(struct shmem_link_device *shmd)
+static inline int init_shmem_ipc(struct shmem_link_device *shmd)
 {
 	struct link_device *ld = &shmd->ld;
 
@@ -689,11 +695,98 @@ static int init_shmem_ipc(struct shmem_link_device *shmd)
 	shmd->iod[IPC_RAW] = link_get_iod_with_format(ld, IPC_MULTI_RAW);
 
 	reset_shmem_ipc(shmd);
-
 	if (get_magic(shmd) != SHM_IPC_MAGIC || get_access(shmd) != 1)
 		return -EACCES;
 
+	ld->mode = LINK_MODE_IPC;
+
 	return 0;
+}
+
+/**
+ * print_req_ack
+ * @shmd: pointer to an instance of shmem_link_device structure
+ * @dev: IPC device (IPC_FMT, IPC_RAW, etc.)
+ * @mst: pointer to an instance of mem_status structure
+ *
+ * Prints a snapshot of the status of an RXQ when receiving REQ_ACK
+ */
+static inline void print_req_ack(struct shmem_link_device *shmd, int dev,
+				 struct mem_status *mst)
+{
+	struct link_device *ld;
+	struct modem_ctl *mc;
+	int req_ack_rcvd;
+	int us;
+	u32 qsize;
+	u32 in;
+	u32 out;
+	u32 rcvd;
+	u32 space;
+	struct utc_time utc;
+
+	if (dev > IPC_RAW)
+		return;
+
+	ld = &shmd->ld;
+	mc = ld->mc;
+
+	req_ack_rcvd = shmd->dev[dev]->req_ack_rcvd;
+	us = ns2us(mst->ts.tv_nsec);
+	qsize = get_rxq_buff_size(shmd, dev);
+	in = mst->head[dev][RX];
+	out = mst->tail[dev][RX];
+	rcvd = circ_get_usage(qsize, in, out);
+	space = circ_get_space(qsize, in, out);
+	ts2utc(&mst->ts, &utc);
+
+	pr_info("%s: [%02d:%02d:%02d.%06d] "
+		"REQ_ACK: %s->%s: %s.%d {in:%d out:%d rcvd:%d space:%d}\n",
+		MIF_TAG, utc.hour, utc.min, utc.sec, us, mc->name, ld->name,
+		get_dev_name(dev), req_ack_rcvd, in, out, rcvd, space);
+}
+
+/**
+ * print_res_ack
+ * @shmd: pointer to an instance of shmem_link_device structure
+ * @dev: IPC device (IPC_FMT, IPC_RAW, etc.)
+ * @mst: pointer to an instance of mem_status structure
+ *
+ * Prints a snapshot of the status of an RXQ when sending RES_ACK
+ */
+static inline void print_res_ack(struct shmem_link_device *shmd, int dev,
+				 struct mem_status *mst)
+{
+	struct link_device *ld;
+	struct modem_ctl *mc;
+	int req_ack_rcvd;
+	int us;
+	u32 qsize;
+	u32 in;
+	u32 out;
+	u32 rcvd;
+	u32 space;
+	struct utc_time utc;
+
+	if (dev > IPC_RAW)
+		return;
+
+	ld = &shmd->ld;
+	mc = ld->mc;
+
+	req_ack_rcvd = shmd->dev[dev]->req_ack_rcvd;
+	us = ns2us(mst->ts.tv_nsec);
+	qsize = get_rxq_buff_size(shmd, dev);
+	in = mst->head[dev][RX];
+	out = mst->tail[dev][RX];
+	rcvd = circ_get_usage(qsize, in, out);
+	space = circ_get_space(qsize, in, out);
+	ts2utc(&mst->ts, &utc);
+
+	pr_info("%s: [%02d:%02d:%02d.%06d] "
+		"RES_ACK: %s->%s: %s.%d {in:%d out:%d rcvd:%d space:%d}\n",
+		MIF_TAG, utc.hour, utc.min, utc.sec, us, ld->name, mc->name,
+		get_dev_name(dev), req_ack_rcvd, in, out, rcvd, space);
 }
 
 #endif

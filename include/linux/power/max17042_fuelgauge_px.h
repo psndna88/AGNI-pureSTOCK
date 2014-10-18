@@ -376,6 +376,7 @@ extern int fg_alert_init(void);
 extern void fg_fullcharged_compensation(u32 is_recharging, u32 pre_update);
 extern void fg_check_vf_fullcap_range(void);
 extern int fg_check_cap_corruption(void);
+extern int fg_check_cap_corruption_p4(void);
 extern void fg_set_full_charged(void);
 extern void fg_reset_fullcap_in_fullcharge(void);
 #endif

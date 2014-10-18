@@ -357,6 +357,10 @@ static ssize_t remocon_store(struct device *dev, struct device_attribute *attr,
 	unsigned int _data;
 	int count, i;
 
+#if defined(CONFIG_TARGET_TAB3_WIFI7) || defined(CONFIG_TARGET_TAB3_LTE7)
+	data->pdata->irled_ldo_onoff(1);
+#endif
+
 	for (i = 0; i < MAX_SIZE; i++) {
 		if (sscanf(buf++, "%u", &_data) == 1) {
 			if (_data == 0 || buf == '\0')
@@ -397,6 +401,11 @@ static ssize_t remocon_store(struct device *dev, struct device_attribute *attr,
 	}
 
 	ir_remocon_work(data, data->count);
+
+#if defined(CONFIG_TARGET_TAB3_WIFI7) || defined(CONFIG_TARGET_TAB3_LTE7)
+	data->pdata->irled_ldo_onoff(0);
+#endif
+
 	return size;
 }
 

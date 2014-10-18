@@ -64,6 +64,8 @@ else ifeq ($(CONFIG_SEC_MODEM_U1_SPR),y)
 obj-$(CONFIG_SEC_MODEM)		+= modem_if_na_spr/
 else ifeq ($(CONFIG_SEC_MODEM_V2), y)
 obj-$(CONFIG_SEC_MODEM)         += modem_v2/
+else ifeq ($(CONFIG_LTE_MODEM_CMC221), y)
+obj-$(CONFIG_SEC_MODEM)		+= modem_if_c1/
 else
 obj-$(CONFIG_SEC_MODEM)		+= modem_if/
 endif

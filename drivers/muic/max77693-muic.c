@@ -1817,7 +1817,17 @@ static void max77693_otg_control(struct max77693_muic_info *info, int enable)
 			MAX77693_CHG_REG_CHG_CNFG_00, chg_cnfg_00);
 
 		mdelay(50);
-
+#if defined(CONFIG_MACH_T0_KOR_SKT) || defined(CONFIG_MACH_T0_KOR_KT) \
+		|| defined(CONFIG_MACH_T0_KOR_LGT)
+		/* [MAX77693] Workaround to get rid of reading dummy(0x00) */
+		/* disable charger detection again */
+		max77693_read_reg(info->max77693->muic,
+			MAX77693_MUIC_REG_CDETCTRL1, &cdetctrl1);
+		cdetctrl1 &= ~(1 << 0);
+		max77693_write_reg(info->max77693->muic,
+			MAX77693_MUIC_REG_CDETCTRL1, cdetctrl1);
+		mdelay(10);
+#endif
 		/* enable charger detection */
 		max77693_read_reg(info->max77693->muic,
 			MAX77693_MUIC_REG_CDETCTRL1, &cdetctrl1);

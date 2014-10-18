@@ -818,6 +818,8 @@ static int keycode[] = {
 };
 void wacom_i2c_softkey(struct wacom_i2c *wac_i2c, s16 key, s16 pressed)
 {
+		if (wac_i2c->pen_pressed || wac_i2c->side_pressed || wac_i2c->pen_prox)
+					forced_release(wac_i2c);
 		input_report_key(wac_i2c->input_dev,
 			keycode[key], pressed);
 		input_sync(wac_i2c->input_dev);

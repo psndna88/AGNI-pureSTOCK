@@ -44,9 +44,6 @@
 #include <linux/string.h>
 #include "multiuser.h"
 
-/* the file system magic number */
-#define SDCARDFS_SUPER_MAGIC	0xb550ca10
-
 /* the file system name */
 #define SDCARDFS_NAME "sdcardfs"
 
@@ -214,6 +211,7 @@ struct sdcardfs_sb_info {
 	char *obbpath_s;
 	struct path obbpath;
 	void *pkgl_id;
+	char *devpath;
 };
 
 /*
@@ -257,6 +255,19 @@ static inline struct inode *sdcardfs_lower_inode(const struct inode *i)
 static inline void sdcardfs_set_lower_inode(struct inode *i, struct inode *val)
 {
 	SDCARDFS_I(i)->lower_inode = val;
+}
+
+/* copy the inode attrs from src to dest except uid and gid */
+static inline void sdcardfs_copy_inode_attr(struct inode *dest, const struct inode *src)
+{
+	dest->i_mode = src->i_mode;
+	dest->i_rdev = src->i_rdev;
+	dest->i_atime = src->i_atime;
+	dest->i_mtime = src->i_mtime;
+	dest->i_ctime = src->i_ctime;
+	dest->i_blkbits = src->i_blkbits;
+	dest->i_flags = src->i_flags;
+	dest->i_nlink = src->i_nlink;
 }
 
 /* superblock to lower superblock */
@@ -467,30 +478,51 @@ static inline int check_min_free_space(struct dentry *dentry, size_t size, int d
 		sdcardfs_put_lower_path(dentry, &lower_path);
 	
 		if (unlikely(err))
-			return 0;
-	
+			goto out_invalid;
+
 		/* Invalid statfs informations. */
 		if (unlikely(statfs.f_bsize == 0))
-			return 0;
-	
+			goto out_invalid;
+
 		/* if you are checking directory, set size to f_bsize. */
 		if (unlikely(dir))
 			size = statfs.f_bsize;
-	
+
 		/* available size */
 		avail = statfs.f_bavail * statfs.f_bsize;
-	
+
 		/* not enough space */
 		if ((u64)size > avail)
-			return 0;
-	
+			goto out_nospc;
+
 		/* enough space */
 		if ((avail - size) > (sbi->options.reserved_mb * 1024 * 1024))
 			return 1;
-	
-		return 0;
 	} else
 		return 1;
-}
 
+out_invalid:
+	printk(KERN_INFO "statfs               : invalid return\n");
+	printk(KERN_INFO "vfs_statfs error#    : %d\n", err);
+	printk(KERN_INFO "statfs.f_type        : 0x%X\n", (u32)statfs.f_type);
+	printk(KERN_INFO "statfs.f_blocks      : %llu blocks\n", statfs.f_blocks);
+	printk(KERN_INFO "statfs.f_bfree       : %llu blocks\n", statfs.f_bfree);
+	printk(KERN_INFO "statfs.f_files       : %llu\n", statfs.f_files);
+	printk(KERN_INFO "statfs.f_ffree       : %llu\n", statfs.f_ffree);
+	printk(KERN_INFO "statfs.f_fsid.val[1] : 0x%X", (u32)statfs.f_fsid.val[1]);
+	printk(KERN_INFO "statfs.f_fsid.val[0] : 0x%X", (u32)statfs.f_fsid.val[0]);
+	printk(KERN_INFO "statfs.f_namelen     : %ld\n", statfs.f_namelen);
+	printk(KERN_INFO "statfs.f_frsize      : %ld\n", statfs.f_frsize);
+	printk(KERN_INFO "statfs.f_flags       : %ld\n", statfs.f_flags);
+
+out_nospc:
+	printk(KERN_INFO "statfs.f_bavail      : %llu blocks\n", statfs.f_bavail);
+	printk(KERN_INFO "statfs.f_bsize       : %ld bytes\n", statfs.f_bsize);
+	printk(KERN_INFO "required size        : %llu byte\n", (u64)size);
+	printk(KERN_INFO "sdcardfs reserved_mb : %u\n", sbi->options.reserved_mb);
+	if (sbi->devpath)
+		printk(KERN_INFO "sdcardfs source path : %s\n", sbi->devpath);
+
+	return 0;
+}
 #endif	/* not _SDCARDFS_H_ */

@@ -164,6 +164,16 @@ config REGULATOR_S5M8767
 	 via I2C bus. S5M8767 have 9 Bucks and 28 LDOs output and
 	 supports 8 DVS modes ranging from 0.65V to 2.225V by 6.25mV steps.
 
+config S5M8767_OSC
+	tristate "Samsung S5M8767 OSC function"
+	depends on MFD_S5M_CORE
+	help
+	 This function for s5m8767 OSC enable during sleep state.
+	 In normal case this feature must be turn off.
+	 If you turn on this function sleep current will be increase about 0.8mA.
+	 But when early wakeup the device has problem and
+	 you need to clear work PWREN then it will help you.
+
 config REGULATOR_TWL4030
 	bool "TI TWL4030/TWL5030/TWL6030/TPS659x0 PMIC"
 	depends on TWL4030_CORE

@@ -150,3 +150,6 @@ obj-$(CONFIG_FELICA) += felica/
 
 #obj-$(CONFIG_J4FS)		+= j4fs/
 obj-$(CONFIG_ICE4_FPGA)		+= ice4_fpga/
+
+# SecFilter Driver
+obj-$(CONFIG_SEC_NET_FILTER)	+= secfilter/

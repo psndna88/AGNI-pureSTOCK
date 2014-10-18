@@ -397,6 +397,7 @@ config EXYNOS4_SETUP_THERMAL
 config EXYNOS4_EXPORT_TEMP
 	bool "Support for CPU temperature export from exynos4"
 	depends on EXYNOS4_SETUP_THERMAL
+	default y
 	help
 	  Exports current CPU temperature from Exynos4 TMU to be able to
 	  use it externally from the driver. You can use the special function
@@ -2178,6 +2179,7 @@ config USER_RESET_DEBUG
 
 config PM_DEBUG_WAKEUP_RESET
 	bool "Log the Power Management debug information"
+	default n
 	help
 	  This configuratoin is only for debugging the PM interrupt issue.
 

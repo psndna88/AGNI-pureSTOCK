@@ -213,8 +213,6 @@ static int ss222_boot_off(struct modem_ctl *mc)
 	unsigned long remain;
 	mif_debug("+++\n");
 
-	ld->mode = LINK_MODE_IPC;
-
 	remain = wait_for_completion_timeout(&ld->init_cmpl, MIF_INIT_TIMEOUT);
 	if (remain == 0) {
 		mif_err("T-I-M-E-O-U-T\n");

@@ -129,7 +129,7 @@ struct max17047_fuelgauge_data {
 	/* adjust full soc */
 	int				full_soc;
 
-#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2)
+#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2) || defined(CONFIG_GC2PD_LTE)
 	int				prev_status;
 #endif
 
@@ -352,7 +352,7 @@ static void max17047_reset_soc(struct i2c_client *client)
 	return;
 }
 
-#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2)
+#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2) || defined(CONFIG_GC2PD_LTE)
 void max17047_set_rcomp(struct i2c_client *client, int state)
 {
 	u8 rst_cmd[2];
@@ -363,6 +363,8 @@ void max17047_set_rcomp(struct i2c_client *client, int state)
 		rst_cmd[0] = 0xC1;
 #elif defined(CONFIG_MACH_GD2)
 		rst_cmd[0] = 0x70;
+#elif defined(CONFIG_GC2PD_LTE) || defined(CONFIG_MACH_GC2PD)
+		rst_cmd[0] = 0x6A;
 #else/*GC1 default*/
 		rst_cmd[0] = 0xCF;
 #endif
@@ -372,6 +374,8 @@ void max17047_set_rcomp(struct i2c_client *client, int state)
 		rst_cmd[0] = 0x8D;
 #elif defined(CONFIG_MACH_GD2)
 		rst_cmd[0] = 0x54;
+#elif defined(CONFIG_GC2PD_LTE) || defined(CONFIG_MACH_GC2PD)
+		rst_cmd[0] = 0x60;
 #else/*GC1 default*/
 		rst_cmd[0] = 0x8F;
 #endif
@@ -553,6 +557,7 @@ static void max17047_update_work(struct work_struct *work)
 
 	if (!battery_psy || !battery_psy->set_property) {
 		pr_err("%s: fail to get battery power supply\n", __func__);
+		wake_lock_timeout(&fg_data->update_wake_lock, HZ);
 		return;
 	}
 
@@ -713,7 +718,7 @@ static int max17047_set_property(struct power_supply *psy,
 		/* adjust full soc */
 		max17047_adjust_fullsoc(fg_data->client);
 		break;
-#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2)
+#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2) || defined(CONFIG_GC2PD_LTE)
 	case POWER_SUPPLY_PROP_RCOMP:
 		if (fg_data->prev_status == val->intval) {
 			pr_debug("%s: No rcomp change, prev(%d) = cur(%d)\n",
@@ -987,7 +992,7 @@ static int __devinit max17047_fuelgauge_i2c_probe(struct i2c_client *client,
 	else
 		fg_data->fuelgauge.name = "max17047-fuelgauge";
 
-#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2)
+#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2) || defined(CONFIG_GC2PD_LTE)
 	fg_data->prev_status = POWER_SUPPLY_STATUS_DISCHARGING;
 #endif
 	fg_data->fuelgauge.type = POWER_SUPPLY_TYPE_UNKNOWN;

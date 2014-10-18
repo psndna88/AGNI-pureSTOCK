@@ -59,7 +59,12 @@
 #define TK_FIRMWARE_VER  0x06
 #define TK_MODULE_VER    0x05
 #elif defined(CONFIG_MACH_T0)
+#if defined(CONFIG_MACH_T0_CHN_CU_DUOS)\
+	|| defined(CONFIG_MACH_T0_CHN_OPEN_DUOS)
+#define TK_FIRMWARE_VER	 0x13
+#else
 #define TK_FIRMWARE_VER	 0x11
+#endif
 #define TK_MODULE_VER    0x08
 #elif defined(CONFIG_MACH_SUPERIOR_KOR_SKT)
 #define TK_FIRMWARE_VER	 0x03
