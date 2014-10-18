@@ -134,11 +134,13 @@ struct mdm_hsic_pm_data {
 	struct delayed_work auto_rpm_restart_work;
 	struct delayed_work request_resume_work;
 	struct delayed_work fast_dormancy_work;
-
+	struct delayed_work rpm_state_check_work;
+	
 	struct mdm_hsic_pm_platform_data *mdm_pdata;
 
 	/* QMICM mode value */
 	bool qmicm_mode;
+	int scc;
 };
 
 /* indicate wakeup from lpa state */
@@ -390,17 +392,24 @@ void request_active_lock_set(const char *name)
 {
 	struct mdm_hsic_pm_data *pm_data = get_pm_data_by_dev_name(name);
 	pr_info("%s\n", __func__);
-	if (pm_data)
+	if (pm_data) {
 		wake_lock(&pm_data->l2_wake);
+		pm_data->scc = 0;
+		queue_delayed_work(pm_data->wq, &pm_data->rpm_state_check_work,
+							msecs_to_jiffies(3000));
+	}
 }
 
 void request_active_lock_release(const char *name)
 {
 	struct mdm_hsic_pm_data *pm_data = get_pm_data_by_dev_name(name);
 	pr_info("%s\n", __func__);
-	if (pm_data)
+	if (pm_data) {
 		wake_unlock(&pm_data->l2_wake);
+		cancel_delayed_work(&pm_data->rpm_state_check_work);
+	}
 }
+
 
 void request_boot_lock_set(const char *name)
 {
@@ -650,6 +659,19 @@ int set_qmicm_mode(const char *name)
 	return 0;
 }
 
+int get_qmicm_mode(const char *name)
+{
+	/* find pm device from list by name */
+	struct mdm_hsic_pm_data *pm_data = get_pm_data_by_dev_name(name);
+
+	if (!pm_data) {
+		pr_err("%s:no pm device(%s) exist\n", __func__, name);
+		return -ENODEV;
+	}
+
+	return pm_data->qmicm_mode;
+}
+
 /* force fatal for debug when HSIC disconnect */
 extern void mdm_force_fatal(void);
 
@@ -714,6 +736,11 @@ static void mdm_hsic_rpm_check(struct work_struct *work)
 		return;
 	}
 
+	if (pm_data->block_request) {
+		pr_info("ignore resume req, block_request\n");
+		return;
+	}
+
 	dev = &pm_data->udev->dev;
 
 	if (pm_runtime_resume(dev) < 0)
@@ -767,6 +794,25 @@ static void mdm_hsic_rpm_restart(struct work_struct *work)
 	pm_runtime_set_autosuspend_delay(dev, 500);
 }
 
+static void rpm_check_func(struct work_struct *work)
+{
+	struct mdm_hsic_pm_data *pm_data =
+			container_of(work, struct mdm_hsic_pm_data,
+					rpm_state_check_work.work);
+
+	if (!pm_data->udev || !pm_data->intf_cnt)
+		return;
+	if (pm_data->udev->dev.power.runtime_status == RPM_ACTIVE)
+		wake_up_all(&pm_data->udev->dev.power.wait_queue);
+	if (pm_data->scc &&
+		pm_data->udev->dev.power.runtime_status == RPM_SUSPENDED)
+		return;
+
+	pr_info("%s:%d\n", __func__, pm_data->scc);
+	pm_data->scc++;
+	queue_delayed_work(pm_data->wq, &pm_data->rpm_state_check_work,
+							msecs_to_jiffies(3000));
+}
 static void fast_dormancy_func(struct work_struct *work)
 {
 	struct mdm_hsic_pm_data *pm_data =
@@ -1258,6 +1304,7 @@ static int mdm_hsic_pm_probe(struct platform_device *pdev)
 							mdm_hsic_rpm_restart);
 	INIT_DELAYED_WORK(&pm_data->request_resume_work, mdm_hsic_rpm_check);
 	INIT_DELAYED_WORK(&pm_data->fast_dormancy_work, fast_dormancy_func);
+	INIT_DELAYED_WORK(&pm_data->rpm_state_check_work, rpm_check_func);
 	/* register notifier call */
 	pm_data->pm_notifier.notifier_call = mdm_hsic_pm_notify_event;
 	register_pm_notifier(&pm_data->pm_notifier);

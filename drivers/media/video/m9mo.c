@@ -91,8 +91,9 @@ int mmc_fw;
 
 #if 0
 #define M9MO_FACTORY_CSV_PATH	"/data/FACTORY_CSV_RAW.bin"
-#endif
 #define M9MO_FACTORY_CSV_PATH	"/mnt/sdcard/FACTORY_CSV_RAW.bin"
+#endif
+#define M9MO_FACTORY_CSV_PATH	"/data/media/FACTORY_CSV_RAW.bin"
 
 #define M9MOTB_FW_PATH "RS_M9LS_TB.bin" /* TECHWIN - SONY */
 /* #define M9MOON_FW_PATH "RS_M9LS_ON.bin" */ /* FIBEROPTICS - SONY */
@@ -3447,7 +3448,7 @@ static int m9mo_make_CSV_rawdata(struct v4l2_subdev *sd,
 	set_fs(KERNEL_DS);
 
 	fp = filp_open(M9MO_FACTORY_CSV_PATH,
-		O_WRONLY|O_CREAT|O_TRUNC, S_IRUGO|S_IWUGO|S_IXUSR);
+		O_WRONLY|O_CREAT|O_TRUNC, 0664);
 	if (IS_ERR(fp)) {
 		cam_err("failed to open %s, err %ld\n",
 			M9MO_FACTORY_CSV_PATH, PTR_ERR(fp));
@@ -11973,8 +11974,6 @@ static int m9mo_load_fw_main(struct v4l2_subdev *sd)
 			err = -EIO;
 			goto out;
 		}
-		if (!IS_ERR(fp) && fp != NULL)
-			filp_close(fp, current->files);
 	}
 
 #else
@@ -12516,7 +12515,7 @@ retry :
 			M9MO_FLASH_WR, 0x01);
 	cam_err("err : %d - %s", err, err==1?"success":"fail");
 
-	retries = 50;
+	retries = 30;
 	do {
 		msleep(300);
 		err = m9mo_readb(sd, M9MO_CATEGORY_FLASH,

@@ -776,7 +776,7 @@ static struct s5m_regulator_data s5m8767_regulators[] = {
 	{S5M8767_LDO2, &s5m_ldo2_init_data,},
 #endif
 	{S5M8767_LDO3, &s5m_ldo3_init_data,},
-#if defined(CONFIG_MACH_GC1_USA_ATT) || defined(CONFIG_MACH_GC1_USA_VZW)
+#if defined(CONFIG_MACH_GC1_USA_ATT) || defined(CONFIG_MACH_GC1_USA_VZW) || defined(CONFIG_MACH_GC2PD) 
 	{S5M8767_LDO5, &s5m_ldo5_init_data,},
 #endif
 #ifdef CONFIG_EXYNOS_C2C

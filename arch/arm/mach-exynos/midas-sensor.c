@@ -588,7 +588,7 @@ static void grip_init_code_set(void)
 	asp01_pdata.init_code[SET_PAR_PER] = 0x24;
 	asp01_pdata.init_code[SET_TOUCH_PER] = 0x3c;
 	asp01_pdata.init_code[SET_HI_CAL_PER] = 0x18;
-	asp01_pdata.init_code[SET_BSMFM_SET] = 0x30;
+	asp01_pdata.init_code[SET_BSMFM_SET] = 0x32;
 	asp01_pdata.init_code[SET_ERR_MFM_CYC] = 0x33;
 	asp01_pdata.init_code[SET_TOUCH_MFM_CYC] = 0x37;
 	asp01_pdata.init_code[SET_SYS_FUNC] = 0x10;
@@ -596,9 +596,9 @@ static void grip_init_code_set(void)
 	asp01_pdata.init_code[SET_CAL_SPD] = 0x03;
 	asp01_pdata.init_code[SET_BFT_MOT] = 0x40;
 	asp01_pdata.init_code[SET_TOU_RF_EXT] = 0x00;
-	asp01_pdata.init_code[SET_OFF_TIME] = 0x30;
-	asp01_pdata.init_code[SET_SENSE_TIME] = 0x48;
-	asp01_pdata.init_code[SET_DUTY_TIME] = 0x50;
+	asp01_pdata.init_code[SET_OFF_TIME] = 0x38;
+	asp01_pdata.init_code[SET_SENSE_TIME] = 0x44;
+	asp01_pdata.init_code[SET_DUTY_TIME] = 0x48;
 	asp01_pdata.init_code[SET_HW_CON1] = 0x78;
 	asp01_pdata.init_code[SET_HW_CON2] = 0x27;
 	asp01_pdata.init_code[SET_HW_CON3] = 0xC8;

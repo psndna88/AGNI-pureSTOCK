@@ -63,17 +63,19 @@ static void battery_error_control(struct battery_info *info);
 unsigned int lpcharge;
 static int battery_get_lpm_state(char *str)
 {
-	get_option(&str, &lpcharge);
+	if (strncmp(str, "charger", 7) == 0)
+		lpcharge = 1;
+
 	pr_info("%s: Low power charging mode: %d\n", __func__, lpcharge);
 
 	return lpcharge;
 }
-__setup("lpcharge=", battery_get_lpm_state);
+__setup("androidboot.mode=", battery_get_lpm_state);
 EXPORT_SYMBOL(lpcharge);
 
-#if defined(CONFIG_MACH_KONA)		
+#if defined(CONFIG_MACH_KONA)
 extern bool mhl_connected;
-#endif		
+#endif
 
 /* Cable type from charger or adc */
 static int battery_get_cable(struct battery_info *info)
@@ -1146,28 +1148,13 @@ static void battery_charge_control(struct battery_info *info,
 	current_time = ktime_to_timespec(ktime);
 
 	if ((info->cable_type != POWER_SUPPLY_TYPE_BATTERY) &&
-		(chg_curr > 0) && (info->siop_state == true)) {
+		(chg_curr > 0)) {
+		info->siop_charge_current = chg_curr * info->siop_lv / 100;
 
-		switch (info->siop_lv) {
-		case SIOP_LV1:
-			info->siop_charge_current =
-				info->pdata->chg_curr_siop_lv1;
-			break;
-		case SIOP_LV2:
-			info->siop_charge_current =
-				info->pdata->chg_curr_siop_lv2;
-			break;
-		case SIOP_LV3:
-			info->siop_charge_current =
-				info->pdata->chg_curr_siop_lv3;
-			break;
-		default:
-			info->siop_charge_current =
-				info->pdata->chg_curr_usb;
-			break;
-		}
-
-		chg_curr = MIN(chg_curr, info->siop_charge_current);
+		if(info->siop_charge_current < info->pdata->chg_curr_usb)
+			chg_curr = info->pdata->chg_curr_usb;
+		else
+			chg_curr = info->siop_charge_current;
 		pr_info("%s: siop state, level(%d), cc(%d)\n",
 				__func__, info->siop_lv, chg_curr);
 	}
@@ -1309,8 +1296,24 @@ static void battery_indicator_icon(struct battery_info *info)
 
 #if defined(CONFIG_MACH_KONA)
 		if (info->cable_type == POWER_SUPPLY_TYPE_USB) {
+		if(info->lpm_state == true)
+		{
+		    if(info->battery_soc == 100)
+			{
+				info->charge_virt_state =
+					POWER_SUPPLY_STATUS_FULL;
+			}
+			else
+			{
 			info->charge_virt_state =
+				POWER_SUPPLY_STATUS_CHARGING;
+			}
+		}
+		else
+		{
+		info->charge_virt_state =
 				POWER_SUPPLY_STATUS_DISCHARGING;
+		}
 		}
 #endif
 #if 0
@@ -1767,13 +1770,20 @@ charge_ok:
 						DOCK_TYPE_AUDIO_CURR);
 			break;
 		case CABLE_TYPE_SMARTDOCK_TA_MUIC:
+		case CABLE_TYPE_SMARTDOCK_MUIC:
 			if (info->cable_sub_type == ONLINE_SUB_TYPE_SMART_OTG) {
+				info->cable_type = POWER_SUPPLY_TYPE_USB;
+				pr_info("%s: OTG model and change cable type to %d\n",
+					__func__, info->cable_type);
 				pr_info("%s: smart dock ta & host, %d\n",
 					__func__, DOCK_TYPE_SMART_OTG_CURR);
 				battery_charge_control(info,
 						DOCK_TYPE_SMART_OTG_CURR,
 						DOCK_TYPE_SMART_OTG_CURR);
 			} else {
+				info->cable_type = POWER_SUPPLY_TYPE_MAINS;
+				pr_info("%s: NOTG model and change cable type to %d\n",
+					__func__, info->cable_type);
 				pr_info("%s: smart dock ta & no host, %d\n",
 					__func__, DOCK_TYPE_SMART_NOTG_CURR);
 				battery_charge_control(info,
@@ -1857,9 +1867,7 @@ monitor_finish:
 						info->charge_start_time));
 	if (info->event_state != EVENT_STATE_CLEAR)
 		pr_cont(", e(%d, 0x%04x)", info->event_state, info->event_type);
-	if (info->siop_state)
-		pr_cont(", op(%d, %d)", info->siop_state, info->siop_lv);
-
+	pr_cont(", op(%d)", info->siop_lv);
 	pr_cont("\n");
 
 	/* check current_avg */
@@ -2075,7 +2083,7 @@ static int samsung_battery_get_property(struct power_supply *ps,
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
 		val->intval = info->charge_virt_state;
-	#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2)
+	#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_GD2) || defined(CONFIG_GC2PD_LTE)
 		info->psy_fuelgauge->set_property(info->psy_fuelgauge,
 			POWER_SUPPLY_PROP_RCOMP, val);
 	#endif
@@ -2321,7 +2329,7 @@ static __devinit int samsung_battery_probe(struct platform_device *pdev)
 	char *temper_src_name[] = { "fuelgauge", "ap adc",
 					"ext adc", "unknown"
 	};
-	char *vf_src_name[] = { "adc", "charger irq", "gpio", "unknown"
+	char *vf_src_name[] = { "adc", "charger irq", "gpio", "adc_gpio", "unknown"
 	};
 	pr_info("%s: battery init\n", __func__);
 
@@ -2450,6 +2458,7 @@ static __devinit int samsung_battery_probe(struct platform_device *pdev)
 	info->led_state = BATT_LED_DISCHARGING;
 	info->monitor_count = 0;
 	info->slate_mode = 0;
+	info->siop_lv = 100;
 #ifdef CONFIG_FAST_BOOT
 	info->dup_power_off = false;
 	info->suspend_check = false;

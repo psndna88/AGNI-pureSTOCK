@@ -37,7 +37,8 @@ static struct gyro_platform_data gyro_pdata = {
 	.gyro_en = &gyro_en,
 };
 
-static struct i2c_board_info i2c_devs18_emul[] __initdata = {
+static struct i2c_board_info i2c_devs1[] __initdata = {
+#if defined(CONFIG_MACH_GC2PD)
 	{
 		I2C_BOARD_INFO("k330_accel", (0x3C >> 1)),
 		.platform_data = &accel_pdata,
@@ -48,6 +49,16 @@ static struct i2c_board_info i2c_devs18_emul[] __initdata = {
 		.platform_data = &gyro_pdata,
 		.irq = -1,	/* polling */
 	},
+#else
+	{
+		I2C_BOARD_INFO("k330_accel", (0x3A >> 1)),
+		.platform_data = &accel_pdata,
+	},
+	{
+		I2C_BOARD_INFO("k330_gyro", (0xD6 >> 1)),
+		.platform_data = &gyro_pdata,
+	},
+#endif
 };
 #endif
 
@@ -234,6 +245,21 @@ static u8 ak8963_get_position(void)
 
 #if defined(CONFIG_MACH_GC1)
 	position = TYPE3_TOP_LOWER_LEFT;
+#elif defined(CONFIG_TARGET_LOCALE_USA) /* LTE USA ATT */
+	if(system_rev >= 9)
+		position = TYPE3_BOTTOM_UPPER_RIGHT;
+	else
+		position = TYPE3_TOP_UPPER_RIGHT;
+#elif defined(CONFIG_GC2PD_LTE) /* LTE EUR OPEN */
+
+	#if defined(CONFIG_TARGET_LOCALE_KOR)
+	if(system_rev >= 7)
+	#else
+	if(system_rev >= 9)
+	#endif
+		position = TYPE3_BOTTOM_UPPER_RIGHT;
+	else
+		position = TYPE3_BOTTOM_LOWER_LEFT;
 #elif defined(CONFIG_MACH_GC2PD)
 	position = TYPE3_TOP_UPPER_RIGHT;
 #else
@@ -304,9 +330,9 @@ static int __init midas_sensor_init(void)
 		pr_err("%s, gyro_gpio_init(err=%d)\n", __func__, ret);
 		return ret;
 	}
-	ret = i2c_add_devices(18, i2c_devs18_emul, ARRAY_SIZE(i2c_devs18_emul));
+	ret = i2c_add_devices(1, i2c_devs1, ARRAY_SIZE(i2c_devs1));
 	if (ret < 0) {
-		pr_err("%s, i2c18 adding i2c fail(err=%d)\n", __func__, ret);
+		pr_err("%s, i2c1 adding i2c fail(err=%d)\n", __func__, ret);
 		return ret;
 	}
 #endif

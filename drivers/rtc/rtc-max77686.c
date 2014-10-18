@@ -57,7 +57,11 @@
 #define MAX77686_RTC_WTSR_SMPL
 #define MAX77686_RTC_DEBUG
 
-#ifdef CONFIG_MACH_KONA
+#if defined(CONFIG_TARGET_LOCALE_CHN) && defined(CONFIG_MACH_T0)
+/* 2014 */
+#define YEAR_OF_SRA 114
+#define DAY_OF_WEEK 3
+#elif defined(CONFIG_MACH_KONA)
 /* 2013 */
 #define YEAR_OF_SRA 113
 #define DAY_OF_WEEK 2
@@ -102,6 +106,12 @@ enum MAX77686_RTC_OP {
 	MAX77686_RTC_WRITE,
 	MAX77686_RTC_READ,
 };
+
+#if defined(CONFIG_RTC_ALARM_BOOT)
+static struct workqueue_struct*	alarm_restart_wq;
+static void alarm_restart_func(struct work_struct *work);
+static DECLARE_WORK(alarm_restart_work, alarm_restart_func);
+#endif
 
 static inline int max77686_rtc_calculate_wday(u8 shifted)
 {
@@ -637,6 +647,11 @@ static irqreturn_t max77686_rtc_alarm_irq(int irq, void *data)
 }
 
 #if defined(CONFIG_RTC_ALARM_BOOT)
+static void alarm_restart_func(struct work_struct *work)
+{
+	kernel_restart(NULL);
+}
+
 static irqreturn_t max77686_rtc_alarm2_irq(int irq, void *data)
 {
 	struct max77686_rtc_info *info = data;
@@ -651,6 +666,7 @@ static irqreturn_t max77686_rtc_alarm2_irq(int irq, void *data)
 	if (info->lpm_mode) {
 		wake_lock(&info->alarm_wake_lock);
 		info->alarm_irq_flag = true;
+		queue_work(alarm_restart_wq, &alarm_restart_work);
 	}
 #endif
 
@@ -916,6 +932,11 @@ static int __devinit max77686_rtc_probe(struct platform_device *pdev)
 		goto err_rtc;
 	}
 #if defined(CONFIG_RTC_ALARM_BOOT)
+	alarm_restart_wq = create_singlethread_workqueue("alarm_restart_wq");
+	if (alarm_restart_wq == NULL) {
+		pr_err("[SAPA] failed to create restart workqueue");
+	}
+
 	ret = request_threaded_irq(info->irq2, NULL, max77686_rtc_alarm2_irq, 0,
 			"rtc-alarm0", info);
 	if (ret < 0) {
@@ -952,6 +973,10 @@ out:
 static int __devexit max77686_rtc_remove(struct platform_device *pdev)
 {
 	struct max77686_rtc_info *info = platform_get_drvdata(pdev);
+
+#if defined(CONFIG_RTC_ALARM_BOOT)
+	destroy_workqueue(alarm_restart_wq);
+#endif
 
 	if (info) {
 		free_irq(info->irq, info);

@@ -26,6 +26,7 @@ struct mc96_platform_data {
 	void (*ir_wake_en)(bool onoff);
 	void (*ir_remote_init) (void);
 	void(*ir_vdd_onoff)(bool onoff);
+	void(*irled_ldo_onoff)(bool onoff);
 };
 
 extern struct class *sec_class;

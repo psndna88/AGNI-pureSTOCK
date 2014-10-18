@@ -319,6 +319,7 @@
 
 #define WACOM_PEN_DETECT
 #define WACOM_DISCARD_EVENT_ON_EDGE
+#define WACOM_CHECK_SUSPEND_ENTER
 
 #define WACOM_X_INVERT 0
 #define WACOM_Y_INVERT 0
@@ -499,6 +500,9 @@ struct wacom_i2c {
 #endif
 #ifdef BATTERY_SAVING_MODE
 	bool battery_saving_mode;
+#endif
+#ifdef WACOM_CHECK_SUSPEND_ENTER
+	bool suspend_enter;
 #endif
 	bool pwr_flag;
 	bool power_enable;

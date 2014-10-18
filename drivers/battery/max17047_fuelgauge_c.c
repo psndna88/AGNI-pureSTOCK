@@ -543,7 +543,40 @@ static void fg_periodic_read(struct i2c_client *client)
 		if (i == 4)
 			i = 13;
 	}
-
+#if defined(CONFIG_MACH_KONA)
+	if ((fg_read_register(client, 0x42) != 0x2400) || (fg_read_register(client, 0x32) != 0x2C80) || \
+		(fg_read_register(client, 0x22) != 0x5B80) || (fg_read_register(client, 0x12) != 0x8A80))    
+	{
+		if((fg_read_register(client, 0x12) != 0x8A80)) {
+		
+			if (fg_write_register(client, 0x12, (u16)0x8A80) < 0) {
+				dev_err(&client->dev, "%s: Failed to write QRtable0 \n",
+					__func__);
+					}
+		}
+		if((fg_read_register(client, 0x22) != 0x5B80)) {
+		
+			if (fg_write_register(client, 0x22, (u16)0x5B80) < 0) {
+				dev_err(&client->dev, "%s: Failed to write QRtable10 \n",
+					__func__);
+					}
+		}
+		if((fg_read_register(client, 0x32) != 0x2C80)) {
+		
+			if (fg_write_register(client, 0x32, (u16)0x2C80) < 0) {
+				dev_err(&client->dev, "%s: Failed to write QRtable20 \n",
+					__func__);
+					}
+		}
+		if((fg_read_register(client, 0x42) != 0x2400)) {
+		
+			if (fg_write_register(client, 0x42, (u16)0x2400) < 0) {
+				dev_err(&client->dev, "%s: Failed to write QRtable30 \n",
+					__func__);
+					}
+		}
+	}
+#endif
 	dev_info(&client->dev, "maxim check %s", str);
 
 	kfree(str);
