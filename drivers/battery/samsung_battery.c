@@ -80,10 +80,6 @@ static int bootloader_get_lpm_state(char *str)
 
 	pr_info("%s: Low power charging mode: %d\n", __func__, lpcharge);
 
-	return lpcharge;
-}
-__setup("androidboot.mode=", bootloader_get_lpm_state);
-EXPORT_SYMBOL(lpcharge);
 
 #if defined(CONFIG_MACH_KONA)		
 extern bool mhl_connected;
