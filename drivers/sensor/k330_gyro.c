@@ -740,13 +740,9 @@ static ssize_t k330_gyro_get_temp(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct k330_gyro_data *data = dev_get_drvdata(dev);
-	char temp;
+	signed char temp;
 
 	temp = i2c_smbus_read_byte_data(data->client, OUT_TEMP);
-	if (temp < 0) {
-		pr_err("%s: STATUS_REGS i2c reading failed\n", __func__);
-		return 0;
-	}
 
 	pr_info("[%s] read temperature : %d\n", __func__, temp);
 

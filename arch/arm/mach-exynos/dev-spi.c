@@ -110,6 +110,7 @@ static int exynos_spi_cfg_gpio(struct platform_device *pdev)
 		break;
 
 	case 1:
+#if !defined(CONFIG_MACH_GC2PD)
 		s3c_gpio_cfgpin(EXYNOS4_GPB(4), S3C_GPIO_SFN(2));
 		s3c_gpio_cfgpin(EXYNOS4_GPB(6), S3C_GPIO_SFN(2));
 		s3c_gpio_cfgpin(EXYNOS4_GPB(7), S3C_GPIO_SFN(2));
@@ -119,7 +120,7 @@ static int exynos_spi_cfg_gpio(struct platform_device *pdev)
 
 		for (gpio = EXYNOS4_GPB(4); gpio < EXYNOS4_GPB(8); gpio++)
 			s5p_gpio_set_drvstr(gpio, S5P_GPIO_DRVSTR_LV3);
-
+#endif
 		break;
 
 	case 2:

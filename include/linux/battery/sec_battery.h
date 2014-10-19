@@ -45,6 +45,7 @@ struct sec_battery_info {
 	struct power_supply psy_bat;
 	struct power_supply psy_usb;
 	struct power_supply psy_ac;
+	struct power_supply psy_ps;
 	unsigned int irq;
 
 	int status;
@@ -125,6 +126,11 @@ struct sec_battery_info {
 	/* wireless charging enable */
 	int wc_enable;
 
+	/* wearable charging */
+	int ps_enable;
+	int ps_status;
+	int ps_changed;
+
 	/* test mode */
 	int test_mode;
 	bool factory_mode;
@@ -174,6 +180,8 @@ enum {
 	BATT_VOL_ADC_CAL,
 	BATT_VOL_AVER,
 	BATT_VOL_ADC_AVER,
+	BATT_CURRENT_UA_NOW,
+	BATT_CURRENT_UA_AVG,
 	BATT_TEMP,
 	BATT_TEMP_ADC,
 	BATT_TEMP_AVER,
@@ -215,6 +223,7 @@ enum {
 	BATT_EVENT_LCD,
 	BATT_EVENT_GPS,
 	BATT_EVENT,
+	BATT_TEMP_TABLE,
 #if defined(CONFIG_SAMSUNG_BATTERY_ENG_TEST)
 	BATT_TEST_CHARGE_CURRENT,
 #endif

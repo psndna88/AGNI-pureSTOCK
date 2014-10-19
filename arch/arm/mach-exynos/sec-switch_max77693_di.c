@@ -136,15 +136,20 @@ int max77693_muic_charger_cb(enum cable_type_muic cable_type)
 #if !defined(USE_CHGIN_INTR)
 #ifdef CONFIG_BATTERY_MAX77693_CHARGER
 	struct power_supply *psy = power_supply_get_by_name("max77693-charger");
+#endif
+#endif
+
 	union power_supply_propval value;
-#endif
-#endif
-	pr_info("%s: %d\n", __func__, cable_type);
+	static enum cable_type_muic previous_cable_type = CABLE_TYPE_NONE_MUIC;
+	struct power_supply *psy_p = power_supply_get_by_name("ps");
+
+	pr_info("%s: cable_type(%d), prev_cable(%d)\n", __func__, cable_type, previous_cable_type);
 
 	switch (cable_type) {
 	case CABLE_TYPE_NONE_MUIC:
 	case CABLE_TYPE_OTG_MUIC:
 	case CABLE_TYPE_JIG_UART_OFF_MUIC:
+	case CABLE_TYPE_POWER_SHARING_MUIC:
 		is_cable_attached = false;
 		break;
 #if defined(CONFIG_MUIC_MAX77693_SUPPORT_MHL_CABLE_DETECTION)
@@ -171,6 +176,11 @@ int max77693_muic_charger_cb(enum cable_type_muic cable_type)
 		return -EINVAL;
 	}
 
+	if (previous_cable_type == cable_type) {
+		pr_info("%s : SKIP cable setting\n", __func__);
+		goto skip_cable_setting;
+	}
+
 #if !defined(USE_CHGIN_INTR)
 #ifdef CONFIG_BATTERY_MAX77693_CHARGER
 	if (!psy || !psy->set_property) {
@@ -183,6 +193,23 @@ int max77693_muic_charger_cb(enum cable_type_muic cable_type)
 #endif
 #endif
 
+	if (!psy_p || !psy_p->set_property) {
+		pr_err("%s: fail to get ps psy\n", __func__);
+		return 0;
+	}
+
+	if (cable_type == CABLE_TYPE_POWER_SHARING_MUIC) {
+		value.intval = POWER_SUPPLY_TYPE_POWER_SHARING;
+		psy_p->set_property(psy_p, POWER_SUPPLY_PROP_ONLINE, &value);
+	} else {
+		if (previous_cable_type == CABLE_TYPE_POWER_SHARING_MUIC) {
+			value.intval = POWER_SUPPLY_TYPE_BATTERY;
+			psy_p->set_property(psy_p, POWER_SUPPLY_PROP_ONLINE, &value);
+		}
+	}
+	previous_cable_type = cable_type;
+
+skip_cable_setting:
 #ifndef CONFIG_TOUCHSCREEN_CYPRESS_TMA46X
 	tsp_charger_infom(is_cable_attached);
 #endif

@@ -652,7 +652,8 @@ int s3cfb_mdnie_pwm_clk_on(void)
 		printk(KERN_ERR "failed to get sclk for mdnie_pwm_pre\n");
 		goto err_clk2;
 	}
-#if defined(CONFIG_FB_S5P_S6C1372) || defined(CONFIG_FB_S5P_HX8369B)
+#if defined(CONFIG_FB_S5P_S6C1372) || defined(CONFIG_FB_S5P_HX8369B) \
+  || defined(CONFIG_BACKLIGHT_LP855X)
 	mout_mpll = clk_get(NULL, "xusbxti");
 	if (IS_ERR(mout_mpll)) {
 		printk(KERN_ERR "failed to get mout_mpll\n");

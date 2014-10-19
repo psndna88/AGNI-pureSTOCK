@@ -300,7 +300,6 @@ enum {
 #define MaxStartup_Set		1
 #define TSP_USE_SHAPETOUCH		1
 #define DEBUG_TSP				1
-#define SUPPORT_CONFIG_VER	1
 #define TSP_BOOSTER		1
 #else
 #define NO_GR_MODE	0
@@ -309,7 +308,6 @@ enum {
 #define MaxStartup_Set		0
 #define TSP_USE_SHAPETOUCH		0
 #define DEBUG_TSP				0
-#define SUPPORT_CONFIG_VER	0
 #define TSP_BOOSTER		0
 #endif
 #define TSP_SEC_FACTORY			1
@@ -318,6 +316,8 @@ enum {
 #else
 #define TSP_INFORM_CHARGER	0
 #endif
+
+#define TSP_CHANGE_CONFIG_FOR_INPUT	1
 
 #define ENABLE_TOUCH_KEY		0
 
@@ -567,7 +567,7 @@ struct mxt_data {
 	bool		check_antitouch; /*In First Step, exist antichannel*/
 	bool		check_after_wakeup; /*In First Step,after wakeup*/
 	bool		TimerSet;/*In Second Step, No Big Tcharea and No Atch*/
-	bool		WakeupPowerOn;
+	u8		WakeupPowerOn;
 	u8		GoodConditionStep;/*checking good condition step*/
 	u8		GoodStep1_AllReleased; /*check release status in good condition 1*/
 	u8		T72_State;
@@ -581,6 +581,7 @@ struct mxt_data {
 	u8		Report_touch_number;
 	u8		Exist_Stylus;
 	u8      Exist_EdgeTouch;
+	u8      FcalSeqdoneNum;//0801
 #endif
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	struct early_suspend early_suspend;
@@ -613,10 +614,8 @@ struct mxt_data {
 	const u8 *ta_cfg_raw_data;
 	u32 cfg_len;
 #endif
-
-#if SUPPORT_CONFIG_VER
-	char ic_config_ver[9];
-	char fw_config_ver[9];
+#if TSP_CHANGE_CONFIG_FOR_INPUT
+bool is_inputmethod;
 #endif
 };
 

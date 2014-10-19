@@ -225,6 +225,9 @@ static void mali_gp_scheduler_return_job_to_user(struct mali_gp_job *job, mali_b
 
 void mali_gp_scheduler_job_done(struct mali_group *group, struct mali_gp_job *job, mali_bool success)
 {
+	MALI_DEBUG_ASSERT_POINTER(group);
+	MALI_DEBUG_ASSERT_POINTER(job);
+	
 	MALI_DEBUG_PRINT(3, ("Mali GP scheduler: Job %u (0x%08X) completed (%s)\n", mali_gp_job_get_id(job), job, success ? "success" : "failure"));
 
 	if (!success)

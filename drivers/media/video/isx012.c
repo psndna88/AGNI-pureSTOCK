@@ -2080,7 +2080,10 @@ static int isx012_do_af(struct v4l2_subdev *sd, u32 touch)
 
 	if (!touch && (state->exposure.restore_lock || state->wb.restore_lock))
 		focus_aeawb_lock = true;
-
+#if defined(CONFIG_MACH_P4NOTE)
+	else if (!touch && !IS_FULL_USER_AEAWB_LOCK_SUPPORTED())
+		focus_aeawb_lock = true;
+#endif
 	if (state->sensor_mode == SENSOR_MOVIE) {
 		isx012_set_from_table(sd, "af_camcorder_start",
 			&state->regs->af_camcorder_start, 1, 0);
@@ -2365,7 +2368,10 @@ static int isx012_check_wait_af_complete(struct v4l2_subdev *sd, bool cancel)
 
 static void isx012_af_worker(struct work_struct *work)
 {
-	isx012_start_af(&TO_STATE(work, af_work)->sd);
+	struct isx012_state *state = container_of(work, \
+			struct isx012_state, af_work);
+
+	isx012_start_af(&state->sd);
 }
 
 /* PX: Set focus mode */
@@ -2665,9 +2671,13 @@ static int isx012_control_stream(struct v4l2_subdev *sd, u32 cmd)
 		state->capture.lowlux_night = 0;
 
 		/* We turn flash off if one-shot flash is still on. */
-		if (isx012_is_hwflash_on(sd))
-			isx012_flash_oneshot(sd, ISX012_FLASH_OFF);
-		else
+		if (isx012_is_hwflash_on(sd)){
+			if(state->flash.mode == FLASH_MODE_TORCH){
+				isx012_flash_torch(sd, ISX012_FLASH_OFF);
+			}else{
+				isx012_flash_oneshot(sd, ISX012_FLASH_OFF);
+			}
+		}else
 			state->flash.on = 0;
 
 		if (state->flash.preflash == PREFLASH_ON)
@@ -2716,8 +2726,10 @@ static int isx012_set_flash_mode(struct v4l2_subdev *sd, s32 val)
 		return 0;
 	}
 
-	if (val == FLASH_MODE_TORCH)
+	if (val == FLASH_MODE_TORCH){
+		//if(state->runmode == RUNMODE_INIT) return 0; //prevent turn on flash before initiated(commented because creating prob with third party apps).
 		isx012_flash_torch(sd, ISX012_FLASH_ON);
+	}
 
 	if ((state->flash.mode == FLASH_MODE_TORCH)
 	    && (val == FLASH_MODE_OFF))
@@ -2854,26 +2866,32 @@ static inline void isx012_get_exif_flash(struct v4l2_subdev *sd,
 
 	*flash = 0;
 
-	switch (state->flash.mode) {
-	case FLASH_MODE_OFF:
-		*flash |= EXIF_FLASH_MODE_SUPPRESSION;
-		break;
+	if(state->flash.support)
+	{
+		switch (state->flash.mode)
+		{
+		case FLASH_MODE_OFF:
+			*flash |= EXIF_FLASH_MODE_SUPPRESSION;
+			 break;
 
-	case FLASH_MODE_AUTO:
-		*flash |= EXIF_FLASH_MODE_AUTO;
-		break;
+		case FLASH_MODE_AUTO:
+			*flash |= EXIF_FLASH_MODE_AUTO;
+			 break;
 
-	case FLASH_MODE_ON:
-	case FLASH_MODE_TORCH:
-		*flash |= EXIF_FLASH_MODE_FIRING;
-		break;
+		case FLASH_MODE_ON:
+		case FLASH_MODE_TORCH:
+			*flash |= EXIF_FLASH_MODE_FIRING;
+			 break;
 
-	default:
-		break;
-	}
+		default:
+			break;
+		}
 
-	if (state->flash.on)
-		*flash |= EXIF_FLASH_FIRED;
+		if(state->flash.on)
+			*flash |= EXIF_FLASH_FIRED;
+
+	} else
+		*flash = EXIF_NO_FLASH ;
 }
 
 /* PX: */
@@ -2948,7 +2966,10 @@ static int isx012_set_preview_size(struct v4l2_subdev *sd)
 
 	isx012_writew(sd, REG_HSIZE_MONI, width);
 	isx012_writew(sd, REG_VSIZE_MONI, height);
-
+#if defined(CONFIG_MACH_KONA)
+	if (width == 720)
+		msleep_debug(50, true);
+#endif
 	state->preview.update_frmsize = 0;
 
 	return 0;
@@ -3735,12 +3756,13 @@ static int isx012_check_vendorid(struct v4l2_subdev *sd)
 	int err = 0;
 	u32 status = 0;
 	u32 temp = 0, temp_msb = 0, temp_lsb = 0;
-	
-	if (vendor_id != UNINITIALIZED_VENDORID)
+
+	if (vendor_id && (vendor_id != UNINITIALIZED_VENDORID))
 		return 0;
 
 	/* Read OTP version */
 	err = isx012_readw(sd, 0x004F, &status);
+	CHECK_ERR(err);
 	cam_dbg("OTP : 0x004F read 0x%04X\n", status);
 	if ((status & 0x10) == 0x10) {
 		err = isx012_readw(sd, 0x0051, &status);
@@ -3769,17 +3791,18 @@ static int isx012_post_poweron(struct v4l2_subdev *sd)
 	/* It's assumed that Mclk is already enabled */
 	cam_trace("E\n");
 
+	msleep_debug(10, false);
+
+#if CONFIG_CAM_DEBUG
 	err = isx012_check_i2c(sd, 0x1234);
 	CHECK_ERR_MSG(err, "I2C check fail\n");
-
 	cam_dbg("I2C check success!\n");
+#endif
 
 	err = isx012_check_vendorid(sd);
 	CHECK_ERR_MSG(err, "VendorID check fail\n");
-
 	cam_dbg("VendorID check success!\n");
 
-	msleep_debug(10, false);
 	err = isx012_is_om_changed(sd);
 	CHECK_ERR(err);
 

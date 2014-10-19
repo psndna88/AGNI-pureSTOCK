@@ -10,6 +10,9 @@
 #include <linux/fs.h>       /* file system operations */
 #include <linux/slab.h>     /* memort allocation functions */
 #include <asm/uaccess.h>    /* user space access */
+#if defined(CONFIG_MACH_GC2PD)
+#include <linux/pid.h>
+#endif
 
 #include "mali_ukk.h"
 #include "mali_osk.h"
@@ -21,6 +24,10 @@ int get_api_version_wrapper(struct mali_session_data *session_data, _mali_uk_get
 {
 	_mali_uk_get_api_version_s kargs;
     _mali_osk_errcode_t err;
+#if defined(CONFIG_MACH_GC2PD)
+    u32 mem = _mali_ukk_report_memory_usage();
+    printk("Mali: mem_usage before %d : %u\n", _mali_osk_get_pid(), mem);
+#endif
 
     MALI_CHECK_NON_NULL(uargs, -EINVAL);
 

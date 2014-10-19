@@ -130,13 +130,7 @@ qh_refresh (struct ehci_hcd *ehci, struct ehci_qh *qh)
 	else {
 		qtd = list_entry (qh->qtd_list.next,
 				struct ehci_qtd, qtd_list);
-		/*
-		 * first qtd may already be partially processed.
-		 * If we come here during unlink, the QH overlay region
-		 * might have reference to the just unlinked qtd. The
-		 * qtd is updated in qh_completions(). Update the QH
-		 * overlay here.
-		 */
+		/* first qtd may already be partially processed */
 		if (cpu_to_hc32(ehci, qtd->qtd_dma) == qh->hw->hw_current) {
 			qh->hw->hw_qtd_next = qtd->hw_next;
 			qtd = NULL;
@@ -1228,11 +1222,18 @@ static void start_unlink_async (struct ehci_hcd *ehci, struct ehci_qh *qh)
 
 #ifdef DEBUG
 	assert_spin_locked(&ehci->lock);
+#if !defined(CONFIG_TARGET_LOCALE_KOR)
 	if (ehci->reclaim
 			|| (qh->qh_state != QH_STATE_LINKED
 				&& qh->qh_state != QH_STATE_UNLINK_WAIT)
 			)
+#if defined(CONFIG_MACH_T0_USA_USCC)
+		/*return added as per the main line code kernel version 3.10*/
+		return;
+#else
 		BUG ();
+#endif
+#endif
 #endif
 
 	/* stop async schedule right now? */

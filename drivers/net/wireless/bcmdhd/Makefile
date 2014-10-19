@@ -10,13 +10,7 @@ DHDCFLAGS += -Wall -Wstrict-prototypes -Dlinux -DLINUX -DBCMDRIVER             \
         -DMMC_SDIO_ABORT -DBCMSDIO -DBCMLXSDMMC -DWLP2P     \
         -DWIFI_ACT_FRAME -DARP_OFFLOAD_SUPPORT          \
         -DKEEP_ALIVE -DCSCAN -DPKT_FILTER_SUPPORT                             \
-        -DEMBEDDED_PLATFORM -DPNO_SUPPORT	\
-	    -fno-unsafe-math-optimizations -fno-gcse-lm -fno-gcse-sm -fno-sched-spec-load -fno-force-addr -fno-modulo-sched \
-        -fno-modulo-sched-allow-regmoves -ftree-vectorize -fno-tree-slp-vectorize -fno-merge-constants \
-        -fno-merge-all-constants -fno-gcse-after-reload -fno-unsafe-loop-optimizations -fno-single-precision-constant \
-        -fno-omit-frame-pointer -fno-inline-functions -fno-unswitch-loops -fno-predictive-commoning -fschedule-insns2 \
-        -fno-ivopts -fno-tree-loop-distribution -fno-graphite-identity -fno-loop-nest-optimize -fno-loop-interchange \
-        -fno-loop-strip-mine -fno-loop-block -fno-loop-parallelize-all
+        -DEMBEDDED_PLATFORM -DPNO_SUPPORT
 
 #################
 # Common feature
@@ -197,6 +191,7 @@ ifeq ($(CONFIG_BCM4354),y)
   DRIVER_TYPE = y
 endif
   DHDCFLAGS += -DCUSTOM_PSPRETEND_THR=30
+  DHDCFLAGS += -DSUPPORT_P2P_GO_PS
 endif
 
 ifneq ($(CONFIG_BCM4339),)
@@ -304,6 +299,13 @@ ifneq ($(CONFIG_BCM4334),)
   DHDCFLAGS += -DPROP_TXSTATUS_VSDB
   DHDCFLAGS += -DWES_SUPPORT
   DHDCFLAGS += -DSUPPORT_WL_TXPOWER
+
+  # New Features
+#  DHDCFLAGS += -DWL11U
+  DHDCFLAGS += -DBCMCCX
+  DHDCFLAGS += -DOKC_SUPPORT
+  DHDCFLAGS += -DWES_SUPPORT
+  DHDCFLAGS += -DWLFBT
 ifeq ($(CONFIG_BCM4334),y)
   DHDCFLAGS += -DENABLE_INSMOD_NO_FW_LOAD
   DHDCFLAGS += -DUSE_LATE_INITCALL_SYNC

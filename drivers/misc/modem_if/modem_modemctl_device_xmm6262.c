@@ -29,6 +29,11 @@
 #ifdef CONFIG_FAST_BOOT
 #include <linux/fake_shut_down.h>
 #endif
+
+#ifdef CONFIG_SEC_DUAL_MODEM_MODE
+extern int cp_boot_flag;
+#endif
+
 static int xmm6262_on(struct modem_ctl *mc)
 {
 	mif_info("\n");
@@ -45,6 +50,7 @@ static int xmm6262_on(struct modem_ctl *mc)
 	gpio_set_value(mc->gpio_sim_io_sel, 0);
 	gpio_set_value(mc->gpio_cp_ctrl1, 1);
 	gpio_set_value(mc->gpio_cp_ctrl2, 0);
+	cp_boot_flag = 2;
 #endif
 
 	/* TODO */

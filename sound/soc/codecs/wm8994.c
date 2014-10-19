@@ -216,6 +216,13 @@ static int wm8994_write(struct snd_soc_codec *codec, unsigned int reg,
 	value = sound_control_hook_wm8994_write(reg, value);
 #endif
 
+#if defined(CONFIG_TARGET_LOCALE_KOR)
+	if ((reg == WM8994_GPIO_1) && (value != WM8994_GP_FN_IRQ)) {
+		dev_err(codec->dev, "Invalid value for 700h\n");
+		return 0;
+	}
+#endif
+
 	if (!wm8994_volatile(codec, reg)) {
 		ret = snd_soc_cache_write(codec, reg, value);
 		if (ret != 0)
@@ -2167,7 +2174,6 @@ static int _wm8994_set_fll(struct snd_soc_codec *codec, int id, int src,
 	u16 reg, clk1, aif_reg, aif_src;
 	unsigned long timeout;
 	bool was_enabled;
-	dev_info(codec->dev, "%s ++\n", __func__);
 
 	switch (id) {
 	case WM8994_FLL1:
@@ -2198,6 +2204,10 @@ static int _wm8994_set_fll(struct snd_soc_codec *codec, int id, int src,
 	case WM8994_FLL_SRC_MCLK2:
 	case WM8994_FLL_SRC_LRCLK:
 	case WM8994_FLL_SRC_BCLK:
+		break;
+	case WM8994_FLL_SRC_INTERNAL:
+		freq_in = 12000000;
+		freq_out = 12000000;
 		break;
 	default:
 		return -EINVAL;
@@ -2262,9 +2272,11 @@ static int _wm8994_set_fll(struct snd_soc_codec *codec, int id, int src,
 				    fll.n << WM8994_FLL1_N_SHIFT);
 
 	snd_soc_update_bits(codec, WM8994_FLL1_CONTROL_5 + reg_offset,
-			    WM8958_FLL1_BYP |
+			    WM8994_FLL1_FRC_NCO | WM8958_FLL1_BYP |
 			    WM8994_FLL1_REFCLK_DIV_MASK |
 			    WM8994_FLL1_REFCLK_SRC_MASK,
+			    ((src == WM8994_FLL_SRC_INTERNAL)
+			     << WM8994_FLL1_FRC_NCO_SHIFT) |
 			    (fll.clk_ref_div << WM8994_FLL1_REFCLK_DIV_SHIFT) |
 			    (src - 1));
 
@@ -2290,13 +2302,15 @@ static int _wm8994_set_fll(struct snd_soc_codec *codec, int id, int src,
 			}
 		}
 
+		reg = WM8994_FLL1_ENA;
+
 		if (fll.k)
-			reg = WM8994_FLL1_ENA | WM8994_FLL1_FRAC;
-		else
-			reg = WM8994_FLL1_ENA;
+			reg |= WM8994_FLL1_FRAC;
+		if (src == WM8994_FLL_SRC_INTERNAL)
+			reg |= WM8994_FLL1_OSC_ENA;
 		snd_soc_update_bits(codec, WM8994_FLL1_CONTROL_1 + reg_offset,
-				    WM8994_FLL1_ENA | WM8994_FLL1_FRAC,
-				    reg);
+				    WM8994_FLL1_ENA | WM8994_FLL1_OSC_ENA |
+				    WM8994_FLL1_FRAC, reg);
 
 		if (wm8994->fll_locked_irq) {
 			timeout = wait_for_completion_timeout(&wm8994->fll_locked[id],
@@ -2331,7 +2345,7 @@ out:
 	wm8994->fll[id].src = src;
 
 	configure_clock(codec);
-	dev_info(codec->dev, "%s --\n", __func__);
+
 	return 0;
 }
 
@@ -2349,6 +2363,21 @@ static int opclk_divs[] = { 10, 20, 30, 40, 55, 60, 80, 120, 160 };
 static int wm8994_set_fll(struct snd_soc_dai *dai, int id, int src,
 			  unsigned int freq_in, unsigned int freq_out)
 {
+#if defined(CONFIG_TARGET_LOCALE_KOR)
+	/*  workaround for jack detection
+	 * sometimes WM8994_GPIO_1 type changed wrong function type
+	 * so if type mismatched, update to IRQ type
+	 */
+	struct snd_soc_codec *codec = dai->codec;
+	unsigned int reg = 0;
+
+	reg = snd_soc_read(codec, WM8994_GPIO_1);
+	if ((reg & WM8994_GPN_FN_MASK) != WM8994_GP_FN_IRQ) {
+		dev_err(codec->dev, "%s: GPIO1 Type [%#x]\n", __func__, reg);
+		snd_soc_write(codec, WM8994_GPIO_1, WM8994_GP_FN_IRQ);
+	}
+#endif
+
 	return _wm8994_set_fll(dai->codec, id, src, freq_in, freq_out);
 }
 
@@ -2482,10 +2511,6 @@ static int wm8994_set_bias_level(struct snd_soc_codec *codec,
 
 	case SND_SOC_BIAS_STANDBY:
 		if (codec->dapm.bias_level == SND_SOC_BIAS_OFF) {
-#if 0 /* To do */
-			pm_runtime_get_sync(codec->dev);
-#endif
-
 			switch (control->type) {
 			case WM8994:
 				if (wm8994->revision < 4) {
@@ -2551,13 +2576,8 @@ static int wm8994_set_bias_level(struct snd_soc_codec *codec,
 		break;
 
 	case SND_SOC_BIAS_OFF:
-		if (codec->dapm.bias_level == SND_SOC_BIAS_STANDBY) {
+		if (codec->dapm.bias_level == SND_SOC_BIAS_STANDBY)
 			wm8994->cur_fw = NULL;
-
-#if 0 /* To do */
-			pm_runtime_put(codec->dev);
-#endif
-		}
 		break;
 	}
 
@@ -3619,10 +3639,20 @@ static irqreturn_t wm1811_jackdet_irq(int irq, void *data)
 		mutex_lock(&codec->mutex);
 
 		if (present)
+#if defined(CONFIG_SND_USE_EXTERNAL_LDO_FOR_EARMICBIAS)
+			snd_soc_dapm_force_enable_pin(&codec->dapm,
+							"Headset ext Mic");
+#else
 			snd_soc_dapm_force_enable_pin(&codec->dapm,
 						      "MICBIAS2");
+#endif							  
 		else
+#if defined(CONFIG_SND_USE_EXTERNAL_LDO_FOR_EARMICBIAS)
+			snd_soc_dapm_disable_pin(&codec->dapm, 
+							"Headset ext Mic");
+#else
 			snd_soc_dapm_disable_pin(&codec->dapm, "MICBIAS2");
+#endif
 
 		snd_soc_dapm_sync(&codec->dapm);
 		mutex_unlock(&codec->mutex);
