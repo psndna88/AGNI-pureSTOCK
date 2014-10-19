@@ -6,6 +6,10 @@
 #include <mach/regs-pmu.h>
 #include <mach/gpio.h>
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+#include <asm/kexec.h>
+#endif
+
 /* charger cable state */
 extern bool is_cable_attached;
 #ifdef CONFIG_MACH_GC1
@@ -164,11 +168,26 @@ static void sec_reboot(char str, const char *cmd)
 	while (1);
 }
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+static void sec_kexec_hardboot(void)
+{
+	/* Show gaudi_bootimg.jpg on reboot instead of charging.jpg when USB is
+	 * connected. */
+	writel(0x12345678, S5P_INFORM2);
+
+	/* Reboot with boot kernel, although probably doesn't matter on e4gt. */
+	writel(REBOOT_MODE_PREFIX|REBOOT_MODE_NONE, S5P_INFORM3);
+}
+#endif
+
 static int __init sec_reboot_init(void)
 {
 	/* to support system shut down */
 	pm_power_off = sec_power_off;
 	arm_pm_restart = sec_reboot;
+#ifdef CONFIG_KEXEC_HARDBOOT
+	kexec_hardboot_hook = sec_kexec_hardboot;
+#endif
 	return 0;
 }
 
