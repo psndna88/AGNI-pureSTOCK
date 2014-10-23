@@ -51,7 +51,7 @@ g_dbgp-y			:= dbgp.o
 g_nokia-y			:= nokia.o
 g_webcam-y			:= webcam.o
 g_ncm-y				:= ncm.o
-g_android-y			:= android.o
+g_android-y			:= android.o f_hid.o
 g_slp-y				:= slp.o
 
 obj-$(CONFIG_USB_ZERO)		+= g_zero.o
