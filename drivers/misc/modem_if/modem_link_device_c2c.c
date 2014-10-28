@@ -40,6 +40,9 @@
 #include "modem_link_device_c2c.h"
 
 static void trigger_forced_cp_crash(struct shmem_link_device *shmd);
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+extern int is_rndis_use(void);
+#endif
 
 #ifdef DEBUG_MODEM_IF
 static void save_mem_dump(struct shmem_link_device *shmd)
@@ -157,10 +160,12 @@ static inline u16 recv_int2ap(struct shmem_link_device *shmd)
  */
 static inline void send_int2cp(struct shmem_link_device *shmd, u16 mask)
 {
+#if 0//def DEBUG_MODEM_IF
 	struct link_device *ld = &shmd->ld;
 
 	if (ld->mode != LINK_MODE_IPC)
-		mif_info("%s: <by %pf> mask = 0x%04X\n", ld->name, CALLER, mask);
+		mif_info("%s: <by %pf> mask 0x%04X\n", ld->name, CALLER, mask);
+#endif
 
 	if (shmd->type == C2C_SHMEM)
 		c2c_send_interrupt(mask);
@@ -195,6 +200,12 @@ static void get_shmem_status(struct shmem_link_device *shmd,
 	mst->tail[IPC_RAW][TX] = get_txq_tail(shmd, IPC_RAW);
 	mst->head[IPC_RAW][RX] = get_rxq_head(shmd, IPC_RAW);
 	mst->tail[IPC_RAW][RX] = get_rxq_tail(shmd, IPC_RAW);
+}
+
+static inline void update_rxq_tail_status(struct shmem_link_device *shmd,
+					  int dev, struct mem_status *mst)
+{
+	mst->tail[dev][RX] = get_rxq_tail(shmd, dev);
 }
 
 static inline int check_link_status(struct shmem_link_device *shmd)
@@ -255,6 +266,9 @@ static void release_cp_wakeup(struct work_struct *ws)
 
 	shmd = container_of(ws, struct shmem_link_device, cp_sleep_dwork.work);
 
+	if (work_pending(&shmd->cp_sleep_dwork.work))
+		cancel_delayed_work(&shmd->cp_sleep_dwork);
+
 	spin_lock_irqsave(&shmd->pm_lock, flags);
 	i = atomic_read(&shmd->ref_cnt);
 	spin_unlock_irqrestore(&shmd->pm_lock, flags);
@@ -279,43 +293,8 @@ static void release_cp_wakeup(struct work_struct *ws)
 	return;
 
 reschedule:
-	if (!work_pending(&shmd->cp_sleep_dwork.work)) {
-		queue_delayed_work(system_nrt_wq, &shmd->cp_sleep_dwork,
-				   msecs_to_jiffies(CP_WAKEUP_HOLD_TIME));
-	}
-}
-
-static void release_ap_status(struct work_struct *ws)
-{
-	struct shmem_link_device *shmd;
-	struct link_device *ld;
-	int i;
-	unsigned long flags;
-
-	shmd = container_of(ws, struct shmem_link_device, link_off_dwork.work);
-
-	spin_lock_irqsave(&shmd->pm_lock, flags);
-	i = atomic_read(&shmd->ref_cnt);
-	spin_unlock_irqrestore(&shmd->pm_lock, flags);
-	if (i > 0)
-		goto reschedule;
-
-	if (gpio_get_value(shmd->gpio_cp_status))
-		goto reschedule;
-
-	gpio_set_value(shmd->gpio_ap_status, 0);
-	print_pm_status(shmd, 1);
-
-	if (wake_lock_active(&shmd->cp_wlock))
-		wake_unlock(&shmd->cp_wlock);
-
-	return;
-
-reschedule:
-	if (!work_pending(&shmd->link_off_dwork.work)) {
-		queue_delayed_work(system_nrt_wq, &shmd->link_off_dwork,
-				   msecs_to_jiffies(100));
-	}
+	queue_delayed_work(system_nrt_wq, &shmd->cp_sleep_dwork,
+			   msecs_to_jiffies(CP_WAKEUP_HOLD_TIME));
 }
 
 /**
@@ -332,26 +311,24 @@ static int forbid_cp_sleep(struct shmem_link_device *shmd)
 {
 	struct link_device *ld = &shmd->ld;
 	int err = 0;
+	int ap_status = gpio_get_value(shmd->gpio_ap_status);
+	int cp_wakeup = gpio_get_value(shmd->gpio_cp_wakeup);
 	unsigned long flags;
 
 	spin_lock_irqsave(&shmd->pm_lock, flags);
+
 	atomic_inc(&shmd->ref_cnt);
-	if (gpio_get_value(shmd->gpio_ap_status) == 0) {
-		gpio_set_value(shmd->gpio_ap_status, 1);
-		print_pm_status(shmd, 1);
-	}
-	spin_unlock_irqrestore(&shmd->pm_lock, flags);
+
+	gpio_set_value(shmd->gpio_ap_status, 1);
+	gpio_set_value(shmd->gpio_cp_wakeup, 1);
 
 	if (work_pending(&shmd->cp_sleep_dwork.work))
 		cancel_delayed_work(&shmd->cp_sleep_dwork);
 
-	if (work_pending(&shmd->link_off_dwork.work))
-		cancel_delayed_work(&shmd->link_off_dwork);
+	spin_unlock_irqrestore(&shmd->pm_lock, flags);
 
-	if (gpio_get_value(shmd->gpio_cp_wakeup) == 0) {
-		gpio_set_value(shmd->gpio_cp_wakeup, 1);
+	if (!ap_status || !cp_wakeup)
 		print_pm_status(shmd, 1);
-	}
 
 	if (check_link_status(shmd) < 0) {
 		print_pm_status(shmd, 1);
@@ -377,16 +354,13 @@ exit:
  */
 static void permit_cp_sleep(struct shmem_link_device *shmd)
 {
-	struct link_device *ld = &shmd->ld;
 	unsigned long flags;
 
 	spin_lock_irqsave(&shmd->pm_lock, flags);
-
 	if (atomic_dec_return(&shmd->ref_cnt) > 0) {
 		spin_unlock_irqrestore(&shmd->pm_lock, flags);
 		return;
 	}
-
 	atomic_set(&shmd->ref_cnt, 0);
 	spin_unlock_irqrestore(&shmd->pm_lock, flags);
 
@@ -423,9 +397,6 @@ static irqreturn_t ap_wakeup_handler(int irq, void *data)
 	print_pm_status(shmd, 1);
 
 	if (ap_wakeup) {
-		if (work_pending(&shmd->link_off_dwork.work))
-			__cancel_delayed_work(&shmd->link_off_dwork);
-
 		if (!wake_lock_active(&shmd->ap_wlock))
 			wake_lock(&shmd->ap_wlock);
 
@@ -436,7 +407,7 @@ static irqreturn_t ap_wakeup_handler(int irq, void *data)
 			wake_unlock(&shmd->ap_wlock);
 
 		queue_delayed_work(system_nrt_wq, &shmd->cp_sleep_dwork,
-				   msecs_to_jiffies(CP_WAKEUP_HOLD_TIME));
+				msecs_to_jiffies(CP_WAKEUP_HOLD_TIME));
 	}
 
 exit:
@@ -457,9 +428,6 @@ static irqreturn_t cp_status_handler(int irq, void *data)
 	if (ld->mode != LINK_MODE_IPC)
 		goto exit;
 
-	if (work_pending(&shmd->link_off_dwork.work))
-		__cancel_delayed_work(&shmd->link_off_dwork);
-
 	print_pm_status(shmd, 1);
 
 	if (cp_status) {
@@ -467,10 +435,20 @@ static irqreturn_t cp_status_handler(int irq, void *data)
 			wake_lock(&shmd->cp_wlock);
 	} else {
 		if (atomic_read(&shmd->ref_cnt) > 0) {
-			queue_delayed_work(system_nrt_wq, &shmd->link_off_dwork,
-					   msecs_to_jiffies(10));
+			/*
+			** This status means that IPC TX is in progress from AP
+			** to CP. So, CP_WAKEUP must be set to 1. Otherwise, it
+			** is a critically erroneous status.
+			*/
+			if (gpio_get_value(shmd->gpio_cp_wakeup) == 0) {
+				mif_err("%s: ERR! cp_wakeup == 0\n", ld->name);
+				trigger_forced_cp_crash(shmd);
+				goto exit;
+			}
+			/* CP_STATUS will be reset to 1 soon due to CP_WAKEUP.*/
 		} else {
 			gpio_set_value(shmd->gpio_ap_status, 0);
+
 			if (wake_lock_active(&shmd->cp_wlock))
 				wake_unlock(&shmd->cp_wlock);
 		}
@@ -499,6 +477,8 @@ static void handle_cp_crash(struct shmem_link_device *shmd)
 
 	if (shmd->forced_cp_crash)
 		shmd->forced_cp_crash = false;
+
+	ld->mode = LINK_MODE_ULOAD;
 
 	/* Stop network interfaces */
 	mif_netif_stop(ld);
@@ -549,11 +529,10 @@ static void trigger_forced_cp_crash(struct shmem_link_device *shmd)
 	struct link_device *ld = &shmd->ld;
 	struct utc_time t;
 
-	if (ld->mode == LINK_MODE_ULOAD) {
+	if (shmd->forced_cp_crash) {
 		mif_err("%s: <by %pf> ALREADY in progress\n", ld->name, CALLER);
 		return;
 	}
-	ld->mode = LINK_MODE_ULOAD;
 	shmd->forced_cp_crash = true;
 
 	get_utc_time(&t);
@@ -570,9 +549,12 @@ static void trigger_forced_cp_crash(struct shmem_link_device *shmd)
 		save_mem_dump(shmd);
 #endif
 
+	/* C2C link for send interrupt */
+	forbid_cp_sleep(shmd);
+
 	/* Send CRASH_EXIT command to a CP */
 	send_int2cp(shmd, INT_CMD(INT_CMD_CRASH_EXIT));
-	get_shmem_status(shmd, TX, msq_get_free_slot(&shmd->stat_list));
+	get_shmem_status(shmd, TX, msq_get_free_slot(&shmd->tx_msq));
 
 	/* If there is no CRASH_ACK from a CP in FORCE_CRASH_ACK_TIMEOUT,
 	   handle_no_cp_crash_ack() will be executed. */
@@ -674,9 +656,11 @@ static void cmd_phone_start_handler(struct shmem_link_device *shmd)
 
 	iod = link_get_iod_with_format(ld, IPC_FMT);
 	if (!iod) {
-		mif_err("%s: ERR! no iod\n", ld->name);
+		mif_err("%s: ERR! no FMT iod\n", ld->name);
 		return;
 	}
+
+	msq_reset(&shmd->rx_msq);
 
 	err = init_shmem_ipc(shmd);
 	if (err)
@@ -693,7 +677,6 @@ static void cmd_phone_start_handler(struct shmem_link_device *shmd)
 	if (cp_status && !wake_lock_active(&shmd->ap_wlock))
 		wake_lock(&shmd->cp_wlock);
 
-	ld->mode = LINK_MODE_IPC;
 	iod->modem_state_changed(iod, STATE_ONLINE);
 }
 
@@ -727,29 +710,33 @@ static void cmd_handler(struct shmem_link_device *shmd, u16 cmd)
 }
 
 /**
- * ipc_rx_work
+ * msg_rx_work
  * @ws: pointer to an instance of work_struct structure
  *
  * Invokes the recv method in the io_device instance to perform receiving IPC
  * messages from each skb.
  */
-static void ipc_rx_work(struct work_struct *ws)
+static void msg_rx_work(struct work_struct *ws)
 {
 	struct shmem_link_device *shmd;
 	struct link_device *ld;
-	struct io_device *iod;
-	struct sk_buff *skb;
 	int i;
 
-	shmd = container_of(ws, struct shmem_link_device, ipc_rx_dwork.work);
+	shmd = container_of(ws, struct shmem_link_device, msg_rx_dwork.work);
 	ld = &shmd->ld;
 
 	for (i = 0; i < MAX_SIPC5_DEV; i++) {
+		struct io_device *iod;
+
 		iod = shmd->iod[i];
+
 		while (1) {
+			struct sk_buff *skb;
+
 			skb = skb_dequeue(ld->skb_rxq[i]);
 			if (!skb)
 				break;
+
 			iod->recv_skb(iod, ld, skb);
 		}
 	}
@@ -777,30 +764,23 @@ static int rx_ipc_frames(struct shmem_link_device *shmd, int dev,
 	struct link_device *ld = &shmd->ld;
 	struct sk_buff_head *rxq = ld->skb_rxq[dev];
 	struct sk_buff *skb;
-	int ret;
-	/**
-	 * variables for the status of the circular queue
-	 */
-	u8 *src;
-	u8 hdr[SIPC5_MIN_HEADER_SIZE];
-	/**
-	 * variables for RX processing
-	 */
+	u8 *src;	/* address of the buffer in the RXQ	*/
 	int qsize;	/* size of the queue			*/
+	int out;	/* index to the start of current frame	*/
 	int rcvd;	/* size of data in the RXQ or error	*/
 	int rest;	/* size of the rest data		*/
-	int out;	/* index to the start of current frame	*/
-	u8 *dst;	/* pointer to the destination buffer	*/
-	int tot;	/* total length including padding data	*/
 
 	src = circ->buff;
 	qsize = circ->qsize;
 	out = circ->out;
 	rcvd = circ->size;
+	rest = circ->size;
 
-	rest = rcvd;
-	tot = 0;
 	while (rest > 0) {
+		u8 hdr[SIPC5_MIN_HEADER_SIZE];
+		int tot;	/* total length including padding data	*/
+		u8 *dst;	/* pointer to the destination buffer	*/
+
 		/* Copy the header in the frame to the header buffer */
 		circ_read(hdr, src, qsize, out, SIPC5_MIN_HEADER_SIZE);
 
@@ -809,8 +789,7 @@ static int rx_ipc_frames(struct shmem_link_device *shmd, int dev,
 			mif_err("%s: ERR! %s INVALID config 0x%02X "
 				"(rcvd %d, rest %d)\n", ld->name,
 				get_dev_name(dev), hdr[0], rcvd, rest);
-			ret = -EBADMSG;
-			goto exit;
+			goto bad_msg;
 		}
 
 		/* Verify the total length of the frame (data + padding) */
@@ -818,17 +797,15 @@ static int rx_ipc_frames(struct shmem_link_device *shmd, int dev,
 		if (unlikely(tot > rest)) {
 			mif_err("%s: ERR! %s tot %d > rest %d (rcvd %d)\n",
 				ld->name, get_dev_name(dev), tot, rest, rcvd);
-			ret = -EBADMSG;
-			goto exit;
+			goto bad_msg;
 		}
 
 		/* Allocate an skb */
 		skb = dev_alloc_skb(tot);
 		if (!skb) {
-			mif_err("%s: ERR! %s dev_alloc_skb fail\n",
-				ld->name, get_dev_name(dev));
-			ret = -ENOMEM;
-			goto exit;
+			mif_info("%s: WARNING! %s dev_alloc_skb(%d) fail\n",
+				ld->name, get_dev_name(dev), tot);
+			goto no_mem;
 		}
 
 		/* Set the attribute of the skb as "single frame" */
@@ -850,16 +827,83 @@ static int rx_ipc_frames(struct shmem_link_device *shmd, int dev,
 
 	/* Update tail (out) pointer to empty out the RXQ */
 	set_rxq_tail(shmd, dev, circ->in);
-
 	return rcvd;
 
-exit:
+no_mem:
+	/* Update tail (out) pointer to the frame to be read in the future */
+	set_rxq_tail(shmd, dev, out);
+	return (rcvd - rest);
+
+bad_msg:
 #ifdef DEBUG_MODEM_IF
-	mif_err("%s: ERR! rcvd:%d tot:%d rest:%d\n", ld->name, rcvd, tot, rest);
 	pr_ipc(1, "c2c: ERR! CP2MIF", (src + out), (rest > 20) ? 20 : rest);
 #endif
+	return -EBADMSG;
+}
 
-	return ret;
+static inline void done_req_ack(struct shmem_link_device *shmd, int dev)
+{
+	u16 mask;
+#if 0//def DEBUG_MODEM_IF
+	struct mem_status mst;
+#endif
+
+	if (unlikely(shmd->dev[dev]->req_ack_rcvd < 0))
+		shmd->dev[dev]->req_ack_rcvd = 0;
+
+	if (likely(shmd->dev[dev]->req_ack_rcvd == 0))
+		return;
+
+	mask = get_mask_res_ack(shmd, dev);
+	send_int2cp(shmd, INT_NON_CMD(mask));
+	shmd->dev[dev]->req_ack_rcvd -= 1;
+
+#if 0 //def DEBUG_MODEM_IF
+	get_shmem_status(shmd, TX, &mst);
+	print_res_ack(shmd, dev, &mst);
+#endif
+}
+
+static inline void recv_res_ack(struct shmem_link_device *shmd,
+				struct mem_status *mst)
+{
+	u16 intr = mst->int2ap;
+
+	if (intr & get_mask_res_ack(shmd, IPC_FMT)) {
+#ifdef DEBUG_MODEM_IF
+		mif_info("%s: recv FMT RES_ACK\n", shmd->ld.name);
+#endif
+		complete(&shmd->req_ack_cmpl[IPC_FMT]);
+	}
+
+	if (intr & get_mask_res_ack(shmd, IPC_RAW)) {
+#ifdef DEBUG_MODEM_IF
+		mif_info("%s: recv RAW RES_ACK\n", shmd->ld.name);
+#endif
+		complete(&shmd->req_ack_cmpl[IPC_RAW]);
+	}
+}
+
+static inline void recv_req_ack(struct shmem_link_device *shmd,
+				struct mem_status *mst)
+{
+	u16 intr = mst->int2ap;
+
+	if (intr & get_mask_req_ack(shmd, IPC_FMT)) {
+		shmd->dev[IPC_FMT]->req_ack_rcvd += 1;
+
+#if 0 //def DEBUG_MODEM_IF
+		print_req_ack(shmd, IPC_FMT, mst);
+#endif
+	}
+
+	if (intr & get_mask_req_ack(shmd, IPC_RAW)) {
+		shmd->dev[IPC_RAW]->req_ack_rcvd += 1;
+
+#if 0 //def DEBUG_MODEM_IF
+		print_req_ack(shmd, IPC_RAW, mst);
+#endif
+	}
 }
 
 /**
@@ -875,128 +919,107 @@ exit:
 static void msg_handler(struct shmem_link_device *shmd, struct mem_status *mst)
 {
 	struct link_device *ld = &shmd->ld;
-	struct circ_status circ;
-	int i = 0;
-	int ret = 0;
+	int i;
 
-	if (!ipc_active(shmd))
-		return;
-
-	/* Read data from every RXQ */
-	for (i = 0; i < MAX_SIPC5_DEV; i++) {
-		/* Invoke an RX function only when there is data in the RXQ */
-		if (likely(mst->head[i][RX] != mst->tail[i][RX])) {
-			ret = get_rxq_rcvd(shmd, i, mst, &circ);
-			if (unlikely(ret < 0)) {
-				mif_err("%s: ERR! get_rxq_rcvd fail (err %d)\n",
-					ld->name, ret);
-#ifdef DEBUG_MODEM_IF
-				trigger_forced_cp_crash(shmd);
-#endif
-				return;
-			}
-
-			ret = rx_ipc_frames(shmd, i, &circ);
-			if (ret < 0) {
-#ifdef DEBUG_MODEM_IF
-				trigger_forced_cp_crash(shmd);
-#endif
-				reset_rxq_circ(shmd, i);
-			}
-		}
-	}
-
-	/* Schedule soft IRQ for RX */
-	queue_delayed_work(system_nrt_wq, &shmd->ipc_rx_dwork, 0);
-}
-
-static void msg_rx_task(unsigned long data)
-{
-	struct shmem_link_device *shmd = (struct shmem_link_device *)data;
-	struct link_device *ld = &shmd->ld;
-	struct mem_status mst;
-	u16 mask = 0;
-
-	get_shmem_status(shmd, RX, &mst);
-
-	if ((mst.head[IPC_FMT][RX] != mst.tail[IPC_FMT][RX])
-	    || (mst.head[IPC_RAW][RX] != mst.tail[IPC_RAW][RX])) {
+	if (!ipc_active(shmd)) {
+		mif_err("%s: ERR! IPC is NOT ACTIVE!!!\n", ld->name);
+		print_pm_status(shmd, 1);
 #if 0
-		print_mem_status(ld, &mst);
+		trigger_forced_cp_crash(shmd);
+		return;
 #endif
-		msg_handler(shmd, &mst);
 	}
 
-	/*
-	** Check and process REQ_ACK (at this time, in == out)
-	*/
-	if (unlikely(shmd->dev[IPC_FMT]->req_ack_rcvd)) {
-		mask |= get_mask_res_ack(shmd, IPC_FMT);
-		shmd->dev[IPC_FMT]->req_ack_rcvd = 0;
-	}
+	for (i = 0; i < MAX_SIPC5_DEV; i++) {
+		int ret;
+		struct link_device *ld = &shmd->ld;
+		struct circ_status circ;
 
-	if (unlikely(shmd->dev[IPC_RAW]->req_ack_rcvd)) {
-		mask |= get_mask_res_ack(shmd, IPC_RAW);
-		shmd->dev[IPC_RAW]->req_ack_rcvd = 0;
-	}
+		/* Skip RX processing if there is no data in the RXQ */
+		if (mst->head[i][RX] == mst->tail[i][RX]) {
+			done_req_ack(shmd, i);
+			continue;
+		}
 
-	if (unlikely(mask)) {
-#ifdef DEBUG_MODEM_IF
-		mif_info("%s: send RES_ACK 0x%04X\n", ld->name, mask);
-#endif
-		send_int2cp(shmd, INT_NON_CMD(mask));
+		/* Get the size of data in the RXQ */
+		ret = get_rxq_rcvd(shmd, i, mst, &circ);
+		if (unlikely(ret < 0)) {
+			mif_err("%s: ERR! get_rxq_rcvd fail (err %d)\n",
+				ld->name, ret);
+			trigger_forced_cp_crash(shmd);
+			return;
+		}
+
+		/* Read data in the RXQ */
+		ret = rx_ipc_frames(shmd, i, &circ);
+		if (unlikely(ret < 0)) {
+			trigger_forced_cp_crash(shmd);
+			return;
+		}
+
+		if (ret < circ.size)
+			break;
+
+		/* Process REQ_ACK (At this point, the RXQ may be empty.) */
+		done_req_ack(shmd, i);
 	}
 }
 
 /**
- * ipc_handler: processes a SHMEM command or receives IPC messages
+ * ipc_rx_task: processes a SHMEM command or receives IPC messages
  * @shmd: pointer to an instance of shmem_link_device structure
  * @mst: pointer to an instance of mem_status structure
  *
- * Invokes cmd_handler for a SHMEM command or msg_handler for IPC messages.
+ * Invokes cmd_handler for commands or msg_handler for IPC messages.
  */
-static void ipc_handler(struct shmem_link_device *shmd, struct mem_status *mst)
+static void ipc_rx_task(unsigned long data)
 {
-#ifdef DEBUG_MODEM_IF
-	struct link_device *ld = &shmd->ld;
-#endif
-	u16 intr = mst->int2ap;
+	struct shmem_link_device *shmd = (struct shmem_link_device *)data;
 
-	if (unlikely(INT_CMD_VALID(intr))) {
-		cmd_handler(shmd, intr);
-		return;
+	/* Prohibit CP from going to sleep */
+	if (gpio_get_value(shmd->gpio_cp_wakeup) == 0) {
+		gpio_set_value(shmd->gpio_cp_wakeup, 1);
+		print_pm_status(shmd, 0);
 	}
 
-	/*
-	** Check REQ_ACK from CP -> REQ_ACK will be processed in the RX tasklet
-	*/
-	if (unlikely(intr & get_mask_req_ack(shmd, IPC_FMT)))
-		shmd->dev[IPC_FMT]->req_ack_rcvd = 1;
+	while (1) {
+		struct mem_status *mst;
+		int i;
+		u16 intr;
 
-	if (unlikely(intr & get_mask_req_ack(shmd, IPC_RAW)))
-		shmd->dev[IPC_RAW]->req_ack_rcvd = 1;
+		mst = msq_get_data_slot(&shmd->rx_msq);
+		if (!mst)
+			break;
 
-	/*
-	** Check and process RES_ACK from CP
-	*/
-	if (unlikely(intr & get_mask_res_ack(shmd, IPC_FMT))) {
-#ifdef DEBUG_MODEM_IF
-		mif_info("%s: recv FMT RES_ACK\n", ld->name);
+		intr = mst->int2ap;
+
+		/* Process a SHMEM command */
+		if (unlikely(INT_CMD_VALID(intr))) {
+			cmd_handler(shmd, intr);
+			continue;
+		}
+
+		/* Update tail variables with the current tail pointers */
+		for (i = 0; i < MAX_SIPC5_DEV; i++)
+			update_rxq_tail_status(shmd, i, mst);
+
+		/* Check and receive RES_ACK from CP */
+		if (unlikely(intr & INT_MASK_RES_ACK_SET))
+			recv_res_ack(shmd, mst);
+
+		/* Check and receive REQ_ACK from CP */
+		if (unlikely(intr & INT_MASK_REQ_ACK_SET))
+			recv_req_ack(shmd, mst);
+
+		msg_handler(shmd, mst);
+
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+		if (unlikely(is_rndis_use() && cpu_online(1)))
+			queue_delayed_work_on(1, system_nrt_wq, &shmd->msg_rx_dwork, 0);
+		else
 #endif
-		complete(&shmd->req_ack_cmpl[IPC_FMT]);
+			queue_delayed_work(system_nrt_wq, &shmd->msg_rx_dwork, 0);
 	}
-
-	if (unlikely(intr & get_mask_res_ack(shmd, IPC_RAW))) {
-#ifdef DEBUG_MODEM_IF
-		mif_info("%s: recv RAW RES_ACK\n", ld->name);
-#endif
-		complete(&shmd->req_ack_cmpl[IPC_RAW]);
-	}
-
-	/*
-	** Schedule RX tasklet
-	*/
-	tasklet_hi_schedule(&shmd->rx_tsk);
 }
 
 /**
@@ -1022,29 +1045,23 @@ static int rx_udl_frames(struct shmem_link_device *shmd, int dev,
 	struct io_device *iod;
 	struct sk_buff *skb;
 	int ret;
-	/**
-	 * variables for the status of the circular queue
-	 */
-	u8 *src;
-	u8 hdr[SIPC5_MIN_HEADER_SIZE];
-	/**
-	 * variables for RX processing
-	 */
+	u8 *src;	/* address of the buffer in the RXQ	*/
 	int qsize;	/* size of the queue			*/
+	int out;	/* index to the start of current frame	*/
 	int rcvd;	/* size of data in the RXQ or error	*/
 	int rest;	/* size of the rest data		*/
-	int out;	/* index to the start of current frame	*/
-	u8 *dst;	/* pointer to the destination buffer	*/
-	int tot;	/* total length including padding data	*/
 
 	src = circ->buff;
 	qsize = circ->qsize;
 	out = circ->out;
 	rcvd = circ->size;
+	rest = circ->size;
 
-	rest = rcvd;
-	tot = 0;
 	while (rest > 0) {
+		u8 hdr[SIPC5_MIN_HEADER_SIZE];
+		int tot;	/* total length including padding data	*/
+		u8 *dst;	/* pointer to the destination buffer	*/
+
 		/* Copy the header in the frame to the header buffer */
 		circ_read(hdr, src, qsize, out, SIPC5_MIN_HEADER_SIZE);
 
@@ -1114,7 +1131,6 @@ static int rx_udl_frames(struct shmem_link_device *shmd, int dev,
 
 	/* Update tail (out) pointer to empty out the RXQ */
 	set_rxq_tail(shmd, dev, circ->in);
-
 	return rcvd;
 
 exit:
@@ -1133,7 +1149,6 @@ static void udl_rx_work(struct work_struct *ws)
 	struct shmem_link_device *shmd;
 	struct link_device *ld;
 	struct sk_buff_head *rxq;
-	struct mem_status mst;
 	struct circ_status circ;
 	int dev = IPC_RAW;
 
@@ -1142,12 +1157,19 @@ static void udl_rx_work(struct work_struct *ws)
 	rxq = ld->skb_rxq[dev];
 
 	while (1) {
-		get_shmem_status(shmd, RX, &mst);
-		if (mst.head[dev][RX] == mst.tail[dev][RX])
+		struct mem_status *mst;
+
+		mst = msq_get_data_slot(&shmd->rx_msq);
+		if (!mst)
+			break;
+		update_rxq_tail_status(shmd, dev, mst);
+
+		/* Exit the loop if there is no more data in the RXQ */
+		if (mst->tail[dev][RX] == mst->head[dev][RX])
 			break;
 
 		/* Invoke an RX function only when there is data in the RXQ */
-		if (get_rxq_rcvd(shmd, dev, &mst, &circ) < 0) {
+		if (get_rxq_rcvd(shmd, dev, mst, &circ) < 0) {
 			mif_err("%s: ERR! get_rxq_rcvd fail\n", ld->name);
 #ifdef DEBUG_MODEM_IF
 			trigger_forced_cp_crash(shmd);
@@ -1176,6 +1198,12 @@ static void udl_handler(struct shmem_link_device *shmd, struct mem_status *mst)
 {
 	u16 intr = mst->int2ap;
 
+	/* Process a SHMEM command */
+	if (unlikely(INT_CMD_VALID(intr))) {
+		cmd_handler(shmd, intr);
+		return;
+	}
+
 	/* Schedule soft IRQ for RX */
 	queue_delayed_work(system_nrt_wq, &shmd->udl_rx_dwork, 0);
 
@@ -1201,16 +1229,18 @@ static void udl_handler(struct shmem_link_device *shmd, struct mem_status *mst)
  *
  * Flow for normal interrupt handling:
  *   c2c_irq_handler -> udl_handler
- *   c2c_irq_handler -> ipc_handler -> cmd_handler -> cmd_xxx_handler
- *   c2c_irq_handler -> ipc_handler -> msg_handler -> rx_ipc_frames ->  ...
+ *   c2c_irq_handler -> ipc_rx_task -> cmd_handler -> cmd_xxx_handler
+ *   c2c_irq_handler -> ipc_rx_task -> msg_handler -> rx_ipc_frames ...
  */
 static void c2c_irq_handler(void *data, u32 intr)
 {
 	struct shmem_link_device *shmd = (struct shmem_link_device *)data;
 	struct link_device *ld = (struct link_device *)&shmd->ld;
-	struct mem_status *mst = msq_get_free_slot(&shmd->stat_list);
+	struct mem_status *mst = msq_get_free_slot(&shmd->rx_msq);
 
 	get_shmem_status(shmd, RX, mst);
+	mst->int2ap = intr;
+	mst->int2cp = 0;
 
 	if (unlikely(ld->mode == LINK_MODE_OFFLINE)) {
 		mif_info("%s: ld->mode == LINK_MODE_OFFLINE\n", ld->name);
@@ -1222,12 +1252,10 @@ static void c2c_irq_handler(void *data, u32 intr)
 		return;
 	}
 
-	mst->int2ap = intr;
-
 	if (ld->mode == LINK_MODE_DLOAD || ld->mode == LINK_MODE_ULOAD)
 		udl_handler(shmd, mst);
 	else
-		ipc_handler(shmd, mst);
+		tasklet_hi_schedule(&shmd->rx_tsk);
 }
 
 #if 1
@@ -1286,16 +1314,18 @@ static int xmit_ipc_msg(struct shmem_link_device *shmd, int dev)
 {
 	struct link_device *ld = &shmd->ld;
 	struct sk_buff_head *txq = ld->skb_txq[dev];
-	struct sk_buff *skb;
 	unsigned long flags;
 	struct circ_status circ;
-	int space;
 	int copied = 0;
+	bool chk_nospc = false;
 
 	/* Acquire the spin lock for a TXQ */
 	spin_lock_irqsave(&shmd->tx_lock[dev], flags);
 
 	while (1) {
+		struct sk_buff *skb;
+		int space;
+
 		/* Get the size of free space in the TXQ */
 		space = get_txq_space(shmd, dev, &circ);
 		if (unlikely(space < 0)) {
@@ -1313,8 +1343,18 @@ static int xmit_ipc_msg(struct shmem_link_device *shmd, int dev)
 		if (unlikely(!skb))
 			break;
 
-		/* Check the free space size comparing with skb->len */
-		if (unlikely(space < skb->len)) {
+		/* Check the free space size,
+		  - FMT : comparing with skb->len
+		  - RAW : check used buffer size  */
+		if (dev == IPC_FMT) {
+			if (unlikely(space < skb->len))
+				chk_nospc = true;
+		} else {
+			if (unlikely((SHM_4M_RAW_TX_BUFF_SZ - space) >= SHM_4M_MAX_UPLINK_SIZE))
+				chk_nospc = true;
+		}
+
+		if (unlikely(chk_nospc)) {
 #ifdef DEBUG_MODEM_IF
 			struct mem_status mst;
 #endif
@@ -1413,7 +1453,13 @@ static int wait_for_res_ack(struct shmem_link_device *shmd, int dev)
 			print_circ_status(ld, dev, &mst);
 #endif
 		}
+
+		goto exit;
 	}
+
+#ifdef DEBUG_MODEM_IF
+	mif_info("%s: recv %s RES_ACK\n", ld->name, get_dev_name(dev));
+#endif
 
 exit:
 	return ret;
@@ -1439,7 +1485,7 @@ static int process_res_ack(struct shmem_link_device *shmd, int dev)
 	if (ret > 0) {
 		mask = get_mask_send(shmd, dev);
 		send_int2cp(shmd, INT_NON_CMD(mask));
-		get_shmem_status(shmd, TX, msq_get_free_slot(&shmd->stat_list));
+		get_shmem_status(shmd, TX, msq_get_free_slot(&shmd->tx_msq));
 	}
 
 	if (ret >= 0)
@@ -1503,6 +1549,7 @@ static void raw_tx_work(struct work_struct *ws)
 {
 	struct link_device *ld;
 	struct shmem_link_device *shmd;
+	unsigned long delay = usecs_to_jiffies(1000);
 	int ret;
 
 	ld = container_of(ws, struct link_device, raw_tx_dwork.work);
@@ -1515,7 +1562,7 @@ static void raw_tx_work(struct work_struct *ws)
 
 	/* ret == 0 on timeout */
 	if (ret == 0) {
-		queue_delayed_work(ld->tx_wq, ld->tx_dwork[IPC_RAW], 0);
+		queue_delayed_work(ld->tx_wq, ld->tx_dwork[IPC_RAW], delay);
 		return;
 	}
 
@@ -1558,7 +1605,7 @@ static int c2c_send_ipc(struct shmem_link_device *shmd, int dev)
 	if (likely(ret > 0)) {
 		mask = get_mask_send(shmd, dev);
 		send_int2cp(shmd, INT_NON_CMD(mask));
-		get_shmem_status(shmd, TX, msq_get_free_slot(&shmd->stat_list));
+		get_shmem_status(shmd, TX, msq_get_free_slot(&shmd->tx_msq));
 		goto exit;
 	}
 
@@ -1689,9 +1736,6 @@ static int c2c_send_udl_data(struct shmem_link_device *shmd, int dev)
 {
 	struct link_device *ld = &shmd->ld;
 	struct sk_buff_head *txq = ld->skb_txq[dev];
-	struct sk_buff *skb;
-	u8 *src;
-	int tx_bytes;
 	int copied;
 	u8 *buff;
 	u32 qsize;
@@ -1720,6 +1764,10 @@ static int c2c_send_udl_data(struct shmem_link_device *shmd, int dev)
 
 	copied = 0;
 	while (1) {
+		struct sk_buff *skb;
+		u8 *src;
+		int tx_bytes;
+
 		skb = skb_dequeue(txq);
 		if (!skb)
 			break;
@@ -1736,7 +1784,7 @@ static int c2c_send_udl_data(struct shmem_link_device *shmd, int dev)
 			/* Take the skb back to the skb_txq */
 			skb_queue_head(txq, skb);
 
-			mif_info("NOSPC in RAW_TXQ {qsize:%u in:%u out:%u}, "
+			mif_debug("NOSPC in RAW_TXQ {qsize:%u in:%u out:%u}, "
 				"space:%u < tx_bytes:%u\n",
 				qsize, in, out, space, tx_bytes);
 			break;
@@ -1784,10 +1832,10 @@ static void c2c_send_udl(struct shmem_link_device *shmd, int dev,
 	struct completion *cmpl = &shmd->req_ack_cmpl[dev];
 	struct std_dload_info *dl_info = &shmd->dl_info;
 	struct mem_status mst;
+	int ret;
 	u32 timeout = msecs_to_jiffies(RES_ACK_WAIT_TIMEOUT);
 	u32 udl_cmd;
-	int ret;
-	u16 mask = get_mask_send(shmd, dev);
+	u16 mask = get_mask_req_ack(shmd, dev) | get_mask_send(shmd, dev);
 
 	udl_cmd = std_udl_get_cmd(skb->data);
 	if (iod->format == IPC_RAMDUMP || !std_udl_with_payload(udl_cmd)) {
@@ -1803,7 +1851,6 @@ static void c2c_send_udl(struct shmem_link_device *shmd, int dev,
 	if (txq->qlen < dl_info->num_frames)
 		goto exit;
 
-	mask |= get_mask_req_ack(shmd, dev);
 	while (1) {
 		ret = c2c_send_udl_data(shmd, dev);
 		if (ret < 0) {
@@ -1847,9 +1894,10 @@ exit:
  *   => process_res_ack -> xmit_ipc_msg (,,, queue_delayed_work ...)
  */
 static int c2c_send(struct link_device *ld, struct io_device *iod,
-			struct sk_buff *skb)
+		    struct sk_buff *skb)
 {
 	struct shmem_link_device *shmd = to_shmem_link_device(ld);
+	struct modem_ctl *mc = ld->mc;
 	int dev = iod->format;
 	int len = skb->len;
 
@@ -1857,24 +1905,33 @@ static int c2c_send(struct link_device *ld, struct io_device *iod,
 	case IPC_FMT:
 	case IPC_RAW:
 		if (likely(ld->mode == LINK_MODE_IPC)) {
-			c2c_try_send_ipc(shmd, dev, iod, skb);
+			if (unlikely(shmd->forced_cp_crash)) {
+				mif_err("%s:%s->%s: ERR! Forced CP Crash ...\n",
+					ld->name, iod->name, mc->name);
+				dev_kfree_skb_any(skb);
+			} else
+				c2c_try_send_ipc(shmd, dev, iod, skb);
 		} else {
-			mif_err("%s->%s: ERR! ld->mode != LINK_MODE_IPC\n",
-				iod->name, ld->name);
+			mif_err("%s:%s->%s: ERR! ld->mode != LINK_MODE_IPC\n",
+				ld->name, iod->name, mc->name);
 			dev_kfree_skb_any(skb);
 		}
-		return len;
+		break;
 
 	case IPC_BOOT:
 	case IPC_RAMDUMP:
 		c2c_send_udl(shmd, IPC_RAW, iod, skb);
-		return len;
+		break;
 
 	default:
-		mif_err("%s: ERR! no TXQ for %s\n", ld->name, iod->name);
+		mif_err("%s:%s->%s: ERR! Invalid IOD (format %d)\n",
+			ld->name, iod->name, mc->name, dev);
 		dev_kfree_skb_any(skb);
-		return -ENODEV;
+		len = -ENODEV;
+		break;
 	}
+
+	return len;
 }
 
 #if 1
@@ -1889,6 +1946,7 @@ static int c2c_dload_start(struct link_device *ld, struct io_device *iod)
 	ld->mode = LINK_MODE_DLOAD;
 
 	clear_shmem_map(shmd);
+	msq_reset(&shmd->rx_msq);
 
 	set_magic(shmd, SHM_BOOT_MAGIC);
 	magic = get_magic(shmd);
@@ -1916,7 +1974,7 @@ static int c2c_set_dload_info(struct link_device *ld, struct io_device *iod,
 	int ret;
 
 	ret = copy_from_user(dl_info, (void __user *)arg,
-			sizeof(struct std_dload_info));
+			     sizeof(struct std_dload_info));
 	if (ret) {
 		mif_err("ERR! copy_from_user fail!\n");
 		return -EFAULT;
@@ -1941,6 +1999,7 @@ static int c2c_dump_start(struct link_device *ld, struct io_device *iod)
 	ld->mode = LINK_MODE_ULOAD;
 
 	clear_shmem_map(shmd);
+	msq_reset(&shmd->rx_msq);
 
 	mif_err("%s: magic = 0x%08X\n", ld->name, SHM_DUMP_MAGIC);
 	set_magic(shmd, SHM_DUMP_MAGIC);
@@ -2024,13 +2083,11 @@ static int c2c_init_ipc_map(struct shmem_link_device *shmd)
 
 	return 0;
 }
+
 static int c2c_init_communication(struct link_device *ld, struct io_device *iod)
 {
 	struct shmem_link_device *shmd = to_shmem_link_device(ld);
 	struct io_device *check_iod;
-
-	if (iod->format == IPC_BOOT)
-		return 0;
 
 	/* send 0xC2 */
 	switch(iod->format) {
@@ -2042,6 +2099,7 @@ static int c2c_init_communication(struct link_device *ld, struct io_device *iod)
 		} else
 			mif_err("%s defined but not opened\n", check_iod->name);
 		break;
+
 	case IPC_RFS:
 		check_iod = link_get_iod_with_format(ld, IPC_FMT);
 		if (check_iod && atomic_read(&check_iod->opened)) {
@@ -2050,9 +2108,11 @@ static int c2c_init_communication(struct link_device *ld, struct io_device *iod)
 		} else
 			mif_err("not opened\n");
 		break;
+
 	default:
 		break;
 	}
+
 	return 0;
 }
 
@@ -2204,8 +2264,8 @@ struct link_device *c2c_create_link_device(struct platform_device *pdev)
 	for (i = 0; i < MAX_SIPC5_DEV; i++)
 		init_completion(&shmd->req_ack_cmpl[i]);
 
-	tasklet_init(&shmd->rx_tsk, msg_rx_task, (unsigned long)shmd);
-	INIT_DELAYED_WORK(&shmd->ipc_rx_dwork, ipc_rx_work);
+	tasklet_init(&shmd->rx_tsk, ipc_rx_task, (unsigned long)shmd);
+	INIT_DELAYED_WORK(&shmd->msg_rx_dwork, msg_rx_work);
 	INIT_DELAYED_WORK(&shmd->udl_rx_dwork, udl_rx_work);
 
 	for (i = 0; i < MAX_SIPC5_DEV; i++) {
@@ -2223,23 +2283,19 @@ struct link_device *c2c_create_link_device(struct platform_device *pdev)
 	ld->tx_dwork[IPC_FMT] = &ld->fmt_tx_dwork;
 	ld->tx_dwork[IPC_RAW] = &ld->raw_tx_dwork;
 
-	spin_lock_init(&shmd->stat_list.lock);
+	spin_lock_init(&shmd->tx_msq.lock);
+	spin_lock_init(&shmd->rx_msq.lock);
 	spin_lock_init(&shmd->trace_list.lock);
 #ifdef DEBUG_MODEM_IF
 	INIT_DELAYED_WORK(&shmd->dump_dwork, mem_dump_work);
 #endif
 
 	INIT_DELAYED_WORK(&shmd->cp_sleep_dwork, release_cp_wakeup);
-	INIT_DELAYED_WORK(&shmd->link_off_dwork, release_ap_status);
 	spin_lock_init(&shmd->pm_lock);
 
 	/*
 	** Retrieve SHMEM IRQ GPIO#, IRQ#, and IRQ flags
 	*/
-	shmd->gpio_pda_active = modem->gpio_pda_active;
-	mif_err("PDA_ACTIVE gpio# = %d (value %d)\n",
-		shmd->gpio_pda_active, gpio_get_value(shmd->gpio_pda_active));
-
 	shmd->gpio_ap_status = modem->gpio_ap_status;
 	shmd->gpio_ap_wakeup = modem->gpio_ap_wakeup;
 	shmd->irq_ap_wakeup = modem->irq_ap_wakeup;
@@ -2263,8 +2319,7 @@ struct link_device *c2c_create_link_device(struct platform_device *pdev)
 	c2c_assign_gpio_cp_wakeup(shmd->gpio_cp_wakeup);
 	c2c_assign_gpio_cp_status(shmd->gpio_cp_status);
 
-	gpio_set_value(shmd->gpio_pda_active, 1);
-	gpio_set_value(shmd->gpio_ap_status, 1);
+	gpio_set_value(shmd->gpio_ap_status, 0);
 
 	/*
 	** Register interrupt handlers
