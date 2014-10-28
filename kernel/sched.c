@@ -87,7 +87,6 @@
 #include <trace/events/sched.h>
 
 ATOMIC_NOTIFIER_HEAD(migration_notifier_head);
-#include <linux/cpufreq_slp.h>
 
 /*
  * Convert user-nice values [ -20 ... 0 ... 19 ]
@@ -4355,8 +4354,6 @@ need_resched:
 		rq->nr_switches++;
 		rq->curr = next;
 		++*switch_count;
-
-		slp_store_task_history(cpu, prev);
 
 		context_switch(rq, prev, next); /* unlocks the rq */
 		/*
