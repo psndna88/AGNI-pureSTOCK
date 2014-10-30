@@ -323,22 +323,24 @@ struct inodes_stat_t {
 #define BLKDISCARDZEROES _IO(0x12,124)
 #define BLKSECDISCARD _IO(0x12,125)
 
-#define BMAP_IOCTL 1                /* obsolete - kept for compatibility */
-#define FIBMAP           _IO(0x00,1)        /* bmap access */
-#define FIGETBSZ   _IO(0x00,2)        /* get the block size used for bmap */
-#define FIFREEZE        _IOWR('X', 119, int)        /* Freeze */
-#define FITHAW                _IOWR('X', 120, int)        /* Thaw */
-#define FITRIM                _IOWR('X', 121, struct fstrim_range)        /* Trim */
+#define BMAP_IOCTL 1		/* obsolete - kept for compatibility */
+#define FIBMAP	   _IO(0x00,1)	/* bmap access */
+#define FIGETBSZ   _IO(0x00,2)	/* get the block size used for bmap */
+#define FIFREEZE	_IOWR('X', 119, int)	/* Freeze */
+#define FITHAW		_IOWR('X', 120, int)	/* Thaw */
+#define FITRIM		_IOWR('X', 121, struct fstrim_range)	/* Trim */
 
-#define        FS_IOC_GETFLAGS                        _IOR('f', 1, long)
-#define        FS_IOC_SETFLAGS                        _IOW('f', 2, long)
-#define        FS_IOC_GETVERSION                _IOR('v', 1, long)
-#define        FS_IOC_SETVERSION                _IOW('v', 2, long)
-#define FS_IOC_FIEMAP                        _IOWR('f', 11, struct fiemap)
-#define FS_IOC32_GETFLAGS                _IOR('f', 1, int)
-#define FS_IOC32_SETFLAGS                _IOW('f', 2, int)
-#define FS_IOC32_GETVERSION                _IOR('v', 1, int)
-#define FS_IOC32_SETVERSION                _IOW('v', 2, int)
+#define FIDTRIM	_IOWR('f', 128, struct fstrim_range)	/* Deep discard trim */
+
+#define	FS_IOC_GETFLAGS			_IOR('f', 1, long)
+#define	FS_IOC_SETFLAGS			_IOW('f', 2, long)
+#define	FS_IOC_GETVERSION		_IOR('v', 1, long)
+#define	FS_IOC_SETVERSION		_IOW('v', 2, long)
+#define FS_IOC_FIEMAP			_IOWR('f', 11, struct fiemap)
+#define FS_IOC32_GETFLAGS		_IOR('f', 1, int)
+#define FS_IOC32_SETFLAGS		_IOW('f', 2, int)
+#define FS_IOC32_GETVERSION		_IOR('v', 1, int)
+#define FS_IOC32_SETVERSION		_IOW('v', 2, int)
 
 /*
  * Inode flags (FS_IOC_GETFLAGS / FS_IOC_SETFLAGS)
