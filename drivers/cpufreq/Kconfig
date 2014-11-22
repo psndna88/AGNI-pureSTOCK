@@ -141,6 +141,12 @@ config CPU_FREQ_DEFAULT_GOV_INTELLIACTIVE
 	  loading your cpufreq low-level hardware driver, using the
 	  'interactive' governor for latency-sensitive workloads.
 
+config CPU_FREQ_DEFAULT_GOV_PEGASUSQ
+	bool "pegasusq"
+	select CPU_FREQ_GOV_PEGASUSQ
+	help
+	  Modified Pegasusq
+
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -232,6 +238,12 @@ config CPU_FREQ_GOV_INTELLIACTIVE
 	  you to get a full dynamic cpu frequency capable system by simply
 	  loading your cpufreq low-level hardware driver, using the
 	  'interactive' governor for latency-sensitive workloads.
+
+config CPU_FREQ_GOV_PEGASUSQ
+	tristate "pegasusq"
+	default y
+	help
+	  Modified Pegasusq
 
 config CPU_FREQ_GOV_CONSERVATIVE
 	tristate "'conservative' cpufreq governor"
