@@ -147,6 +147,12 @@ config CPU_FREQ_DEFAULT_GOV_PEGASUSQ
 	help
 	  Modified Pegasusq
 
+config CPU_FREQ_DEFAULT_GOV_LULZACTIVEQ
+	bool "lulzactiveq"
+	select CPU_FREQ_GOV_LULZACTIVEQ
+	help
+	  Modified Lulzactiveq
+
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -244,6 +250,12 @@ config CPU_FREQ_GOV_PEGASUSQ
 	default y
 	help
 	  Modified Pegasusq
+
+config CPU_FREQ_GOV_LULZACTIVEQ
+	tristate "lulzactiveq"
+	default y
+	help
+	  Modified Lulzactiveq
 
 config CPU_FREQ_GOV_CONSERVATIVE
 	tristate "'conservative' cpufreq governor"
