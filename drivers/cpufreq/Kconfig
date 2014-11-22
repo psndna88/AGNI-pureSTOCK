@@ -132,6 +132,15 @@ config CPU_FREQ_DEFAULT_GOV_ZZMOOVE
           CPU Hotplug modifications partially taken from ktoonservative governor from
           ktoonsez KT747-JB kernel. DUAL CORE MODE
 
+config CPU_FREQ_DEFAULT_GOV_INTELLIACTIVE
+	bool "intelliactive"
+	select CPU_FREQ_GOV_INTELLIACTIVE
+	help
+	  Use the CPUFreq governor 'intelliactive' as default. This allows
+	  you to get a full dynamic cpu frequency capable system by simply
+	  loading your cpufreq low-level hardware driver, using the
+	  'interactive' governor for latency-sensitive workloads.
+
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -215,6 +224,14 @@ config CPU_FREQ_GOV_ZZMOOVE
         Modified by Zane Zaminsky November 2012 to be
         hotplug-able and optimzed for use with Samsung I9300.
         DUAL CORE MODE
+
+config CPU_FREQ_GOV_INTELLIACTIVE
+	tristate "intelliactive"
+	help
+	  Use the CPUFreq governor 'intelliactive' as default. This allows
+	  you to get a full dynamic cpu frequency capable system by simply
+	  loading your cpufreq low-level hardware driver, using the
+	  'interactive' governor for latency-sensitive workloads.
 
 config CPU_FREQ_GOV_CONSERVATIVE
 	tristate "'conservative' cpufreq governor"
