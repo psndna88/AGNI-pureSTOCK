@@ -1,7 +1,7 @@
 #!/bin/sh
 export KERNELDIR=`readlink -f .`
 . ~/AGNi_stamp_STOCK.sh
-. ~/gcc_4.9.2_linaro_cortex-a9.sh
+. ~/gcc_4.9.3_linaro_cortex-a9.sh
 
 mv .git .git-halt
 
@@ -9,7 +9,7 @@ export ARCH=arm
 
 if [ ! -f $KERNELDIR/.config ];
 then
-  make defconfig psn_p31xx_v3.4_defconfig
+  make defconfig psn_p31xx_v3.5_defconfig
 fi
 
 . $KERNELDIR/.config
