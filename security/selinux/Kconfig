@@ -52,6 +52,13 @@ config SECURITY_SELINUX_DISABLE
 
 	  If you are unsure how to answer this question, answer N.
 
+config SECURITY_SELINUX_FORCE_PERMISSIVE
+	bool "NSA SELinux Permanent Permissive"
+	depends on SECURITY_SELINUX
+	default n
+	help
+	  This option sets SELINUX mode as permissive permanently
+
 config SECURITY_SELINUX_DEVELOP
 	bool "NSA SELinux Development Support"
 	depends on SECURITY_SELINUX
