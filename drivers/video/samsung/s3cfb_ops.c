@@ -1543,7 +1543,7 @@ void s3c_fb_set_busfreq(struct s3cfb_global *fbdev, unsigned int num_of_win)
 }
 static void s3c_fd_fence_wait(struct s3cfb_global *fbdev, struct sync_fence *fence)
 {
-	int err = sync_fence_wait(fence, 1000);
+	int err = sync_fence_wait(fence, 2000);
 	if (err >= 0)
 		return;
 
