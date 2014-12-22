@@ -11,6 +11,10 @@
 #include <plat/map-s5p.h>
 #include <asm/mach/map.h>
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+#include <asm/kexec.h>
+#endif
+
 /*
  * Example usage: sec_log=256K@0x45000000
  * In above case, log_buf size is 256KB and its base address is
@@ -72,6 +76,10 @@ static int __init sec_log_setup(char *str)
 	unsigned size = memparse(str, &str);
 	unsigned long base = 0;
 	unsigned *sec_log_mag;
+
+#ifdef CONFIG_KEXEC_HARDBOOT
+	memblock_remove(KEXEC_HB_PAGE_ADDR, SZ_4K);
+#endif
 
 	/* If we encounter any problem parsing str ... */
 	if (!size || size != roundup_pow_of_two(size) || *str != '@'
