@@ -13,6 +13,7 @@
 
 #ifdef CONFIG_KEXEC_HARDBOOT
 #include <asm/kexec.h>
+#include <linux/memblock.h>
 #endif
 
 /*
