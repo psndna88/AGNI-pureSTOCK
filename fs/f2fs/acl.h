@@ -38,7 +38,8 @@ struct f2fs_acl_header {
 
 extern int f2fs_check_acl(struct inode *inode, int mask, unsigned int flags);
 extern int f2fs_acl_chmod(struct inode *);
-extern int f2fs_init_acl(struct inode *, struct inode *, struct page *);
+extern int f2fs_init_acl(struct inode *, struct inode *, struct page *,
+							struct page *);
 #else
 #define f2fs_check_acl	NULL
 #define f2fs_set_acl	NULL
@@ -49,7 +50,7 @@ static inline int f2fs_acl_chmod(struct inode *inode)
 }
 
 static inline int f2fs_init_acl(struct inode *inode, struct inode *dir,
-							struct page *page)
+				struct page *ipage, struct page *dpage)
 {
 	return 0;
 }
