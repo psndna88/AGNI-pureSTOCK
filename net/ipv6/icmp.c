@@ -951,7 +951,7 @@ int icmpv6_err_convert(u8 type, u8 code, int *err)
 	switch (type) {
 	case ICMPV6_DEST_UNREACH:
 		fatal = 1;
-		if (code < ARRAY_SIZE(tab_unreach)) {
+		if (code <= ICMPV6_PORT_UNREACH) {
 			*err  = tab_unreach[code].err;
 			fatal = tab_unreach[code].fatal;
 		}
