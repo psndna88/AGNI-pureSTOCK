@@ -145,8 +145,13 @@ static irqreturn_t s3cfb_irq_frame(int irq, void *dev_id)
 	if (fbdev[0]->regs != 0)
 		s3cfb_clear_interrupt(fbdev[0]);
 
-#if defined(CONFIG_FB_S5P_VSYNC_THREAD)
+#ifdef CONFIG_MALI_VER_R4P0
 	fbdev[0]->vsync_info.timestamp = ktime_get();
+#endif
+#if defined(CONFIG_FB_S5P_VSYNC_THREAD)
+#ifndef CONFIG_MALI_VER_R4P0
+	fbdev[0]->vsync_info.timestamp = ktime_get();
+#endif
 	wake_up_interruptible_all(&fbdev[0]->vsync_info.wait);
 #endif
 
@@ -211,6 +216,10 @@ int s3cfb_wait_for_vsync(struct s3cfb_global *fbdev, u32 timeout)
 						!ktime_equal(timestamp,
 						fbdev->vsync_info.timestamp));
 	}
+#ifdef CONFIG_MALI_VER_R4P0
+	sysfs_notify(&fbdev->dev->kobj,
+				NULL, "vsync_time");
+#endif
 	s3cfb_deactivate_vsync(fbdev);
 
 	pm_runtime_put_sync(fbdev->dev);

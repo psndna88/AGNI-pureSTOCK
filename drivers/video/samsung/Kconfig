@@ -36,7 +36,7 @@ config FB_S5P_DEBUG
 
 config FB_S5P_VSYNC_THREAD
 	bool "S5P Framebuffer vsync thread"
-	depends on FB_S5P
+	depends on FB_S5P && ! MALI_VER_R4P0
 
 config FB_S5P_TRACE_UNDERRUN
 	bool "S5P Framebuffer FIFO underrun trace"
