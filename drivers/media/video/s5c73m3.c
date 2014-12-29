@@ -1102,7 +1102,8 @@ request_fw:
 			retVal = s5c73m3_compare_date(sd,
 				S5C73M3_IN_DATA,
 				S5C73M3_IN_SYSTEM);
-			if (retVal <= 0) {
+			/* only use firmware from system if it's newer than firmware on data */
+			if (retVal < 0) {
 				/*unlink(&fw_path_in_data);*/
 				state->fw_index = S5C73M3_IN_SYSTEM;
 			} else {
@@ -2458,7 +2459,7 @@ static int s5c73m3_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 	struct s5c73m3_state *state = to_state(sd);
 	int err = 0;
 
-	printk(KERN_INFO "id %d, value %d\n",
+	printk(KERN_INFO "s5c73m3_s_ctrl: id %d, value %d\n",
 		ctrl->id - V4L2_CID_PRIVATE_BASE, ctrl->value);
 
 	if (unlikely(state->isp.bad_fw && ctrl->id != V4L2_CID_CAM_UPDATE_FW)) {
@@ -2646,6 +2647,9 @@ static int s5c73m3_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 static int s5c73m3_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 {
 	int err = 0;
+
+	printk(KERN_INFO "s5c73m3_g_ctrl: id %d, value %d\n",
+        ctrl->id - V4L2_CID_PRIVATE_BASE, ctrl->value);
 
 	switch (ctrl->id) {
 	case V4L2_CID_CAMERA_CAPTURE:
