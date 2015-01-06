@@ -1448,8 +1448,10 @@ static void ksm_do_scan(unsigned int scan_npages)
 		if (!rmap_item)
 			return;
 		if (!PageKsm(page) || !in_stable_tree(rmap_item)) {
+#ifdef CONFIG_KSM_CHECK_PAGE
 			if (!is_page_scanned(page))
-				cmp_and_merge_page(page, rmap_item);
+#endif
+			cmp_and_merge_page(page, rmap_item);
 		}
 		put_page(page);
 	}
