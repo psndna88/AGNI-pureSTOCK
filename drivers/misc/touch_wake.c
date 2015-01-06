@@ -34,6 +34,7 @@
 #include <linux/delay.h>
 #include <linux/wakelock.h>
 #include <linux/input.h>
+#include <linux/syscalls.h>
 
 extern void touchscreen_enable(void);
 extern void touchscreen_disable(void);
@@ -226,7 +227,7 @@ static ssize_t touchwake_status_write(struct device * dev, struct device_attribu
 
 static ssize_t touchwake_delay_read(struct device * dev, struct device_attribute * attr, char * buf)
 {
-	return sprintf(buf, "%u\n", touchoff_delay);
+	return sprintf(buf, "%u\n", touchoff_delay / 1000);
 }
 
 static ssize_t touchwake_delay_write(struct device * dev, struct device_attribute * attr, const char * buf, size_t size)
@@ -234,7 +235,7 @@ static ssize_t touchwake_delay_write(struct device * dev, struct device_attribut
 	unsigned int data;
 
 	if(sscanf(buf, "%u\n", &data) == 1) {
-		touchoff_delay = data;
+		touchoff_delay = data * 1000;
 		#ifdef DEBUG_PRINT
 		pr_info("[TOUCHWAKE] Delay set to %u\n", touchoff_delay); 
 		#endif
@@ -259,20 +260,20 @@ static ssize_t touchwake_debug(struct device * dev, struct device_attribute * at
 }
 #endif
 
-static DEVICE_ATTR(enabled, S_IRUGO | S_IWUGO, touchwake_status_read, touchwake_status_write);
-static DEVICE_ATTR(delay, S_IRUGO | S_IWUGO, touchwake_delay_read, touchwake_delay_write);
-static DEVICE_ATTR(version, S_IRUGO , touchwake_version, NULL);
+static DEVICE_ATTR(tw_enabled, S_IRUGO | S_IWUGO, touchwake_status_read, touchwake_status_write);
+static DEVICE_ATTR(tw_delay, S_IRUGO | S_IWUGO, touchwake_delay_read, touchwake_delay_write);
+static DEVICE_ATTR(tw_version, S_IRUGO , touchwake_version, NULL);
 #ifdef DEBUG_PRINT
-static DEVICE_ATTR(debug, S_IRUGO , touchwake_debug, NULL);
+static DEVICE_ATTR(tw_debug, S_IRUGO , touchwake_debug, NULL);
 #endif
 
 static struct attribute *touchwake_notification_attributes[] =
 {
-	&dev_attr_enabled.attr,
-	&dev_attr_delay.attr,
-	&dev_attr_version.attr,
+	&dev_attr_tw_enabled.attr,
+	&dev_attr_tw_delay.attr,
+	&dev_attr_tw_version.attr,
 #ifdef DEBUG_PRINT
-	&dev_attr_debug.attr,
+	&dev_attr_tw_debug.attr,
 #endif
 	NULL
 };
@@ -285,7 +286,7 @@ static struct attribute_group touchwake_notification_group =
 static struct miscdevice touchwake_device =
 {
 	.minor = MISC_DYNAMIC_MINOR,
-	.name = "touchwake",
+	.name = "touchwakee",
 };
 
 void proximity_detected(void)
