@@ -71,8 +71,6 @@ EXPORT_SYMBOL(switch_dev);
 extern bool is_cable_attached;
 bool is_jig_attached;
 
-bool device_charging = false;
-
 #if 0
 static ssize_t midas_switch_show_vbus(struct device *dev,
 				      struct device_attribute *attr, char *buf)
