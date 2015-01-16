@@ -292,6 +292,7 @@ static unsigned int GPU_MHZ	= 1000000;
 
 int  gpu_power_state;
 static int bPoweroff;
+atomic_t clk_active;
 
 #define MAX_MALI_DVFS_STEPS 5
 static _mali_osk_atomic_t bottomlock_status;
@@ -561,9 +562,10 @@ void mali_clk_set_rate(unsigned int clk, unsigned int mhz)
 		clk_set_parent(mali_clock, mali_parent_clock);
 	}
 
-    if (gpu_power_state == 0) {
-		clk_enable(mali_clock);
-		gpu_power_state = 1;
+	if (atomic_read(&clk_active) == 0) {
+		if (clk_enable(mali_clock) < 0)
+			return;
+		atomic_set(&clk_active, 1);
 	}
 
 	err = clk_set_rate(mali_clock, rate);
@@ -1003,6 +1005,7 @@ mali_bool mali_dvfs_handler(unsigned int utilization)
 static mali_bool init_mali_clock(void)
 {
 	mali_bool ret = MALI_TRUE;
+	gpu_power_state = 1;
 	bPoweroff = 1;
 
 	if (mali_clock != 0)
@@ -1081,9 +1084,15 @@ static _mali_osk_errcode_t enable_mali_clocks(void)
 {
 	int err;
 
-	clk_enable(mali_clock);
-	gpu_power_state = 1;
-	
+	if (atomic_read(&clk_active) == 0) {
+		err = clk_enable(mali_clock);
+		MALI_DEBUG_PRINT(3,("enable_mali_clocks mali_clock %p error %d \n", mali_clock, err));
+		atomic_set(&clk_active, 1);
+		if (err >= 0)
+			atomic_set(&clk_active, 1);
+		gpu_power_state = 1;
+	}
+
 	/* set clock rate */
 #ifdef CONFIG_MALI_DVFS
 	if (get_mali_dvfs_control_status() != 0 || mali_gpu_clk >= mali_runtime_resume.clk) {
@@ -1105,11 +1114,11 @@ static _mali_osk_errcode_t enable_mali_clocks(void)
 
 static _mali_osk_errcode_t disable_mali_clocks(void)
 {
-    _mali_osk_lock_wait(mali_dvfs_lock, _MALI_OSK_LOCKMODE_RW);
-	clk_disable(mali_clock);
-	gpu_power_state = 0;
-    _mali_osk_lock_signal(mali_dvfs_lock, _MALI_OSK_LOCKMODE_RW);
-	
+	if (atomic_read(&clk_active) == 1) {
+		clk_disable(mali_clock);
+		atomic_set(&clk_active, 0);
+		gpu_power_state = 0;
+	}
 	MALI_DEBUG_PRINT(3, ("disable_mali_clocks mali_clock %p \n", mali_clock));
 
 	MALI_SUCCESS;
@@ -1169,6 +1178,8 @@ _mali_osk_errcode_t g3d_power_domain_control(int bpower_on)
 _mali_osk_errcode_t mali_platform_init(struct device *dev)
 {
 	MALI_CHECK(init_mali_clock(), _MALI_OSK_ERR_FAULT);
+
+	atomic_set(&clk_active, 0);
 
 #ifdef CONFIG_MALI_DVFS
 	/* Create sysfs for time-in-state */
