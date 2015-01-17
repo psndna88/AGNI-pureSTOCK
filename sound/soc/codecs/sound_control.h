@@ -52,13 +52,13 @@ enum {
 // Debug mode
 
 enum {
-	DEBUG_OFF = 0,
-	DEBUG_NORMAL,
-	DEBUG_VERBOSE,
-	DEBUG_MAX,
+	DEBUG_OFF_WOLF = 0,
+	DEBUG_NORMAL_WOLF,
+	DEBUG_VERBOSE_WOLF,
+	DEBUG_MAX_WOLF,
 };
 
-#define DEBUG_DEFAULT 		DEBUG_OFF
+#define DEBUG_DEFAULT_WOLF 		DEBUG_OFF_WOLF
 
 // Debug register
 #define DEBUG_REGISTER_KEY 	66
@@ -70,7 +70,7 @@ enum {
 	EQ_SATPREVENT = 2,
 };
 
-#define EQ_DEFAULT 		EQ_ENABLED & EQ_SATPREVENT
+#define EQ_DEFAULT_WOLF 		EQ_ENABLED & EQ_SATPREVENT
 
 // EQ gain
 #define EQ_GAIN_DEFAULT 	0
@@ -100,7 +100,7 @@ enum {
 #define STEREO_3D_GAIN_MAX	31
 
 // headphone levels
-#define HEADPHONE_DEFAULT 	50
+#define HEADPHONE_DEFAULT_WOLF 	50
 
 #define HEADPHONE_MAX 		63
 #define HEADPHONE_MIN 		0
@@ -109,7 +109,7 @@ enum {
 #define SPEAKER_DEFAULT 	57
 
 #define SPEAKER_MAX 		63
-#define SPEAKER_MIN 		57
+#define SPEAKER_MIN_WOLF	57
 
 // Microphone control
 #define MICLEVEL_GENERAL	28
