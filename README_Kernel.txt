@@ -22,3 +22,27 @@ HOW TO BUILD KERNEL FOR GT-N7100_ALL
 	- type following command
 	$ tar cvf GT-N7100_ALL.tar zImage
 ################################################################################
+################################################################################
+
+1. How to Build KERNEL FOR GT-N7105
+
+	- get Toolchain
+		From android git server , codesourcery and etc ..
+		 - arm-eabi-4.4.3
+		
+	- edit Makefile
+		edit "CROSS_COMPILE" to right toolchain path(You downloaded).
+		  EX)  CROSS_COMPILE= $(android platform directory you download)/android/prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
+		  Ex)  CROSS_COMPILE=/usr/local/toolchain/arm-eabi-4.4.3/bin/arm-eabi-		// check the location of toolchain
+  	
+        - to Build
+          $ make arch=arm t0lte_04_defconfig
+          $ make
+
+2. Output files
+	- Kernel : arch/arm/boot/zImage
+	- module : drivers/*/*.ko
+
+3. How to Clean	
+		$ make clean
+################################################################################

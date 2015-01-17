@@ -823,12 +823,6 @@ int __pm_runtime_resume(struct device *dev, int rpmflags)
 	might_sleep_if(!(rpmflags & RPM_ASYNC) && !dev->power.irq_safe);
 
 	if (rpmflags & RPM_GET_PUT) {
-#if defined (CONFIG_TARGET_LOCALE_USA) && defined (CONFIG_MACH_T0_USA_VZW)
-		if (!strcmp(dev_name(dev), "1-2"))
-			pr_info("[MIF] %s, usage_count : %d by %pF\n", __func__,
-					atomic_read(&dev->power.usage_count),
-					__builtin_return_address(0));
-#endif
 		atomic_inc(&dev->power.usage_count);
 	}
 
@@ -1205,12 +1199,6 @@ static void update_autosuspend(struct device *dev, int old_delay, int old_use)
 
 		/* If it used to be prevented then allow it. */
 		if (old_use && old_delay < 0) {
-#if defined (CONFIG_TARGET_LOCALE_USA) && defined (CONFIG_MACH_T0_USA_VZW)
-			if (!strcmp(dev_name(dev), "1-2"))
-				pr_info("[MIF] %s, usage_count : %d by %pF\n", __func__,
-						atomic_read(&dev->power.usage_count),
-						__builtin_return_address(0));
-#endif
 			atomic_dec(&dev->power.usage_count);
 		}
 
