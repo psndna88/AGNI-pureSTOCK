@@ -262,7 +262,7 @@ unsigned int sound_control_hook_wm8994_write(unsigned int reg, unsigned int val)
 	}
 
 	// print debug info
-	if (unlikely(debug(DEBUG_VERBOSE)))
+	if (unlikely(debug(DEBUG_VERBOSE_WOLF)))
 		printk("Audio: write hook %d -> %d (Orig:%d), output:%d r:%d\n",
 				reg, newval, val, output_type, is_fmradio);
 
@@ -288,13 +288,13 @@ static int wm8994_write(struct snd_soc_codec *codec, unsigned int reg,
 	}
 
 	// print debug info
-	if (unlikely(debug(DEBUG_VERBOSE)))
+	if (unlikely(debug(DEBUG_VERBOSE_WOLF)))
 		printk("Audio: write register %d -> %d\n", reg, value);
 
 	return wm8994_reg_write(codec->control_data, reg, value);
 }
 
-bool check_for_dapm(enum snd_soc_dapm_type dapm_type, char* widget_name)
+bool check_for_dapm_wolf(enum snd_soc_dapm_type dapm_type, char* widget_name)
 {
 	struct snd_soc_dapm_widget *w;
 
@@ -313,22 +313,22 @@ bool check_for_dapm(enum snd_soc_dapm_type dapm_type, char* widget_name)
 
 bool check_for_fmradio(void) 
 {
-	return check_for_dapm(snd_soc_dapm_line, "FM In");
+	return check_for_dapm_wolf(snd_soc_dapm_line, "FM In");
 }
 
 bool check_for_receiver(void) 
 {
-	return check_for_dapm(snd_soc_dapm_spk, "RCV");
+	return check_for_dapm_wolf(snd_soc_dapm_spk, "RCV");
 }
 
 bool check_for_speaker(void) 
 {
-	return check_for_dapm(snd_soc_dapm_spk, "SPK");
+	return check_for_dapm_wolf(snd_soc_dapm_spk, "SPK");
 }
 
 bool check_for_headphone(void)
 {
-//	return check_for_dapm(snd_soc_dapm_hp, "HP");
+//	return check_for_dapm_wolf(snd_soc_dapm_hp, "HP");
 	if( wm8994->micdet[0].jack != NULL )
 	{
 		if ((wm8994->micdet[0].jack->status & SND_JACK_HEADPHONE) ||
@@ -394,7 +394,7 @@ void set_headphone(void)
         wm8994_write(codec, WM8994_RIGHT_OUTPUT_VOLUME, val | WM8994_HPOUT1_VU);
 
 	// print debug info
-	if (debug(DEBUG_NORMAL))
+	if (debug(DEBUG_NORMAL_WOLF))
 		printk("Audio: %s %d %d\n", __func__, headphone_l, headphone_r);
 
 }
@@ -433,7 +433,7 @@ void set_speaker(void)
         wm8994_write(codec, WM8994_SPEAKER_VOLUME_RIGHT, val | WM8994_SPKOUT_VU);
 
 	// print debug info
-	if (unlikely(debug(DEBUG_NORMAL))) {
+	if (unlikely(debug(DEBUG_NORMAL_WOLF))) {
 		if (privacy_mode && output_type == OUTPUT_HP) {
 			printk("Audio: %s to mute (privacy mode)\n", __func__);
 		} else {
@@ -488,7 +488,7 @@ void set_eq(void)
 
 	wm8994_write(codec, WM8994_AIF1_DAC1_EQ_GAINS_1, val);
 
-	if (debug(DEBUG_NORMAL))
+	if (debug(DEBUG_NORMAL_WOLF))
 		printk("Audio: %s %s\n", __func__, is_eq ? "on":"off");
 
 	// refresh settings for gains, bands, saturation prevention and speaker boost
@@ -529,7 +529,7 @@ void set_eq_gains(void)
 	gain5 = eq_gains[out][4];
 
 	// print debug info
-	if (unlikely(debug(DEBUG_NORMAL)))
+	if (unlikely(debug(DEBUG_NORMAL_WOLF)))
 		printk("Audio: %s (%d) %d %d %d %d %d\n", __func__,
 			output_type,
 			gain1, gain2, gain3, gain4, gain5);
@@ -591,7 +591,7 @@ void set_eq_bands()
 		} 
 	}
 
-	if (unlikely(debug(DEBUG_NORMAL))) {
+	if (unlikely(debug(DEBUG_NORMAL_WOLF))) {
 		for(i = 0; i < 5; i++) {
 			printk("Audio: %s %d (%d) %d %d %d %d\n",
 				__func__, i+1, output_type,
@@ -621,7 +621,7 @@ void set_eq_satprevention(void)
 	}
 
 	// print debug information
-	if (unlikely(debug(DEBUG_NORMAL))) {
+	if (unlikely(debug(DEBUG_NORMAL_WOLF))) {
 		/* Output current equalizer status and saturation prevention mode */
 		if (is_eq && (eq & EQ_SATPREVENT || eq_speaker)) {
 			printk("Audio: %s to on (%d)\n", __func__, output_type);
@@ -665,7 +665,7 @@ void set_speaker_boost(void)
 	wm8994_write(codec, WM8994_CLASSD, val);
 
 	// print debug info
-	if (unlikely(debug(DEBUG_NORMAL)))
+	if (unlikely(debug(DEBUG_NORMAL_WOLF)))
 		printk("Audio: %s %d\n", __func__, boostval);
 }
 
@@ -691,7 +691,7 @@ void set_dac_direct(void)
 
 	// take value of the right channel as reference, check for the bypass bit
 	// and print debug information
-	if (unlikely(debug(DEBUG_NORMAL)))
+	if (unlikely(debug(DEBUG_NORMAL_WOLF)))
 		printk("Audio: set_dac_direct %s\n", 
 			(val & WM8994_DAC1R_TO_HPOUT1R) ? "on":"off");
 
@@ -740,7 +740,7 @@ void set_dac_oversampling()
 	else
 		val &= ~WM8994_DAC_OSR128;
 
-	if (unlikely(debug(DEBUG_NORMAL)))
+	if (unlikely(debug(DEBUG_NORMAL_WOLF)))
 		printk("Audio: %s %s\n", __func__, dac_oversampling ? "on":"off");
 
 	// write value back to audio hub
@@ -768,7 +768,7 @@ void set_fll_tuning(void)
 	// write value back to audio hub
 	wm8994_write(codec, WM8994_FLL1_CONTROL_4, val);
 
-	if (unlikely(debug(DEBUG_NORMAL)))
+	if (unlikely(debug(DEBUG_NORMAL_WOLF)))
 		printk("Audio: %s %s\n", __func__, dac_oversampling ? "on":"off");
 }
 
@@ -792,10 +792,10 @@ void set_stereo_3D(void)
 	if (stereo_3D_gain != STEREO_3D_GAIN_OFF) {
 		val |= (stereo_3D_gain << WM8994_AIF1DAC1_3D_GAIN_SHIFT) | WM8994_AIF1DAC1_3D_ENA;
 
-		if (unlikely(debug(DEBUG_NORMAL)))
+		if (unlikely(debug(DEBUG_NORMAL_WOLF)))
 			printk("Audio: set_stereo_3D set to %d\n", stereo_3D_gain);
 	} else
-		if (unlikely(debug(DEBUG_NORMAL)))
+		if (unlikely(debug(DEBUG_NORMAL_WOLF)))
 			printk("Audio: set_stereo_3D off\n");
 
 	// write value back to audio hub
@@ -822,7 +822,7 @@ void set_mono_downmix(void)
 		
 		wm8994_write(codec, WM8994_AIF1_DAC1_FILTERS_1, val);
 
-		if (debug(DEBUG_NORMAL))
+		if (debug(DEBUG_NORMAL_WOLF))
 			printk("Audio: %s set to %s\n", __func__, mono_downmix ? "on":"off");
 	}
 }
@@ -867,7 +867,7 @@ void set_mic_level(void)
 //	wm8994_write(codec, WM8994_RIGHT_LINE_INPUT_3_4_VOLUME, mic_level | WM8994_IN1_VU);
 
 	// print debug info
-	if (debug(DEBUG_NORMAL))
+	if (debug(DEBUG_NORMAL_WOLF))
 		printk("Audio: set_mic_level %d\n", mic_level);
 }
 
@@ -893,8 +893,8 @@ void initialize_global_variables(void)
 {
 	// set global variables to standard values
 
-	headphone_l = HEADPHONE_DEFAULT;
-	headphone_r = HEADPHONE_DEFAULT;
+	headphone_l = HEADPHONE_DEFAULT_WOLF;
+	headphone_r = HEADPHONE_DEFAULT_WOLF;
 
 	speaker_l = SPEAKER_DEFAULT;
 	speaker_r = SPEAKER_DEFAULT;
@@ -903,7 +903,7 @@ void initialize_global_variables(void)
 
 	memcpy(eq_bands, eq_bands_original, sizeof(eq_bands_original));
 
-	eq = EQ_DEFAULT;
+	eq = EQ_DEFAULT_WOLF;
 
 	dac_direct = false;
 
@@ -928,7 +928,7 @@ void initialize_global_variables(void)
 	is_eq = false;
 
 	// print debug info
-	if (debug(DEBUG_NORMAL))
+	if (debug(DEBUG_NORMAL_WOLF))
 		printk("Audio: %s complete\n", __func__);
 }
 
@@ -936,7 +936,7 @@ void initialize_global_variables(void)
 void reset_sound_control(void)
 {
 	// print debug info
-	if (debug(DEBUG_NORMAL))
+	if (debug(DEBUG_NORMAL_WOLF))
 		printk("Audio: %s start\n", __func__);
 
 	// load all default values
@@ -960,7 +960,7 @@ void reset_sound_control(void)
 	is_fmradio = check_for_fmradio();
 
 	// print debug info
-	if (debug(DEBUG_NORMAL))
+	if (debug(DEBUG_NORMAL_WOLF))
 		printk("Audio: %s complete\n", __func__);
 }
 
@@ -1357,7 +1357,7 @@ static ssize_t store_sound_property(struct device *dev,
 
 		case SPEAKER_LEFT:
 		case SPEAKER_RIGHT:
-			sanitize_min_max(val, SPEAKER_MIN, SPEAKER_MAX);
+			sanitize_min_max(val, SPEAKER_MIN_WOLF, SPEAKER_MAX);
 
 			if(offset == SPEAKER_LEFT)
 				speaker_l = val;
@@ -1493,7 +1493,7 @@ static int sound_control_init(void)
 	initialize_global_variables();
 
 	// One-time only initialisations
-	debug_level = DEBUG_DEFAULT;
+	debug_level = DEBUG_DEFAULT_WOLF;
 	regdump_bank = 0;
 
 	// Print debug info
