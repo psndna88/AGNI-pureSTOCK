@@ -2183,6 +2183,7 @@ static int _wm8994_set_fll(struct snd_soc_codec *codec, int id, int src,
 	u16 reg, clk1, aif_reg, aif_src;
 	unsigned long timeout;
 	bool was_enabled;
+	dev_info(codec->dev, "%s ++\n", __func__);
 
 	switch (id) {
 	case WM8994_FLL1:
@@ -2213,10 +2214,6 @@ static int _wm8994_set_fll(struct snd_soc_codec *codec, int id, int src,
 	case WM8994_FLL_SRC_MCLK2:
 	case WM8994_FLL_SRC_LRCLK:
 	case WM8994_FLL_SRC_BCLK:
-		break;
-	case WM8994_FLL_SRC_INTERNAL:
-		freq_in = 12000000;
-		freq_out = 12000000;
 		break;
 	default:
 		return -EINVAL;
@@ -2281,11 +2278,9 @@ static int _wm8994_set_fll(struct snd_soc_codec *codec, int id, int src,
 				    fll.n << WM8994_FLL1_N_SHIFT);
 
 	snd_soc_update_bits(codec, WM8994_FLL1_CONTROL_5 + reg_offset,
-			    WM8994_FLL1_FRC_NCO | WM8958_FLL1_BYP |
+			    WM8958_FLL1_BYP |
 			    WM8994_FLL1_REFCLK_DIV_MASK |
 			    WM8994_FLL1_REFCLK_SRC_MASK,
-			    ((src == WM8994_FLL_SRC_INTERNAL)
-			     << WM8994_FLL1_FRC_NCO_SHIFT) |
 			    (fll.clk_ref_div << WM8994_FLL1_REFCLK_DIV_SHIFT) |
 			    (src - 1));
 
@@ -2311,15 +2306,13 @@ static int _wm8994_set_fll(struct snd_soc_codec *codec, int id, int src,
 			}
 		}
 
-		reg = WM8994_FLL1_ENA;
-
 		if (fll.k)
-			reg |= WM8994_FLL1_FRAC;
-		if (src == WM8994_FLL_SRC_INTERNAL)
-			reg |= WM8994_FLL1_OSC_ENA;
+			reg = WM8994_FLL1_ENA | WM8994_FLL1_FRAC;
+		else
+			reg = WM8994_FLL1_ENA;
 		snd_soc_update_bits(codec, WM8994_FLL1_CONTROL_1 + reg_offset,
-				    WM8994_FLL1_ENA | WM8994_FLL1_OSC_ENA |
-				    WM8994_FLL1_FRAC, reg);
+				    WM8994_FLL1_ENA | WM8994_FLL1_FRAC,
+				    reg);
 
 		if (wm8994->fll_locked_irq) {
 			timeout = wait_for_completion_timeout(&wm8994->fll_locked[id],
@@ -2354,7 +2347,7 @@ out:
 	wm8994->fll[id].src = src;
 
 	configure_clock(codec);
-
+	dev_info(codec->dev, "%s --\n", __func__);
 	return 0;
 }
 
@@ -2520,6 +2513,10 @@ static int wm8994_set_bias_level(struct snd_soc_codec *codec,
 
 	case SND_SOC_BIAS_STANDBY:
 		if (codec->dapm.bias_level == SND_SOC_BIAS_OFF) {
+#if 0 /* To do */
+			pm_runtime_get_sync(codec->dev);
+#endif
+
 			switch (control->type) {
 			case WM8994:
 				if (wm8994->revision < 4) {
@@ -2585,8 +2582,13 @@ static int wm8994_set_bias_level(struct snd_soc_codec *codec,
 		break;
 
 	case SND_SOC_BIAS_OFF:
-		if (codec->dapm.bias_level == SND_SOC_BIAS_STANDBY)
+		if (codec->dapm.bias_level == SND_SOC_BIAS_STANDBY) {
 			wm8994->cur_fw = NULL;
+
+#if 0 /* To do */
+			pm_runtime_put(codec->dev);
+#endif
+		}
 		break;
 	}
 

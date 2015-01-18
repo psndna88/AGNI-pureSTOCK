@@ -115,13 +115,7 @@
 #define MAX77693_CHG_CV_PRM_SHIFT		0
 #define MAX77693_CHG_CV_PRM_4_20V		0x16
 #define MAX77693_CHG_CV_PRM_4_30V		0x1A
-
-#if defined(CONFIG_MACH_GC2PD)
-#define MAX77693_CHG_CV_PRM_4_35V		0x1C
-#else
 #define MAX77693_CHG_CV_PRM_4_35V		0x1D
-#endif
-
 #define MAX77693_CHG_CV_PRM_4_40V		0x1F
 
 /* MAX77693_CHG_REG_CHG_CNFG_06 */
@@ -245,9 +239,9 @@ struct max77693_charger_data {
 #endif
 };
 
-#if defined(CONFIG_MACH_KONA)
-bool mhl_connected = false;
-#endif
+#if defined(CONFIG_MACH_KONA)		
+bool mhl_connected = false; 
+#endif			
 
 static void max77693_dump_reg(struct max77693_charger_data *chg_data)
 {
@@ -904,14 +898,14 @@ chg_det_err:
 		state = POWER_SUPPLY_TYPE_BATTERY;
 		break;
 	case 0x1:		/* USB cabled */
-#if defined(CONFIG_MACH_KONA)
+#if defined(CONFIG_MACH_KONA)		
 		if(mu_adc1k == 0x80) //MHL charging
 		{
 			state = POWER_SUPPLY_TYPE_MAINS;
 			mhl_connected = true;
 		}
-		else
-#endif
+		else	
+#endif			
 			state = POWER_SUPPLY_TYPE_USB;
 
 #ifdef CONFIG_BATTERY_WPC_CHARGER
@@ -928,7 +922,7 @@ chg_det_err:
 	case 0x5:		/* Apple 1A or 2A charger */
 	case 0x6:		/* Special charger */
 		state = POWER_SUPPLY_TYPE_MAINS;
-#if defined(CONFIG_MACH_KONA)
+#if defined(CONFIG_MACH_KONA)		
 		mhl_connected = false;
 #endif
 		break;
@@ -1352,21 +1346,13 @@ static void max77693_softreg_work(struct work_struct *work)
 	u8 mu_st2, vbvolt;
 	u8 cnfg_09;
 	u8 reg_data;
-	#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_KONALTE_USA_ATT)
-	int cable_type_test = 0;
-	#endif
+	int cable_type = 0;
 	int in_curr = 0;
 	pr_debug("%s\n", __func__);
 	
-	#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_KONALTE_USA_ATT)
-	cable_type_test = max77693_get_cable_type(chg_data);
-	if (cable_type_test == POWER_SUPPLY_TYPE_USB)
-		return;
-	#endif
-
-	#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_KONALTE_USA_ATT)
-	cable_type_test = max77693_get_cable_type(chg_data);
-	if (cable_type_test == POWER_SUPPLY_TYPE_USB)
+	cable_type = max77693_get_cable_type(chg_data);
+	#if defined(CONFIG_MACH_T0)
+	if (cable_type == POWER_SUPPLY_TYPE_USB)
 		return;
 	#endif
 
@@ -1512,7 +1498,7 @@ static void max77693_recovery_work(struct work_struct *work)
 		pr_info("%s: try to recovery, cnt(%d)\n", __func__,(chg_data->soft_reg_recovery_cnt + 1));
 		/* release softreg state */
 		chg_data->soft_reg_state = false;
-
+		
 		max77693_set_input_current(chg_data,chg_data->charging_current);
 #else
 	if ((chg_data->soft_reg_recovery_cnt < RECOVERY_CNT) && (
@@ -1552,7 +1538,7 @@ static void max77693_recovery_work(struct work_struct *work)
 #if defined(CONFIG_MACH_KONA)
 		in_curr = max77693_get_input_current(chg_data);
 		pr_info("%s: read input_curr (%dmA)\n", __func__, in_curr);
-
+		
 		if(in_curr < chg_data->charging_current)
 		{
 			chg_data->soft_reg_recovery_cnt = 0;
@@ -1627,56 +1613,12 @@ static int max77693_charger_set_property(struct power_supply *psy,
 	struct max77693_charger_data *chg_data = container_of(psy,
 						  struct max77693_charger_data,
 						  charger);
-	union power_supply_propval value;
-	struct power_supply *ps_psy = power_supply_get_by_name("ps");
-	u8 chg_cnfg_00;
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
 		max77693_set_charger_state(chg_data, val->intval);
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
-		if (val->intval == POWER_SUPPLY_TYPE_POWER_SHARING) {
-			/* check and unlock */
-			max77693_charger_unlock(chg_data);
-
-			ps_psy->get_property(ps_psy,
-					POWER_SUPPLY_PROP_STATUS,
-					&value);
-			max77693_read_reg(chg_data->max77693->i2c,
-					  MAX77693_CHG_REG_CHG_CNFG_00,
-					  &chg_cnfg_00);
-
-			chg_cnfg_00 &= ~(CHG_CNFG_00_CHG_MASK
-					 | CHG_CNFG_00_OTG_MASK
-					 | CHG_CNFG_00_BUCK_MASK
-					 | CHG_CNFG_00_BOOST_MASK
-					 | CHG_CNFG_00_DIS_MUIC_CTRL_MASK);
-
-			if (value.intval) {
-				chg_cnfg_00 |= (CHG_CNFG_00_OTG_MASK
-						| CHG_CNFG_00_BOOST_MASK
-						| CHG_CNFG_00_DIS_MUIC_CTRL_MASK);
-
-				max77693_write_reg(chg_data->max77693->i2c,
-						   MAX77693_CHG_REG_CHG_CNFG_00,
-						   chg_cnfg_00);
-#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_KONA)
-				gpio_request(GPIO_OTG_EN, "USB_OTG_EN");
-				gpio_direction_output(GPIO_OTG_EN, 1);
-				gpio_free(GPIO_OTG_EN);
-#endif
-				pr_info("%s : ps enable, chg_cnfg_00(0x%x)\n", __func__, chg_cnfg_00);
-				max77693_dump_reg(chg_data);
-			} else {
-				chg_cnfg_00 |= CHG_CNFG_00_BUCK_MASK;
-				max77693_write_reg(chg_data->max77693->i2c,
-						   MAX77693_CHG_REG_CHG_CNFG_00,
-						   chg_cnfg_00);
-				pr_info("%s : ps disable, chg_cnfg_00(0x%x)\n", __func__, chg_cnfg_00);
-			}
-			break;
-		}
 #if !defined(USE_CHGIN_INTR)
 		max77693_set_muic_cb_type(chg_data, val->intval);
 #else
@@ -1791,9 +1733,6 @@ static irqreturn_t max77693_charger_irq(int irq, void *data)
 	u8 dtls_00, thm_dtls, chgin_dtls;
 	u8 dtls_01, chg_dtls, bat_dtls;
 	u8 mu_st2, vbvolt;
-	#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_KONALTE_USA_ATT)
-	int cable_type_test = 0;
-	#endif
 	pr_info("%s: irq(%d)\n", __func__, irq);
 
 	mutex_lock(&chg_data->irq_lock);
@@ -1859,15 +1798,6 @@ static irqreturn_t max77693_charger_irq(int irq, void *data)
 		pr_info("%s: abnormal power state: chgin(%d), vb(%d), chg(%d)\n",
 					__func__, chgin_dtls, vbvolt, chg_dtls);
 
-		#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_KONALTE_USA_ATT)
-		cable_type_test = max77693_get_cable_type(chg_data);
-			if (cable_type_test == POWER_SUPPLY_TYPE_USB)
-			{
-				chg_data->soft_reg_state = false;
-				goto skip_softreg_usb;
-			}
-		#endif
-
 		/* set soft regulation progress */
 		chg_data->soft_reg_ing = true;
 
@@ -1882,10 +1812,6 @@ static irqreturn_t max77693_charger_irq(int irq, void *data)
 		schedule_delayed_work(&chg_data->softreg_work,
 				msecs_to_jiffies(SW_REG_STEP_DELAY));
 	}
-#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_KONALTE_USA_ATT)
-skip_softreg_usb:
-#endif
-
 #endif
 
 	cancel_delayed_work(&chg_data->update_work);
@@ -2342,29 +2268,6 @@ static int max77693_charger_resume(struct device *dev)
 	return 0;
 }
 
-void max77693_charger_shutdown(struct device *dev)
-{
-	struct max77693_dev *max77693 =
-				dev_get_drvdata(dev->parent);
-	u8 reg_data;
-
-	if (!max77693->i2c) {
-		pr_err("%s: no max77693 i2c client\n", __func__);
-		return;
-	}
-	reg_data = 0x04;
-	max77693_write_reg(max77693->i2c,
-		MAX77693_CHG_REG_CHG_CNFG_00, reg_data);
-	reg_data = 0x19;
-	max77693_write_reg(max77693->i2c,
-		MAX77693_CHG_REG_CHG_CNFG_09, reg_data);
-	reg_data = 0x19;
-	max77693_write_reg(max77693->i2c,
-		MAX77693_CHG_REG_CHG_CNFG_10, reg_data);
-	pr_info("func:%s \n", __func__);
-}
-
-
 static SIMPLE_DEV_PM_OPS(max77693_charger_pm_ops, max77693_charger_suspend,
 			max77693_charger_resume);
 
@@ -2373,7 +2276,6 @@ static struct platform_driver max77693_charger_driver = {
 		.owner	= THIS_MODULE,
 		.name	= "max77693-charger",
 		.pm	= &max77693_charger_pm_ops,
-		.shutdown = max77693_charger_shutdown,
 	},
 	.probe		= max77693_charger_probe,
 	.remove		= __devexit_p(max77693_charger_remove),
