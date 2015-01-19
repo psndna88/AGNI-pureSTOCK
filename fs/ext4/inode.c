@@ -2924,6 +2924,7 @@ static int ext4_da_writepages(struct address_space *mapping,
 	struct ext4_sb_info *sbi = EXT4_SB(mapping->host->i_sb);
 	pgoff_t done_index = 0;
 	pgoff_t end;
+	struct blk_plug plug;
 
 	trace_ext4_da_writepages(inode, wbc);
 
@@ -3002,6 +3003,7 @@ retry:
 	if (wbc->sync_mode == WB_SYNC_ALL || wbc->tagged_writepages)
 		tag_pages_for_writeback(mapping, index, end);
 
+	blk_start_plug(&plug);
 	while (!ret && wbc->nr_to_write > 0) {
 
 		/*
@@ -3020,6 +3022,7 @@ retry:
 			ext4_msg(inode->i_sb, KERN_CRIT, "%s: jbd2_start: "
 			       "%ld pages, ino %lu; err %d", __func__,
 				wbc->nr_to_write, inode->i_ino, ret);
+			blk_finish_plug(&plug);
 			goto out_writepages;
 		}
 
@@ -3066,6 +3069,7 @@ retry:
 			 */
 			break;
 	}
+	blk_finish_plug(&plug);
 	if (!io_done && !cycled) {
 		cycled = 1;
 		index = 0;
