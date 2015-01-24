@@ -886,6 +886,28 @@ int s3cfb_resume(struct platform_device *pdev)
 #define s3cfb_resume NULL
 #endif
 
+#ifndef CONFIG_FB_S5P_GD2EVF
+void s3cfb_shutdown(struct platform_device *pdev)
+{
+	struct s3c_platform_fb *pdata = to_fb_plat(&pdev->dev);
+
+	dev_info(&pdev->dev, "+%s\n", __func__);
+
+#if defined(CONFIG_FB_S5P_MIPI_DSIM)
+	if (lcd_early_suspend)
+		lcd_early_suspend();
+#endif
+
+#if defined(CONFIG_FB_S5P_MIPI_DSIM)
+	s5p_dsim_early_suspend();
+#endif
+
+	dev_info(&pdev->dev, "-%s\n", __func__);
+
+	return;
+}
+#endif
+
 #ifdef CONFIG_FB_S5P_GD2EVF
 static int s3cfb_disable(struct s3cfb_global *fbdev)
 {
@@ -1429,6 +1451,9 @@ static struct platform_driver s3cfb_driver = {
 		.pm	= &s3cfb_pm_ops,
 #endif
 	},
+#ifndef CONFIG_FB_S5P_GD2EVF
+	.shutdown	= s3cfb_shutdown,
+#endif
 };
 
 struct fb_ops s3cfb_ops = {

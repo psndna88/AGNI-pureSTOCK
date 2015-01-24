@@ -721,7 +721,7 @@ retry:
 				  &raw_entry->adate, NULL);
 	}
 	spin_unlock(&sbi->inode_hash_lock);
-	mark_buffer_dirty(bh);
+	mark_buffer_dirty_sync(bh);
 	err = 0;
 	if (wait)
 		err = sync_dirty_buffer(bh);
@@ -1529,7 +1529,7 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 		sbi->fat_bits = (total_clusters > MAX_FAT12) ? 16 : 12;
 
 	/* check that FAT table does not overflow */
-	fat_clusters = calc_fat_clusters(sb);
+	fat_clusters = sbi->fat_length * sb->s_blocksize * 8 / sbi->fat_bits;
 	total_clusters = min(total_clusters, fat_clusters - FAT_START_ENT);
 	if (total_clusters > MAX_FAT(sb)) {
 		if (!silent)

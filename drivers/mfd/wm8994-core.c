@@ -367,7 +367,16 @@ static int wm8994_suspend(struct device *dev)
 	/* Explicitly put the device into reset in case regulators
 	 * don't get disabled in order to ensure consistent restart.
 	 */
-	wm8994_reg_write(wm8994, WM8994_SOFTWARE_RESET, 0x8994);
+	wm8994_reg_write(wm8994, WM8994_SOFTWARE_RESET,
+			 wm8994_reg_read(wm8994, WM8994_SOFTWARE_RESET));
+
+	/* Restore GPIO registers to prevent problems with mismatched
+	 * pin configurations.
+	 */
+	ret = wm8994_write(wm8994, WM8994_GPIO_1, WM8994_NUM_GPIO_REGS * 2,
+			   &wm8994->gpio_regs);
+	if (ret < 0)
+		dev_err(dev, "Failed to restore GPIO registers: %d\n", ret);
 
 	wm8994->suspended = true;
 
