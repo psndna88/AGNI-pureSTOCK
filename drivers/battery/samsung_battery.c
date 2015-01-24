@@ -847,7 +847,7 @@ static bool battery_fullcharged_cond(struct battery_info *info)
 	pr_debug("%s\n", __func__);
 
 	/* max voltage - RECHG_DROP_VALUE: recharge voltage */
-	f_cond_vcell = info->pdata->recharge_voltage;
+	f_cond_vcell = info->pdata->voltage_max - RECHG_DROP_VALUE;
 	/* max soc - 5% */
 	f_cond_soc = 95;
 
@@ -1751,21 +1751,13 @@ charge_ok:
 		if (!info->pdata->suspend_chging)
 			wake_lock(&info->charge_wake_lock);
 		battery_charge_control(info, info->pdata->chg_curr_usb,
-#ifdef CONFIG_BATTERY_MAX77693_CHARGER_CONTROL
-						info->pdata->in_curr_usb);
-#else
 						info->pdata->chg_curr_usb);
-#endif
 		break;
 	case POWER_SUPPLY_TYPE_USB_CDP:
 		if (!info->pdata->suspend_chging)
 			wake_lock(&info->charge_wake_lock);
 		battery_charge_control(info, info->pdata->chg_curr_cdp,
-#ifdef CONFIG_BATTERY_MAX77693_CHARGER_CONTROL
-						info->pdata->in_curr_cdp);
-#else
 						info->pdata->chg_curr_cdp);
-#endif
 		break;
 	case POWER_SUPPLY_TYPE_DOCK:
 		if (!info->pdata->suspend_chging)
@@ -2604,10 +2596,6 @@ gpio_bat_det_finish:
 		info->entry->read_proc = battery_info_proc;
 		info->entry->data = (struct battery_info *)info;
 	}
-#endif
-
-#ifdef CONFIG_BATTERY_MAX77693_CHARGER_CONTROL
-	charger_control_init(info);
 #endif
 
 	pr_info("%s: probe complete\n", __func__);
