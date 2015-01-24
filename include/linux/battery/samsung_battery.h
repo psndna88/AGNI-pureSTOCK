@@ -130,7 +130,6 @@ struct battery_info {
 	unsigned int health_state;
 
 	/* SIOP */
-	unsigned int siop_state;
 	unsigned int siop_charge_current;
 	unsigned int siop_lv;
 

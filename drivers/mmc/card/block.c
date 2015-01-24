@@ -422,6 +422,13 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 	cmd.arg = idata->ic.arg;
 	cmd.flags = idata->ic.flags;
 
+	if( cmd.opcode == MMC_IOC_CLOCK )
+	{
+		mmc_set_clock(card->host, cmd.arg);
+		err = 0;
+		goto cmd_done;
+	}
+
 	if (idata->buf_bytes) {
 		int len;
 		data.blksz = idata->ic.blksz;
