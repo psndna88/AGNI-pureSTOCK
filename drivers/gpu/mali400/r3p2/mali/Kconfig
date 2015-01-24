@@ -87,12 +87,13 @@ config MALI_R3P2_REL_3_API_29
 	bool "Support MALI R3P2 rel 3 blobs (API 29)"
 	help
 	  This enables support for SAMSUNG MALI R3P2 rel3 blobs shipped with SAMSUNG 4.4.4 roms
-
-config MALI_R3P2_REL_3_API_ALL
-	bool "IGNORE API COMPATIBILITY CHECK"
-	help
-	  This disables the MALI API checking and assumes compatibility.
-	  
+ 
 endchoice
+
+config MALI_R3P2_REL_3_API_SKIP_COMPATIBILITY_CHECKING
+	bool "IGNORE MALI R3P2 rel 3 blobs API COMPATIBILITY CHECK"
+	help
+	  This disables the MALI API checking and assumes compatibility, thereby not resorting to black screen
+	  if incompatible blobs are used.  (Use with caution !)
 
 

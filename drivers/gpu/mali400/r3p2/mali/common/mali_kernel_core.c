@@ -1061,19 +1061,18 @@ _mali_osk_errcode_t _mali_ukk_get_api_version( _mali_uk_get_api_version_s *args 
 	MALI_DEBUG_ASSERT_POINTER(args);
 	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
 
-#ifndef CONFIG_MALI_R3P2_REL_3_API_ALL
+#ifndef CONFIG_MALI_R3P2_REL_3_API_SKIP_COMPATIBILITY_CHECKING
 	/* check compatability */
 	if ( args->version == _MALI_UK_API_VERSION )
 	{
+#endif
 		args->compatible = 1;
+#ifndef CONFIG_MALI_R3P2_REL_3_API_SKIP_COMPATIBILITY_CHECKING
 	}
 	else
 	{
 		args->compatible = 0;
 	}
-#endif
-#ifdef CONFIG_MALI_R3P2_REL_3_API_ALL
-		args->compatible = 1; /* ignore API check */
 #endif
 	args->version = _MALI_UK_API_VERSION; /* report our version */
 
