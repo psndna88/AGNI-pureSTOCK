@@ -218,7 +218,9 @@ struct touchkey_i2c {
 	int (*power)(int on);
 	struct work_struct update_work;
 	int update_status;
+#ifdef CONFIG_AGNI_PURECM_MODE
 	atomic_t keypad_enable;
+#endif
 };
 
 #endif /* _LINUX_CYPRESS_TOUCHKEY_I2C_H */

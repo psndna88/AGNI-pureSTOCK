@@ -54,7 +54,9 @@ static struct device_attribute factory_attrs[] = {
 	FACTORY_ATTR(batt_vfocv),
 	FACTORY_ATTR(batt_lp_charging),
 	FACTORY_ATTR(batt_charging_source),
+#ifdef CONFIG_AGNI_PURECM_MODE
 	FACTORY_ATTR(charging_enabled),
+#endif
 	FACTORY_ATTR(test_mode),
 	FACTORY_ATTR(batt_error_test),
 	FACTORY_ATTR(siop_activated),
@@ -92,7 +94,9 @@ enum {
 	BATT_VFOCV,
 	BATT_LP_CHARGING,
 	BATT_CHARGING_SOURCE,
+#ifdef CONFIG_AGNI_PURECM_MODE
 	CHARGING_ENABLED,
+#endif
 	TEST_MODE,
 	BATT_ERROR_TEST,
 	SIOP_ACTIVATED,
@@ -206,6 +210,7 @@ static ssize_t factory_show_property(struct device *dev,
 			battery_get_info(info, POWER_SUPPLY_PROP_ONLINE);
 		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", val);
 		break;
+#ifdef CONFIG_AGNI_PURECM_MODE
 	case CHARGING_ENABLED:
 		if (info->charge_real_state == POWER_SUPPLY_STATUS_CHARGING)
 			val = ENABLE;
@@ -213,6 +218,7 @@ static ssize_t factory_show_property(struct device *dev,
 			val = DISABLE;
 		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", val);
 		break;
+#endif
 	case TEST_MODE:
 		val = info->battery_test_mode;
 		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", val);
