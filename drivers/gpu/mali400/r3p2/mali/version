@@ -1,0 +1,143 @@
+common/mali_kernel_vsync.c:	_mali_uk_vsync_event event = (_mali_uk_vsync_event)args->event;
+common/mali_ukk.h: * If the request fails args->status is set to _MALI_UK_START_JOB_NOT_STARTED_DO_REQUEUE and you can
+common/mali_ukk.h: * existing one returned, otherwise the new job is started and the status field args->status is set to
+common/mali_ukk.h: * If the request fails args->status is set to _MALI_UK_START_JOB_NOT_STARTED_DO_REQUEUE and you can
+common/mali_ukk.h: * existing one returned, otherwise the new job is started and the status field args->status is set to
+common/mali_memory.c:  	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_memory.c:	session_data = (struct mali_session_data *)args->ctx;
+common/mali_memory.c:	if ( ! args->size) MALI_ERROR(_MALI_OSK_ERR_INVALID_ARGS);
+common/mali_memory.c:	if ( args->size % _MALI_OSK_MALI_PAGE_SIZE ) MALI_ERROR(_MALI_OSK_ERR_INVALID_ARGS);
+common/mali_memory.c:	                  args->secure_id, args->mali_address, args->size));
+common/mali_memory.c:	ump_mem = ump_dd_handle_create_from_secure_id( (int)args->secure_id ) ;
+common/mali_memory.c:	descriptor->size = args->size;
+common/mali_memory.c:	descriptor->mali_address = args->mali_address;
+common/mali_memory.c:	if (args->flags & _MALI_MAP_EXTERNAL_MAP_GUARD_PAGE)
+common/mali_memory.c:	args->cookie = md;
+common/mali_memory.c:	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_memory.c:	session_data = (struct mali_session_data *)args->ctx;
+common/mali_memory.c:	if (_MALI_OSK_ERR_OK != mali_descriptor_mapping_get(session_data->descriptor_mapping, args->cookie, (void**)&descriptor))
+common/mali_memory.c:		MALI_DEBUG_PRINT(1, ("Invalid memory descriptor %d used to release ump memory\n", args->cookie));
+common/mali_memory.c:	descriptor = mali_descriptor_mapping_free(session_data->descriptor_mapping, args->cookie);
+common/mali_memory.c:	if (NULL == args->ctx)
+common/mali_memory.c:	args->size = _mali_osk_mem_write_safe(args->dest, args->src, args->size);
+common/mali_memory.c:	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_memory.c:	session_data = (struct mali_session_data *)args->ctx;
+common/mali_memory.c:	if ( ! args->size) MALI_ERROR(_MALI_OSK_ERR_INVALID_ARGS);
+common/mali_memory.c:	if ( args->size % _MALI_OSK_MALI_PAGE_SIZE ) MALI_ERROR(_MALI_OSK_ERR_INVALID_ARGS);
+common/mali_memory.c:	        (void*)args->phys_addr,
+common/mali_memory.c:	        (void*)(args->phys_addr + args->size -1),
+common/mali_memory.c:	        (void*)args->mali_address)
+common/mali_memory.c:	if (_MALI_OSK_ERR_OK != mali_mem_validation_check(args->phys_addr, args->size))
+common/mali_memory.c:	info[0] = args->phys_addr;
+common/mali_memory.c:	info[1] = args->size;
+common/mali_memory.c:	descriptor->size = args->size;
+common/mali_memory.c:	descriptor->mali_address = args->mali_address;
+common/mali_memory.c:	if (args->flags & _MALI_MAP_EXTERNAL_MAP_GUARD_PAGE)
+common/mali_memory.c:	args->cookie = md;
+common/mali_memory.c:	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_memory.c:	session_data = (struct mali_session_data *)args->ctx;
+common/mali_memory.c:	if (_MALI_OSK_ERR_OK != mali_descriptor_mapping_get(session_data->descriptor_mapping, args->cookie, (void**)&descriptor))
+common/mali_memory.c:		MALI_DEBUG_PRINT(1, ("Invalid memory descriptor %d used to unmap external memory\n", args->cookie));
+common/mali_memory.c:	old_value = mali_descriptor_mapping_free(session_data->descriptor_mapping, args->cookie);
+common/mali_memory.c:	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_memory.c:	args->memory_size = 2 * 1024 * 1024 * 1024UL; /* 2GB address space */
+common/mali_memory.c:	args->mali_address_base = 1 * 1024 * 1024 * 1024UL; /* staring at 1GB, causing this layout: (0-1GB unused)(1GB-3G usage by Mali)(3G-4G unused) */
+common/mali_memory.c:	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_memory.c:	session_data = (struct mali_session_data *)args->ctx;
+common/mali_memory.c:	descriptor->size = args->size;
+common/mali_memory.c:	descriptor->mali_address = args->phys_addr;
+common/mali_memory.c:	descriptor->process_addr_mapping_info = args->ukk_private; /* save to be used during physical manager callback */
+common/mali_memory.c:	descriptor->cache_settings = (u32) args->cache_settings ;
+common/mali_memory.c:		args->mapping = descriptor->mapping;
+common/mali_memory.c:		args->cookie = (u32)descriptor;
+common/mali_memory.c:	descriptor = (mali_memory_allocation *)args->cookie;
+common/mali_memory.c:	/** @note args->context unused; we use the memory_session from the cookie */
+common/mali_memory.c:	/* args->mapping and args->size are also discarded. They are only necessary
+common/mali_memory.c:	descriptor = (mali_memory_allocation *)args->cookie;
+common/mali_memory.c:	/** @note args->context unused; we use the memory_session from the cookie */
+common/mali_memory.c:	/* args->mapping and args->size are also discarded. They are only necessary
+common/mali_mmu_page_directory.c:  	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_mmu_page_directory.c:	session_data = (struct mali_session_data *)(args->ctx);
+common/mali_mmu_page_directory.c:	args->size = info.register_writes_size + info.page_table_dump_size;
+common/mali_mmu_page_directory.c:  	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_mmu_page_directory.c:	MALI_CHECK_NON_NULL(args->buffer, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_mmu_page_directory.c:	session_data = (struct mali_session_data *)(args->ctx);
+common/mali_mmu_page_directory.c:	info.buffer_left = args->size;
+common/mali_mmu_page_directory.c:	info.buffer = args->buffer;
+common/mali_mmu_page_directory.c:	args->register_writes = info.buffer;
+common/mali_mmu_page_directory.c:	args->page_table_dump = info.buffer;
+common/mali_mmu_page_directory.c:	args->register_writes_size = info.register_writes_size;
+common/mali_mmu_page_directory.c:	args->page_table_dump_size = info.page_table_dump_size;
+common/mali_kernel_core.c:	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_kernel_core.c:	if ( args->version == _MALI_UK_API_VERSION )
+common/mali_kernel_core.c:		args->compatible = 1;
+common/mali_kernel_core.c:		args->compatible = 0;
+common/mali_kernel_core.c:	args->version = _MALI_UK_API_VERSION; /* report our version */
+common/mali_kernel_core.c:	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_kernel_core.c:	queue = ((struct mali_session_data *)args->ctx)->ioctl_queue;
+common/mali_kernel_core.c:		args->type = _MALI_NOTIFICATION_CORE_SHUTDOWN_IN_PROGRESS;
+common/mali_kernel_core.c:	args->type = (_mali_uk_notification_type)notification->notification_type;
+common/mali_kernel_core.c:	_mali_osk_memcpy(&args->data, notification->result_buffer, notification->result_buffer_size);
+common/mali_kernel_core.c:	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_kernel_core.c:	queue = ((struct mali_session_data *)args->ctx)->ioctl_queue;
+common/mali_kernel_core.c:	notification = _mali_osk_notification_create(args->type, 0);
+common/mali_pp_scheduler.c:	MALI_DEBUG_ASSERT_POINTER(args->ctx);
+common/mali_pp_scheduler.c:	args->number_of_total_cores = num_cores;
+common/mali_pp_scheduler.c:	args->number_of_enabled_cores = enabled_cores;
+common/mali_pp_scheduler.c:	MALI_DEBUG_ASSERT_POINTER(args->ctx);
+common/mali_pp_scheduler.c:	args->version = pp_version;
+common/mali_pp_scheduler.c:	MALI_DEBUG_ASSERT_POINTER(args->ctx);
+common/mali_pp_scheduler.c:	session = (struct mali_session_data*)args->ctx;
+common/mali_pp_scheduler.c:		    mali_pp_job_get_frame_builder_id(job) == (u32)args->fb_id &&
+common/mali_pp_scheduler.c:		    mali_pp_job_get_flush_id(job) == (u32)args->flush_id)
+common/mali_pp_scheduler.c:			if (args->wbx & _MALI_UK_PP_JOB_WB0)
+common/mali_pp_scheduler.c:			if (args->wbx & _MALI_UK_PP_JOB_WB1)
+common/mali_pp_scheduler.c:			if (args->wbx & _MALI_UK_PP_JOB_WB2)
+common/mali_gp_scheduler.c:	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_gp_scheduler.c:	args->number_of_cores = 1;
+common/mali_gp_scheduler.c:	MALI_CHECK_NON_NULL(args->ctx, _MALI_OSK_ERR_INVALID_ARGS);
+common/mali_gp_scheduler.c:	args->version = gp_version;
+common/mali_gp_scheduler.c:	if (NULL == args->ctx)
+common/mali_gp_scheduler.c:	session = (struct mali_session_data*)args->ctx;
+common/mali_gp_scheduler.c:	if (_MALIGP_JOB_RESUME_WITH_NEW_HEAP == args->code)
+common/mali_gp_scheduler.c:			mali_group_abort_gp_job(slot.group, args->cookie);
+common/mali_gp_scheduler.c:	if (_MALIGP_JOB_RESUME_WITH_NEW_HEAP == args->code)
+common/mali_gp_scheduler.c:		MALI_DEBUG_PRINT(3, ("Mali GP scheduler: Resuming job %u with new heap; 0x%08X - 0x%08X\n", args->cookie, args->arguments[0], args->arguments[1]));
+common/mali_gp_scheduler.c:		resumed_job = mali_group_resume_gp_with_new_heap(slot.group, args->cookie, args->arguments[0], args->arguments[1]);
+common/mali_gp_scheduler.c:	MALI_DEBUG_PRINT(3, ("Mali GP scheduler: Aborting job %u, no new heap provided\n", args->cookie));
+common/mali_gp_scheduler.c:	mali_group_abort_gp_job(slot.group, args->cookie);
+common/mali_user_settings_db.c:	setting = args->setting;
+common/mali_user_settings_db.c:		args->value = mali_user_settings[setting];
+common/mali_user_settings_db.c:	_mali_osk_memcpy(args->settings, mali_user_settings, sizeof(mali_user_settings));
+linux/mali_ukk_mem.c:    if (0 != put_user(kargs.mali_address_base, &uargs->mali_address_base)) goto mem_init_rollback;
+linux/mali_ukk_mem.c:    if (0 != put_user(kargs.memory_size, &uargs->memory_size)) goto mem_init_rollback;
+linux/mali_ukk_mem.c:	if (0 != put_user(kargs.size, &uargs->size))
+linux/mali_ukk_mem.c:    if (0 != put_user(kargs.size, &uargs->size)) return -EFAULT;
+linux/mali_ukk_mem.c:	if (0 != get_user(buffer, &uargs->buffer)) goto err_exit;
+linux/mali_ukk_mem.c:	if ( 0 != get_user(kargs.size, &uargs->size) ) goto err_exit;
+linux/mali_ukk_mem.c:	if (0 != copy_to_user(uargs->buffer, kargs.buffer, kargs.size) ) goto err_exit;
+linux/mali_ukk_mem.c:    if (0 != put_user((kargs.register_writes - (u32 *)kargs.buffer) + (u32 *)uargs->buffer, &uargs->register_writes)) goto err_exit;
+linux/mali_ukk_mem.c:    if (0 != put_user((kargs.page_table_dump - (u32 *)kargs.buffer) + (u32 *)uargs->buffer, &uargs->page_table_dump)) goto err_exit;
+linux/mali_ukk_mem.c:    if (0 != put_user(kargs.register_writes_size, &uargs->register_writes_size)) goto err_exit;
+linux/mali_ukk_mem.c:    if (0 != put_user(kargs.page_table_dump_size, &uargs->page_table_dump_size)) goto err_exit;
+linux/mali_ukk_core.c:    if (0 != get_user(kargs.version, &uargs->version)) return -EFAULT;
+linux/mali_ukk_core.c:    if (0 != put_user(kargs.version, &uargs->version)) return -EFAULT;
+linux/mali_ukk_core.c:    if (0 != put_user(kargs.compatible, &uargs->compatible)) return -EFAULT;
+linux/mali_ukk_core.c:		if (0 != put_user(kargs.type, &uargs->type)) return -EFAULT;
+linux/mali_ukk_core.c:	if (0 != get_user(kargs.type, &uargs->type))
+linux/mali_ukk_core.c:	if (0 != get_user(kargs.stream, &uargs->stream)) return -EFAULT;
+linux/mali_ukk_core.c:	if (0 != get_user(fd, &uargs->fd))
+linux/mali_osk_profiling.c:	return _mali_osk_profiling_start(&args->limit);
+linux/mali_osk_profiling.c:	_mali_osk_profiling_add_event(args->event_id, _mali_osk_get_pid(), _mali_osk_get_tid(), args->data[2], args->data[3], args->data[4]);
+linux/mali_osk_profiling.c:	return _mali_osk_profiling_stop(&args->count);
+linux/mali_osk_profiling.c:	return _mali_osk_profiling_get_event(args->index, &args->timestamp, &args->event_id, args->data);
+linux/mali_osk_profiling.c:	_mali_osk_profiling_report_sw_counters(args->counters);
+linux/mali_ukk_gp.c:    if (0 != put_user(kargs.version, &uargs->version)) return -EFAULT;
+linux/mali_ukk_gp.c:    if (0 != put_user(kargs.cookie, &uargs->cookie)) return -EFAULT;
+linux/mali_ukk_gp.c:    if (0 != put_user(kargs.number_of_cores, &uargs->number_of_cores)) return -EFAULT;
+linux/mali_ukk_profiling.c:	if (0 != put_user(kargs.limit, &uargs->limit))
+linux/mali_ukk_profiling.c:	if (0 != put_user(kargs.count, &uargs->count))
+linux/mali_ukk_profiling.c:	if (0 != get_user(kargs.index, &uargs->index))
+linux/mali_ukk_pp.c:	if (0 != put_user(fence, &uargs->fence))
+linux/mali_ukk_pp.c:    if (0 != put_user(kargs.version, &uargs->version)) return -EFAULT;
+linux/mali_osk_low_level_mem.c:	/** @note args->context unused, initialized to 0.

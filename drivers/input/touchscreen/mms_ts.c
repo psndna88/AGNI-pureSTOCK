@@ -62,6 +62,8 @@
 #include "touchboost_switch.h"
 #endif
 
+#include "../keyboard/cypress/cypress-touchkey.h"
+
 #define MAX_FINGERS		10
 #define MAX_WIDTH		30
 #define MAX_PRESSURE		255
@@ -470,7 +472,7 @@ static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 			if (ret < 0) {
 				pr_err("%s: dev lock failed(%d)\n",\
 							__func__, __LINE__);
-}
+			}
 
 			ret = exynos_cpufreq_lock(DVFS_LOCK_ID_TSP,
 							info->cpufreq_level);
@@ -546,8 +548,8 @@ static void release_all_fingers(struct mms_ts_info *info)
 	if (tb_switch == TOUCHBOOST_ON)
 	{
 #endif
-		set_dvfs_lock(info, 2);
-		pr_debug("[TSP] dvfs_lock free.\n ");
+	set_dvfs_lock(info, 2);
+	pr_debug("[TSP] dvfs_lock free.\n ");
 #ifdef CONFIG_TOUCH_BOOST_SWITCH
 	}
 #endif
@@ -701,7 +703,7 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 			reset_mms_ts(info);
 			info->noise_mode = 0;
 		} else {
-			info->noise_mode = 1 ;
+		info->noise_mode = 1 ;
 			dev_dbg(&client->dev, "[TSP] set noise mode!!\n");
 			mms_set_noise_mode(info);
 		}
@@ -745,6 +747,9 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 				, angle, palm);
 #else
 			if (info->finger_state[id] != 0) {
+                // report state to cypress-touchkey for backlight timeout
+                touchscreen_state_report(0);
+
 				dev_notice(&client->dev,
 					"finger [%d] up, palm %d\n", id, palm);
 			}
@@ -783,6 +788,10 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 #else
 		if (info->finger_state[id] == 0) {
 			info->finger_state[id] = 1;
+
+            // report state to cypress-touchkey for backlight timeout
+            touchscreen_state_report(1);
+
 			dev_notice(&client->dev,
 				"finger [%d] down, palm %d\n", id, palm);
 		}
@@ -805,7 +814,7 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 	if (tb_switch == TOUCHBOOST_ON)
 	{
 #endif
-		set_dvfs_lock(info, !!touch_is_pressed);
+	set_dvfs_lock(info, !!touch_is_pressed);
 #ifdef CONFIG_TOUCH_BOOST_SWITCH
 	}
 #endif
@@ -3315,12 +3324,12 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 	if (tb_switch == TOUCHBOOST_ON)
 	{
 #endif
-		mutex_init(&info->dvfs_lock);
-		INIT_DELAYED_WORK(&info->work_dvfs_off, set_dvfs_off);
-		INIT_DELAYED_WORK(&info->work_dvfs_chg, change_dvfs_lock);
-		bus_dev = dev_get("exynos-busfreq");
-		info->cpufreq_level = -1;
-		info->dvfs_lock_status = false;
+	mutex_init(&info->dvfs_lock);
+	INIT_DELAYED_WORK(&info->work_dvfs_off, set_dvfs_off);
+	INIT_DELAYED_WORK(&info->work_dvfs_chg, change_dvfs_lock);
+	bus_dev = dev_get("exynos-busfreq");
+	info->cpufreq_level = -1;
+	info->dvfs_lock_status = false;
 #ifdef CONFIG_TOUCH_BOOST_SWITCH
 	}
 #endif

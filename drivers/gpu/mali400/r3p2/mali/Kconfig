@@ -72,3 +72,27 @@ config GPU_CLOCK_CONTROL
   default y
   help
     This enables a sysfs interface to control gpu clock and voltage.
+
+choice
+depends on MALI400 && MALI_VER_R3P2
+prompt "Select MALI400 R3P2 Blobs version"
+default MALI_R3P2_REL_3_API_23
+
+config MALI_R3P2_REL_3_API_23
+	bool "Support MALI R3P2 rel 3 blobs (API 23)"
+	help
+	  This enables support for SAMSUNG MALI R3P2 rel3 blobs shipped with SAMSUNG 4.3.0 to 4.4.2 roms
+
+config MALI_R3P2_REL_3_API_29
+	bool "Support MALI R3P2 rel 3 blobs (API 29)"
+	help
+	  This enables support for SAMSUNG MALI R3P2 rel3 blobs shipped with SAMSUNG 4.4.4 roms
+
+config MALI_R3P2_REL_3_API_ALL
+	bool "IGNORE API COMPATIBILITY CHECK"
+	help
+	  This disables the MALI API checking and assumes compatibility.
+	  
+endchoice
+
+

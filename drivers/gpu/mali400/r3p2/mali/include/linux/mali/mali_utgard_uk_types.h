@@ -722,7 +722,13 @@ typedef struct
  * The 16bit integer is stored twice in a 32bit integer
  * For example, for version 1 the value would be 0x00010001
  */
-#define _MALI_API_VERSION 29
+#ifdef CONFIG_MALI_R3P2_REL_3_API_23
+#define _MALI_API_VERSION 23 /* R3P2 rel3 SAMSUNG 4.3.0 to 4.4.2 */
+#endif
+#ifdef CONFIG_MALI_R3P2_REL_3_API_29
+#define _MALI_API_VERSION 29 /* R3P2 rel3 SAMSUNG 4.4.4 */
+#endif
+
 #define _MALI_UK_API_VERSION _MAKE_VERSION_ID(_MALI_API_VERSION)
 
 /**
