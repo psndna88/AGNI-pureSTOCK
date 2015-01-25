@@ -65,6 +65,12 @@ config BATTERY_MAX77693_CHARGER
 	help
 	  Say Y here to enable support for the MAX77693 charger
 
+config BATTERY_MAX77693_CHARGER_SKIP_WAKELOCKS
+	bool "Skip WakeLocks for MAX77693 battery charger"
+	depends on BATTERY_MAX77693_CHARGER
+	help
+	  Say Y here to ignore wakelocks as implemented in MAX77693 charger
+
 config BATTERY_WPC_CHARGER
 	tristate "wireless charger support"
 	depends on BATTERY_MAX77693_CHARGER

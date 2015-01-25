@@ -1326,7 +1326,9 @@ static void max77693_update_work(struct work_struct *work)
 		vbus_state = max77693_get_vbus_state(chg_data);
 		if (vbus_state == POWER_SUPPLY_VBUS_WEAK) {
 			pr_info("%s: vbus weak\n", __func__);
+#ifndef CONFIG_BATTERY_MAX77693_CHARGER_SKIP_WAKELOCKS
 			wake_lock(&chg_data->softreg_wake_lock);
+#endif
 			schedule_delayed_work(&chg_data->softreg_work,
 					msecs_to_jiffies(SW_REG_START_DELAY));
 		} else
@@ -1431,7 +1433,9 @@ static void max77693_softreg_work(struct work_struct *work)
 		cancel_delayed_work(&chg_data->update_work);
 
 		/* schedule softreg wq */
+#ifndef CONFIG_BATTERY_MAX77693_CHARGER_SKIP_WAKELOCKS
 		wake_lock(&chg_data->softreg_wake_lock);
+#endif
 		schedule_delayed_work(&chg_data->softreg_work,
 				msecs_to_jiffies(SW_REG_STEP_DELAY));
 	} else {
@@ -1714,7 +1718,9 @@ static irqreturn_t max77693_bypass_irq(int irq, void *data)
 		pr_err("%s: chgin regulation loop is active\n", __func__);
 		if (chg_data->cable_type != POWER_SUPPLY_TYPE_WIRELESS) {
 			/* software regulation */
+#ifndef CONFIG_BATTERY_MAX77693_CHARGER_SKIP_WAKELOCKS
 			wake_lock(&chg_data->softreg_wake_lock);
+#endif
 			schedule_delayed_work(&chg_data->softreg_work,
 					msecs_to_jiffies(SW_REG_START_DELAY));
 		} else
@@ -1822,7 +1828,9 @@ static irqreturn_t max77693_charger_irq(int irq, void *data)
 		max77693_reduce_input(chg_data, SW_REG_CURR_STEP_MA);
 
 		/* software regulation */
+#ifndef CONFIG_BATTERY_MAX77693_CHARGER_SKIP_WAKELOCKS
 		wake_lock(&chg_data->softreg_wake_lock);
+#endif
 		schedule_delayed_work(&chg_data->softreg_work,
 				msecs_to_jiffies(SW_REG_STEP_DELAY));
 	}
