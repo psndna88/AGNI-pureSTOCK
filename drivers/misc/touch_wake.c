@@ -22,6 +22,14 @@
  * Bumped version to 1.1a
  *
  *  		                           Jean-Pierre Rasquin <yank555.lu@gmail.com>
+ *
+ * Touch to wake: Add option to keep touch-to-wake active all the time
+ * when connected to charger (andip71)
+ *
+ * /sys/class/misc/touchwakee
+ *
+ * Bumped version to 1.1b (psndna88@xda)
+ *
  */
 
 #include <linux/init.h>
@@ -34,9 +42,11 @@
 #include <linux/delay.h>
 #include <linux/wakelock.h>
 #include <linux/input.h>
+#include <linux/battery/samsung_battery.h>
 
 extern void touchscreen_enable(void);
 extern void touchscreen_disable(void);
+extern unsigned int charge_info_cable_type;
 
 static bool touchwake_enabled = false;
 static bool touch_disabled = false;
@@ -44,6 +54,7 @@ static bool device_suspended = false;
 static bool timed_out = true;
 static bool prox_near = false;
 static unsigned int touchoff_delay = 45000;
+static bool charger_mode = false;
 
 static void touchwake_touchoff(struct work_struct * touchoff_work);
 static DECLARE_DELAYED_WORK(touchoff_work, touchwake_touchoff);
@@ -55,7 +66,7 @@ static struct input_dev * powerkey_device;
 static struct wake_lock touchwake_wake_lock;
 static struct timeval last_powerkeypress;
 
-#define TOUCHWAKE_VERSION "1.1a"
+#define TOUCHWAKE_VERSION "1.1b"
 #define TIME_LONGPRESS 500
 #define POWERPRESS_DELAY 100
 #define POWERPRESS_TIMEOUT 1000
@@ -90,7 +101,15 @@ static void touchwake_early_suspend(struct early_suspend * h)
 	#endif
 
 	if (touchwake_enabled) {
-		if (likely(touchoff_delay > 0))	{
+		if ((charge_info_cable_type != POWER_SUPPLY_TYPE_BATTERY) && charger_mode)	{
+			if (timed_out && !prox_near) {
+				#ifdef DEBUG_PRINT
+				pr_info("[TOUCHWAKE] Charger plug mode - keep touch enabled indefinately\n");
+				#endif
+				wake_lock(&touchwake_wake_lock);
+			}
+		}
+		else if (likely(touchoff_delay > 0))	{
 			if (timed_out && !prox_near) {
 				#ifdef DEBUG_PRINT
 				pr_info("[TOUCHWAKE] Early suspend - enable touch delay\n");
@@ -181,6 +200,33 @@ static void press_powerkey(struct work_struct * presspower_work)
 	return;
 }
 
+static ssize_t touchwake_charger_mode_read(struct device * dev, struct device_attribute * attr, char * buf)
+{
+	return sprintf(buf, "%u\n", (charger_mode ? 1 : 0));
+}
+
+static ssize_t touchwake_charger_mode_write(struct device * dev, struct device_attribute * attr, const char * buf, size_t size)
+{
+	unsigned int ret = -EINVAL;
+	unsigned int val;
+
+	ret = sscanf(buf, "%d", &val);
+
+    if (ret != 1)
+        return -EINVAL;
+
+	if (val == 0)
+		charger_mode = false;
+	else if (val == 1)
+		charger_mode = true;
+
+	#ifdef DEBUG_PRINT
+	pr_info("[TOUCHWAKE] %s: Charger mode set to %d\n", __FUNCTION__, charger_mode);
+	#endif
+	
+	return size;
+}
+
 static ssize_t touchwake_status_read(struct device * dev, struct device_attribute * attr, char * buf)
 {
 	return sprintf(buf, "%u\n", (touchwake_enabled ? 1 : 0));
@@ -255,6 +301,7 @@ static ssize_t touchwake_debug(struct device * dev, struct device_attribute * at
 static DEVICE_ATTR(tw_enabled, S_IRUGO | S_IWUGO, touchwake_status_read, touchwake_status_write);
 static DEVICE_ATTR(tw_delay, S_IRUGO | S_IWUGO, touchwake_delay_read, touchwake_delay_write);
 static DEVICE_ATTR(tw_version, S_IRUGO , touchwake_version, NULL);
+static DEVICE_ATTR(tw_charger_mode, S_IRUGO | S_IWUGO, touchwake_charger_mode_read, touchwake_charger_mode_write);
 #ifdef DEBUG_PRINT
 static DEVICE_ATTR(tw_debug, S_IRUGO , touchwake_debug, NULL);
 #endif
@@ -264,6 +311,7 @@ static struct attribute *touchwake_notification_attributes[] =
 	&dev_attr_tw_enabled.attr,
 	&dev_attr_tw_delay.attr,
 	&dev_attr_tw_version.attr,
+	&dev_attr_tw_charger_mode.attr,
 #ifdef DEBUG_PRINT
 	&dev_attr_tw_debug.attr,
 #endif
@@ -351,8 +399,8 @@ void touch_press(void)
 	pr_info("[TOUCHWAKE] Touch press detected\n");
 	#endif
 
-	if (unlikely(device_suspended && touchwake_enabled && !prox_near && mutex_trylock(&lock)))
-		schedule_work(&presspower_work);
+			if (unlikely(device_suspended && touchwake_enabled && !prox_near && mutex_trylock(&lock)))
+				schedule_work(&presspower_work);
 
 	return;
 }
