@@ -2187,3 +2187,9 @@ config ABB_CONTROL
 	bool "Adaptive body bias control"
 	depends on EXYNOS4_CPUFREQ && CPU_EXYNOS4412
 	default n
+
+config CHARGE_LEVEL
+	bool "Charge level interface"
+	default y
+	help
+	  Allows configuration of ac, wireless and usb charging levels	  
