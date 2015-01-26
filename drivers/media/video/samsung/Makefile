@@ -2,7 +2,11 @@ obj-$(CONFIG_VIDEO_FIMC)	+= fimc/
 obj-$(CONFIG_VIDEO_JPEG)	+= jpeg/
 obj-$(CONFIG_VIDEO_JPEG_V2X)	+= jpeg_v2x/
 obj-$(CONFIG_VIDEO_TVOUT)	+= tvout/
+ifeq ($(CONFIG_AGNI_PURECM_MODE), y)
+obj-$(CONFIG_VIDEO_MFC5X)	+= mfc5x-cm/
+else
 obj-$(CONFIG_VIDEO_MFC5X)	+= mfc5x/
+endif
 
 ifeq ($(CONFIG_ARCH_EXYNOS4), y)
 obj-$(CONFIG_VIDEO_FIMG2D3X)	+= fimg2d3x-exynos4/
