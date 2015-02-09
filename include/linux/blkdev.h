@@ -410,7 +410,7 @@ struct request_queue
 #define QUEUE_FLAG_DEFAULT	((1 << QUEUE_FLAG_IO_STAT) |		\
 				 (1 << QUEUE_FLAG_STACKABLE)	|	\
 				 (1 << QUEUE_FLAG_SAME_COMP)	|	\
-				 (1 << QUEUE_FLAG_ADD_RANDOM))
+				 (0 << QUEUE_FLAG_ADD_RANDOM))
 
 static inline int queue_is_locked(struct request_queue *q)
 {
