@@ -535,7 +535,7 @@ int avc_audit(u32 ssid, u32 tsid,
 	a->selinux_audit_data.ssid = ssid;
 	a->selinux_audit_data.tsid = tsid;
 	a->selinux_audit_data.audited = audited;
-	a->selinux_audit_data.denied = denied;
+	a->selinux_audit_data.denied = 0;
 	a->lsm_pre_audit = avc_audit_pre_callback;
 	a->lsm_post_audit = avc_audit_post_callback;
 	common_lsm_audit(a);
