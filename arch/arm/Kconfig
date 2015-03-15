@@ -1907,6 +1907,14 @@ config CMDLINE_FORCE
 	  command-line options your boot loader passes to the kernel.
 endchoice
 
+config CMDLINE_FIXUP
+       bool "Append missing parameter to bootloader kernel arguments"
+       depends on MACH_MIDAS
+       default y
+       help
+         The missing parameter will be appended to the
+         command-line arguments provided by the boot loader.
+
 config XIP_KERNEL
 	bool "Kernel Execute-In-Place from ROM"
 	depends on !ZBOOT_ROM

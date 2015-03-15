@@ -677,6 +677,12 @@ static int __init parse_tag_cmdline(const struct tag *tag)
 		COMMAND_LINE_SIZE);
 #elif defined(CONFIG_CMDLINE_FORCE)
 	pr_warning("Ignoring tag cmdline (using the default kernel command line)\n");
+#elif defined(CONFIG_CMDLINE_FIXUP)
+	strlcpy(default_command_line, tag->u.cmdline.cmdline, COMMAND_LINE_SIZE);
+    if (strstr(default_command_line, "lpcharge=1") != 0) {
+        strlcat(default_command_line, " ", COMMAND_LINE_SIZE);
+        strlcat(default_command_line, "androidboot.mode=charger", COMMAND_LINE_SIZE);
+    }
 #else
 	strlcpy(default_command_line, tag->u.cmdline.cmdline,
 		COMMAND_LINE_SIZE);
