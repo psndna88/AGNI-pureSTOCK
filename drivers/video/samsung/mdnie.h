@@ -30,6 +30,8 @@ enum SCENARIO {
 	UI_MODE,
 	VIDEO_MODE,
 	CAMERA_MODE = 4,
+	VIDEO_WARM_MODE,
+	VIDEO_COLD_MODE,
 	NAVI_MODE,
 	GALLERY_MODE,
 	VT_MODE,
@@ -48,6 +50,19 @@ enum SCENARIO {
 enum SCENARIO_DMB {
 	DMB_NORMAL_MODE = 20,
 	DMB_MODE_MAX
+};
+
+enum OUTDOOR {
+	OUTDOOR_OFF,
+	OUTDOOR_ON,
+	OUTDOOR_MAX,
+};
+
+enum TONE {
+	TONE_NORMAL,
+	TONE_WARM,
+	TONE_COLD,
+	TONE_MAX,
 };
 
 enum CABC {
@@ -69,6 +84,12 @@ enum POWER_LUT_LEVEL {
 	LUT_LEVEL_OUTDOOR_1,
 	LUT_LEVEL_OUTDOOR_2,
 	LUT_LEVEL_MAX
+};
+
+enum NEGATIVE {
+	NEGATIVE_OFF,
+	NEGATIVE_ON,
+	NEGATIVE_MAX,
 };
 
 enum ACCESSIBILITY {
@@ -106,8 +127,11 @@ struct mdnie_info {
 	unsigned int enable;
 	enum SCENARIO scenario;
 	enum MODE mode;
+	enum TONE tone;
+	enum OUTDOOR outdoor;
 	enum CABC cabc;
 	unsigned int tuning;
+	unsigned int negative;
 	unsigned int accessibility;
 	unsigned int color_correction;
 	char path[50];
