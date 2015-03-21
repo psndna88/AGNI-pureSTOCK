@@ -30,8 +30,10 @@ enum SCENARIO {
 	UI_MODE,
 	VIDEO_MODE,
 	CAMERA_MODE = 4,
+#ifdef CONFIG_FB_S5P_MDNIE_CONTROL
 	VIDEO_WARM_MODE,
 	VIDEO_COLD_MODE,
+#endif
 	NAVI_MODE,
 	GALLERY_MODE,
 	VT_MODE,
@@ -52,6 +54,7 @@ enum SCENARIO_DMB {
 	DMB_MODE_MAX
 };
 
+#ifdef CONFIG_FB_S5P_MDNIE_CONTROL
 enum OUTDOOR {
 	OUTDOOR_OFF,
 	OUTDOOR_ON,
@@ -64,6 +67,7 @@ enum TONE {
 	TONE_COLD,
 	TONE_MAX,
 };
+#endif
 
 enum CABC {
 	CABC_OFF,
@@ -86,11 +90,13 @@ enum POWER_LUT_LEVEL {
 	LUT_LEVEL_MAX
 };
 
+#ifdef CONFIG_FB_S5P_MDNIE_CONTROL
 enum NEGATIVE {
 	NEGATIVE_OFF,
 	NEGATIVE_ON,
 	NEGATIVE_MAX,
 };
+#endif
 
 enum ACCESSIBILITY {
 	ACCESSIBILITY_OFF,
@@ -127,11 +133,15 @@ struct mdnie_info {
 	unsigned int enable;
 	enum SCENARIO scenario;
 	enum MODE mode;
+#ifdef CONFIG_FB_S5P_MDNIE_CONTROL
 	enum TONE tone;
 	enum OUTDOOR outdoor;
+#endif
 	enum CABC cabc;
 	unsigned int tuning;
+#ifdef CONFIG_FB_S5P_MDNIE_CONTROL
 	unsigned int negative;
+#endif
 	unsigned int accessibility;
 	unsigned int color_correction;
 	char path[50];
