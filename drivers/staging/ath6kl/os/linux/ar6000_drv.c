@@ -919,9 +919,9 @@ ar6000_softmac_update(struct ar6_softc *ar, u8 *eeprom_data, size_t size)
     ptr_mac[0] = 0;
     ptr_mac[1] = 0x03;
     ptr_mac[2] = 0x7F;
-    ptr_mac[3] = random32() & 0xff; 
-    ptr_mac[4] = random32() & 0xff; 
-    ptr_mac[5] = random32() & 0xff; 
+    ptr_mac[3] = prandom_u32() & 0xff; 
+    ptr_mac[4] = prandom_u32() & 0xff; 
+    ptr_mac[5] = prandom_u32() & 0xff; 
     if ((A_REQUEST_FIRMWARE(&softmac_entry, "softmac", ((struct device *)ar->osDevInfo.pOSDevice))) == 0)
     {
         char *macbuf = A_MALLOC_NOWAIT(softmac_entry->size+1);

@@ -98,9 +98,9 @@ static int ath6kl_fetch_nvmac_info(struct ath6kl *ar)
 		if (isnvmac_file < 16 && ismac_file < 16) {
 			snprintf(softmac_temp, sizeof(softmac_temp),
 				"00:12:34:%02x:%02x:%02x",
-				random32() & 0xff,
-				random32() & 0xff,
-				random32() & 0xff);
+				prandom_u32() & 0xff,
+				prandom_u32() & 0xff,
+				prandom_u32() & 0xff);
 
 			ret = android_readwrite_file(softmac_filename, NULL,
 				(char *)softmac_temp, strlen(softmac_temp));

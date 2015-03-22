@@ -2755,14 +2755,14 @@ pfm_new_counter_value (pfm_counter_t *reg, int is_long_reset)
 {
 	unsigned long val = is_long_reset ? reg->long_reset : reg->short_reset;
 	unsigned long new_seed, old_seed = reg->seed, mask = reg->mask;
-	extern unsigned long carta_random32 (unsigned long seed);
+	extern unsigned long carta_prandom_u32 (unsigned long seed);
 
 	if (reg->flags & PFM_REGFL_RANDOM) {
-		new_seed = carta_random32(old_seed);
+		new_seed = carta_prandom_u32(old_seed);
 		val -= (old_seed & mask);	/* counter values are negative numbers! */
 		if ((mask >> 32) != 0)
 			/* construct a full 64-bit random value: */
-			new_seed |= carta_random32(old_seed >> 32) << 32;
+			new_seed |= carta_prandom_u32(old_seed >> 32) << 32;
 		reg->seed = new_seed;
 	}
 	reg->lval = val;

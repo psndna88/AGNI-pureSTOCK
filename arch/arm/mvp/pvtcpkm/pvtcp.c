@@ -451,8 +451,8 @@ PvtcpStateAlloc(CommChannel channel)
       state->namespace = NULL;
       state->mask = ((unsigned int)channel << 4) ^ (unsigned int)state;
 #if defined(__linux__)
-      state->id = ((unsigned long long)random32() << 32) |
-                  (unsigned long long)random32();
+      state->id = ((unsigned long long)prandom_u32() << 32) |
+                  (unsigned long long)prandom_u32();
 #else
       state->id = (unsigned long long)state;
 #endif

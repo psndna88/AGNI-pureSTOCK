@@ -18,7 +18,7 @@
 #define t1	r17
 #define	seed	r32
 
-GLOBAL_ENTRY(carta_random32)
+GLOBAL_ENTRY(carta_prandom_u32)
 	movl	a = (16807 << 16) | 16807
 	;;
 	pmpyshr2.u t0 = a, seed, 0
@@ -51,4 +51,4 @@ GLOBAL_ENTRY(carta_random32)
 	;;
 (p6)	add	lo = 1, lo
 	br.ret.sptk.many rp
-END(carta_random32)
+END(carta_prandom_u32)

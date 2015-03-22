@@ -44,13 +44,13 @@ static unsigned long own_send_time(struct bat_priv *bat_priv)
 {
 	return jiffies + msecs_to_jiffies(
 		   atomic_read(&bat_priv->orig_interval) -
-		   JITTER + (random32() % 2*JITTER));
+		   JITTER + (prandom_u32() % 2*JITTER));
 }
 
 /* when do we schedule a forwarded packet to be sent */
 static unsigned long forward_send_time(void)
 {
-	return jiffies + msecs_to_jiffies(random32() % (JITTER/2));
+	return jiffies + msecs_to_jiffies(prandom_u32() % (JITTER/2));
 }
 
 /* send out an already prepared packet to the given address via the

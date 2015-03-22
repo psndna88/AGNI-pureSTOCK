@@ -5227,7 +5227,7 @@ static int bnx2x_init_hw_common(struct bnx2x *bp, u32 load_code)
 
 	REG_WR(bp, SRC_REG_SOFT_RST, 1);
 	for (i = SRC_REG_KEYRSS0_0; i <= SRC_REG_KEYRSS1_9; i += 4)
-		REG_WR(bp, i, random32());
+		REG_WR(bp, i, prandom_u32());
 
 	bnx2x_init_block(bp, SRCH_BLOCK, COMMON_STAGE);
 #ifdef BCM_CNIC

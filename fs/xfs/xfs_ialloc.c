@@ -371,7 +371,7 @@ xfs_ialloc_ag_alloc(
 	 * number from being easily guessable.
 	 */
 	xfs_ialloc_inode_init(args.mp, tp, agno, args.agbno, args.len,
-			      random32());
+			      prandom_u32());
 
 	/*
 	 * Convert the results.

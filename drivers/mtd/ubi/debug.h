@@ -128,7 +128,7 @@ static inline int ubi_dbg_is_bgt_disabled(void)
 static inline int ubi_dbg_is_bitflip(void)
 {
 	if (ubi_tst_flags & UBI_TST_EMULATE_BITFLIPS)
-		return !(random32() % 200);
+		return !(prandom_u32() % 200);
 	return 0;
 }
 
@@ -141,7 +141,7 @@ static inline int ubi_dbg_is_bitflip(void)
 static inline int ubi_dbg_is_write_failure(void)
 {
 	if (ubi_tst_flags & UBI_TST_EMULATE_WRITE_FAILURES)
-		return !(random32() % 500);
+		return !(prandom_u32() % 500);
 	return 0;
 }
 
@@ -154,7 +154,7 @@ static inline int ubi_dbg_is_write_failure(void)
 static inline int ubi_dbg_is_erase_failure(void)
 {
 	if (ubi_tst_flags & UBI_TST_EMULATE_ERASE_FAILURES)
-		return !(random32() % 400);
+		return !(prandom_u32() % 400);
 	return 0;
 }
 

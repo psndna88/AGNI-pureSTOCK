@@ -1887,7 +1887,7 @@ qla24xx_vport_delete(struct fc_vport *fc_vport)
 	}
 
 	/* No pending activities shall be there on the vha now */
-	DEBUG(msleep(random32()%10));  /* Just to see if something falls on
+	DEBUG(msleep(prandom_u32()%10));  /* Just to see if something falls on
 					* the net we have placed below */
 
 	BUG_ON(atomic_read(&vha->vref_count));
