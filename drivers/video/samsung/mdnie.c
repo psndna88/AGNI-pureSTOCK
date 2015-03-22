@@ -142,7 +142,6 @@ struct mdnie_info *g_mdnie;
 #ifdef CONFIG_FB_S5P_MDNIE_CONTROL
 extern unsigned short mdnie_reg_hook(unsigned short reg, unsigned short value);
 extern unsigned short *mdnie_sequence_hook(struct mdnie_info *pmdnie, unsigned short *seq);
-int mdnie_control_master_switch = 0;
 #endif
 
 #ifdef CONFIG_FB_S5P_MDNIE_CONTROL
@@ -181,12 +180,9 @@ static int mdnie_send_sequence(struct mdnie_info *mdnie, const unsigned short *s
 
 	while (wbuf[i] != END_SEQ) {
 #ifdef CONFIG_FB_S5P_MDNIE_CONTROL
-		if (mdnie_control_master_switch == 1) {
 		ret += mdnie_write(wbuf[i], mdnie_reg_hook(wbuf[i], wbuf[i+1]));
-		}
-		else {
+#else
 		ret += mdnie_write(wbuf[i], wbuf[i+1]);
-		}
 #endif
 		i += 2;
 	}
@@ -1894,24 +1890,6 @@ static void mdnie_late_resume(struct early_suspend *h)
 #endif
 
 #ifdef CONFIG_FB_S5P_MDNIE_CONTROL
-static ssize_t mdnie_control_master_switch_read(struct device * dev, struct device_attribute * attr, char * buf)
-{
-	return sprintf(buf, "%u\n", (mdnie_control_master_switch ? 1 : 0));
-}
-
-static ssize_t mdnie_control_master_switch_write(struct device * dev, struct device_attribute * attr, const char * buf, size_t size)
-{
-	unsigned int ret = -EINVAL;
-	unsigned int val;
-
-	ret = sscanf(buf, "%d", &val);
-
-    if (ret != 1)
-        return -EINVAL;
-
-	return size;
-}
-
 #define MDNIE_STORE(name) \
 static ssize_t show_##name(struct device *dev, \
 		struct device_attribute *attr, \
@@ -1948,7 +1926,6 @@ static ssize_t store_##name(struct device *dev, \
 } \
 static DEVICE_ATTR(name, S_IRUGO | S_IWUGO, show_##name, store_##name);
 
-static DEVICE_ATTR(mdnie_control_master_switch, S_IRUGO | S_IWUGO, mdnie_control_master_switch_read, mdnie_control_master_switch_write);
 
 MDNIE_STORE(tune_dynamic_gallery);
 MDNIE_STORE(tune_dynamic_ui);
@@ -1989,11 +1966,6 @@ MDNIE_STORE(tune_color_tone_2);
 MDNIE_STORE(tune_color_tone_3);
 
 #define MDNIE_ATTR(name) &dev_attr_##name.attr,
-
-static struct attribute *mdnie_control_master_switch_attributes[] = {
-	&dev_attr_mdnie_control_master_switch.attr,
-	NULL
-};
 
 static struct attribute *mdniesysfs_attributes[] = {
 MDNIE_ATTR(tune_dynamic_gallery)
@@ -2037,7 +2009,6 @@ MDNIE_ATTR(tune_color_tone_3)
 };
 
 static struct attribute_group mdnie_group = {
-	.attrs = mdnie_control_master_switch_attributes,
 	.attrs = mdniesysfs_attributes,
 };
 
