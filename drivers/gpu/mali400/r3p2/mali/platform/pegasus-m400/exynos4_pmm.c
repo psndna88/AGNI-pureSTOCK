@@ -630,7 +630,6 @@ static mali_bool set_mali_dvfs_status(u32 step,mali_bool boostup)
 			MALI_PROFILING_EVENT_REASON_SINGLE_GPU_FREQ_VOLT_CHANGE,
 			mali_gpu_clk, mali_gpu_vol/1000, 0, 0, 0);
 #endif
-	mali_clk_put(MALI_FALSE);
 
 #if MALI_DVFS_CLK_DEBUG
 	pRegMaliClkDiv = ioremap(0x1003c52c,32);

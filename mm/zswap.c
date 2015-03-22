@@ -784,6 +784,12 @@ static int zswap_frontswap_store(unsigned type, pgoff_t offset,
 		goto reject;
 	}
 
+	/* if this page got EIO on pageout before, give up immediately */
+	if (PageError(page)) {
+		ret = -ENOMEM;
+		goto reject;
+	}
+
 	/* allocate entry */
 	entry = zswap_entry_cache_alloc(GFP_KERNEL);
 	if (!entry) {
