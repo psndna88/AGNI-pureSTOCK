@@ -124,14 +124,6 @@ config FB_S5P_MDNIE_HIJACK
 	---help---
 	This enables support to hijack Samsung MDNIE feature
 
-config FB_S5P_MDNIE_CONTROL
-	bool "Samsung MDNIE Register Value Intercept Control"
-	depends on FB_S5P
-	depends on FB_S5P_MDNIE
-	default y
-	---help---
-	This enables control support for Samsung MDNIE feature
-
 if FIMD_EXT_SUPPORT
 
 config MDNIE_SUPPORT
