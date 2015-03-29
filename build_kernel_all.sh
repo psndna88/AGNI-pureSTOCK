@@ -21,3 +21,15 @@ echo "Building I605 .....";
 echo "Building I605 CM .....";
 ./build_kernel_CM_i605.sh && sleep 10 && rm .config;
 
+echo "Building I9300 .....";
+./build_kernel_i9300.sh && sleep 10 && rm .config;
+
+echo "Building I9300 CM .....";
+./build_kernel_CM_i9300.sh && sleep 10 && rm .config;
+
+echo "Building I9305 .....";
+./build_kernel_i9305.sh && sleep 10 && rm .config;
+
+echo "Building I9305 CM .....";
+./build_kernel_CM_i9305.sh && sleep 10 && rm .config;
+
