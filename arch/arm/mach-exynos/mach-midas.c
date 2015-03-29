@@ -2418,6 +2418,13 @@ static struct samsung_battery_platform_data samsung_battery_pdata = {
 	.chg_curr_siop_lv1 = 1000,
 	.chg_curr_siop_lv2 = 475,
 	.chg_curr_siop_lv3 = 1,	/* zero make charger off */
+#elif (defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_M3)) && defined(CONFIG_CHARGE_LEVEL)
+	.in_curr_limit = 1500,
+	.chg_curr_ta = 1400,
+	.chg_curr_dock = 1400,
+	.chg_curr_siop_lv1 = 1000,
+	.chg_curr_siop_lv2 = 475,
+	.chg_curr_siop_lv3 = 1,	/* zero make charger off */
 #elif defined(CONFIG_MACH_GD2)
 	.in_curr_limit = 1900,
 	.chg_curr_ta = 2000,
