@@ -10,7 +10,6 @@
  */
 #include <linux/types.h>
 #include <linux/cpu.h>
-#include <linux/cpu_pm.h>
 #include <linux/hardirq.h>
 #include <linux/kernel.h>
 #include <linux/notifier.h>
