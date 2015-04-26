@@ -1289,6 +1289,10 @@ out:
  */
 static int __init mobicore_init(void)
 {
+#ifdef CONFIG_AGNI_PURECM_MODE
+	dev_info(mcd, "Skipping MobiCore Driver module initialization for AOSP ROM!\n");
+	return -ENODEV;
+#endif
 	int ret = 0;
 	dev_set_name(mcd, "mcd");
 
@@ -1382,6 +1386,9 @@ error:
  */
 static void __exit mobicore_exit(void)
 {
+#ifdef CONFIG_AGNI_PURECM_MODE
+	return;
+#endif
 	MCDRV_DBG_VERBOSE(mcd, "enter");
 #ifdef MC_MEM_TRACES
 	mobicore_log_free();

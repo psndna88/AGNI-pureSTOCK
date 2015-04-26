@@ -139,6 +139,10 @@ static void mcapi_callback(struct sk_buff *skb)
 
 static int __init mcapi_init(void)
 {
+#ifdef CONFIG_AGNI_PURECM_MODE
+	dev_info(mc_kapi, "Skipping Mobicore API module initialization for AOSP ROM!\n");
+	return -ENODEV;
+#endif
 #if defined MC_NETLINK_COMPAT || defined MC_NETLINK_COMPAT_V37
 	struct netlink_kernel_cfg cfg = {
 		.input  = mcapi_callback,
@@ -173,6 +177,9 @@ static int __init mcapi_init(void)
 
 static void __exit mcapi_exit(void)
 {
+#ifdef CONFIG_AGNI_PURECM_MODE
+	return;
+#endif
 	dev_info(mc_kapi, "Unloading Mobicore API module.\n");
 
 	if (mod_ctx->sk != NULL) {
