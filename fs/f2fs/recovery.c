@@ -129,8 +129,7 @@ retry:
 	goto out;
 
 out_unmap_put:
-	if (!f2fs_has_inline_dentry(dir))
-		kunmap(page);
+	f2fs_dentry_kunmap(dir, page);
 	f2fs_put_page(page, 0);
 out_err:
 	iput(dir);
@@ -171,13 +170,15 @@ static int find_fsync_dnodes(struct f2fs_sb_info *sbi, struct list_head *head)
 	curseg = CURSEG_I(sbi, CURSEG_WARM_NODE);
 	blkaddr = NEXT_FREE_BLKADDR(sbi, curseg);
 
+	ra_meta_pages(sbi, blkaddr, 1, META_POR);
+
 	while (1) {
 		struct fsync_inode_entry *entry;
 
 		if (blkaddr < MAIN_BLKADDR(sbi) || blkaddr >= MAX_BLKADDR(sbi))
 			return 0;
 
-		page = get_meta_page_ra(sbi, blkaddr);
+		page = get_meta_page(sbi, blkaddr);
 
 		if (cp_ver != cpver_of_node(page))
 			break;
@@ -228,6 +229,8 @@ next:
 		/* check next segment */
 		blkaddr = next_blkaddr_of_node(page);
 		f2fs_put_page(page, 1);
+
+		ra_meta_pages_cond(sbi, blkaddr);
 	}
 	f2fs_put_page(page, 1);
 	return err;
@@ -343,6 +346,10 @@ static int do_recover_data(struct f2fs_sb_info *sbi, struct inode *inode,
 	if (IS_INODE(page)) {
 		recover_inline_xattr(inode, page);
 	} else if (f2fs_has_xattr_block(ofs_of_node(page))) {
+		/*
+		 * Deprecated; xattr blocks should be found from cold log.
+		 * But, we should remain this for backward compatibility.
+		 */
 		recover_xattr_data(inode, page, blkaddr);
 		goto out;
 	}
@@ -393,7 +400,8 @@ static int do_recover_data(struct f2fs_sb_info *sbi, struct inode *inode,
 
 			/* write dummy data page */
 			recover_data_page(sbi, NULL, &sum, src, dest);
-			update_extent_cache(dest, &dn);
+			dn.data_blkaddr = dest;
+			update_extent_cache(&dn);
 			recovered++;
 		}
 		dn.ofs_in_node++;
@@ -437,7 +445,9 @@ static int recover_data(struct f2fs_sb_info *sbi,
 		if (blkaddr < MAIN_BLKADDR(sbi) || blkaddr >= MAX_BLKADDR(sbi))
 			break;
 
-		page = get_meta_page_ra(sbi, blkaddr);
+		ra_meta_pages_cond(sbi, blkaddr);
+
+		page = get_meta_page(sbi, blkaddr);
 
 		if (cp_ver != cpver_of_node(page)) {
 			f2fs_put_page(page, 1);
@@ -498,7 +508,7 @@ int recover_fsync_data(struct f2fs_sb_info *sbi)
 	INIT_LIST_HEAD(&inode_list);
 
 	/* step #1: find fsynced inode numbers */
-	sbi->por_doing = true;
+	set_sbi_flag(sbi, SBI_POR_DOING);
 
 	/* prevent checkpoint */
 	mutex_lock(&sbi->cp_mutex);
@@ -531,7 +541,7 @@ out:
 		truncate_inode_pages(META_MAPPING(sbi), 0);
 	}
 
-	sbi->por_doing = false;
+	clear_sbi_flag(sbi, SBI_POR_DOING);
 	if (err) {
 		discard_next_dnode(sbi, blkaddr);
 
