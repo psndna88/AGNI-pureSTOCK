@@ -15,7 +15,7 @@ fi
 mv .git .git-halt
 
 cd $KERNELDIR/
-make -j2 || exit 1
+make -j3 || exit 1
 
 mkdir -p $KERNELDIR/BUILT_N7100/lib/modules
 
