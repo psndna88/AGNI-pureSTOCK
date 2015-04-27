@@ -37,15 +37,6 @@ config MALI_DVFS
 		This enables Mali driver DVFS.
 endif
 
-if CPU_EXYNOS4212 || CPU_EXYNOS4412
-config MALI400_UMP
-	bool "Enable UMP support"
-	depends on MALI400
-	default y
-	---help---
-	  This enables support for the UMP memory sharing API in the Mali driver.
-endif
-
 config MALI_DMA_BUF_MAP_ON_ATTACH
 	bool "Map dma-buf attachments on attach"
 	depends on MALI400 && DMA_SHARED_BUFFER
@@ -73,10 +64,18 @@ config GPU_CLOCK_CONTROL
   help
     This enables a sysfs interface to control gpu clock and voltage.
 
+config MALI_R3P2_REL_3_API_SKIP_COMPATIBILITY_CHECKING
+	bool "IGNORE MALI R3P2 rel 3 blobs API COMPATIBILITY CHECK"
+	depends on MALI400 && MALI_VER_R3P2
+	default n
+	help
+	  This disables the MALI API checking and assumes compatibility, thereby not resorting to black screen
+	  if incompatible blobs are used.  (Use with caution !)
+
+if !MALI_R3P2_REL_3_API_SKIP_COMPATIBILITY_CHECKING
 choice
-depends on MALI400 && MALI_VER_R3P2
-prompt "Select MALI400 R3P2 Blobs version"
-default MALI_R3P2_REL_3_API_23
+	prompt "Select MALI400 R3P2 Blobs version"
+	default MALI_R3P2_REL_3_API_23
 
 config MALI_R3P2_REL_3_API_23
 	bool "Support MALI R3P2 rel 3 blobs (API 23)"
@@ -87,13 +86,7 @@ config MALI_R3P2_REL_3_API_29
 	bool "Support MALI R3P2 rel 3 blobs (API 29)"
 	help
 	  This enables support for SAMSUNG MALI R3P2 rel3 blobs shipped with SAMSUNG 4.4.4 roms
- 
+
 endchoice
-
-config MALI_R3P2_REL_3_API_SKIP_COMPATIBILITY_CHECKING
-	bool "IGNORE MALI R3P2 rel 3 blobs API COMPATIBILITY CHECK"
-	help
-	  This disables the MALI API checking and assumes compatibility, thereby not resorting to black screen
-	  if incompatible blobs are used.  (Use with caution !)
-
+endif
 
