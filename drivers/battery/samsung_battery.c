@@ -2026,10 +2026,10 @@ skip_updating_status:
 		(info->cable_type == POWER_SUPPLY_TYPE_BATTERY)) {
 		pr_info("%s: lpm with battery, maybe power off\n", __func__);
 		wake_lock_timeout(&info->monitor_wake_lock,
-					msecs_to_jiffies(3000));
+					msecs_to_jiffies(3000)); //default 10000
 	} else {
 		wake_lock_timeout(&info->monitor_wake_lock,
-					msecs_to_jiffies(300));
+					msecs_to_jiffies(1000));
 	}
 
 	mutex_unlock(&info->mon_lock);
@@ -2179,11 +2179,6 @@ static enum power_supply_property samsung_battery_props[] = {
 
 /* Support property from usb, ac */
 static enum power_supply_property samsung_power_props[] = {
-	POWER_SUPPLY_PROP_ONLINE,
-};
-
-static enum power_supply_property sec_ps_props[] = {
-	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_ONLINE,
 };
 
@@ -2403,108 +2398,6 @@ static int samsung_ac_get_property(struct power_supply *ps,
 	return 0;
 }
 
- static int sec_ps_set_property(struct power_supply *ps,
-				enum power_supply_property psp,
-				const union power_supply_propval *val)
-{
-	struct battery_info *info =
-		container_of(ps, struct battery_info, psy_ps);
-	union power_supply_propval value;
-
-	switch (psp) {
-	case POWER_SUPPLY_PROP_STATUS:
-		if (val->intval == 0) {
-			if (info->ps_enable == true) {
-				info->ps_enable = val->intval;
-					dev_info(info->dev,
-						"%s: power sharing cable set (%d)\n", __func__, info->ps_enable);
-				value.intval = POWER_SUPPLY_TYPE_POWER_SHARING;
-				info->psy_charger->set_property(info->psy_charger,
-				POWER_SUPPLY_PROP_ONLINE, &value);
-			}
-		} else if ((val->intval == 1) && (info->ps_status == true)) {
-			info->ps_enable = val->intval;
-				dev_info(info->dev,
-					"%s: power sharing cable set (%d)\n", __func__, info->ps_enable);
-			value.intval = POWER_SUPPLY_TYPE_POWER_SHARING;
-			info->psy_charger->set_property(info->psy_charger,
-			POWER_SUPPLY_PROP_ONLINE, &value);
-		} else {
-			dev_err(info->dev,
-				"%s: invalid setting (%d) ps_status (%d)\n",
-				__func__, val->intval, info->ps_status);
-		}
-		break;
-	case POWER_SUPPLY_PROP_ONLINE:
-		if (val->intval == POWER_SUPPLY_TYPE_POWER_SHARING) {
-			info->ps_status = true;
-			info->ps_enable = true;
-			info->ps_changed = true;
-			dev_info(info->dev,
-				"%s: power sharing cable plugin (%d)\n", __func__, info->ps_status);
-			wake_lock(&info->monitor_wake_lock);
-			schedule_work(&info->monitor_work);
-		} else {
-			info->ps_status = false;
-			dev_info(info->dev,
-				"%s: power sharing cable plugout (%d)\n", __func__, info->ps_status);
-			wake_lock(&info->monitor_wake_lock);
-			schedule_work(&info->monitor_work);
-		}
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static int sec_ps_get_property(struct power_supply *ps,
-			       enum power_supply_property psp,
-			       union power_supply_propval *val)
-{
-	struct battery_info *info =
-		container_of(ps, struct battery_info, psy_ps);
-	union power_supply_propval value;
-
-	switch (psp) {
-	case POWER_SUPPLY_PROP_STATUS:
-		if (info->ps_enable)
-			val->intval = 1;
-		else
-			val->intval = 0;
-		break;
-	case POWER_SUPPLY_PROP_ONLINE:
-		if (info->ps_status) {
-			if ((info->ps_enable == true) && (info->ps_changed == true)) {
-				info->ps_changed = false;
-
-				value.intval = POWER_SUPPLY_TYPE_POWER_SHARING;
-				info->psy_charger->set_property(info->psy_charger,
-				POWER_SUPPLY_PROP_ONLINE, &value);
-			}
-			val->intval = 1;
-		} else {
-			if (info->ps_enable == true) {
-				info->ps_enable = false;
-				dev_info(info->dev,
-					"%s: power sharing cable disconnected! ps disable (%d)\n",
-					__func__, info->ps_enable);
-
-				value.intval = POWER_SUPPLY_TYPE_POWER_SHARING;
-				info->psy_charger->set_property(info->psy_charger,
-				POWER_SUPPLY_PROP_ONLINE, &value);
-			}
-			val->intval = 0;
-		}
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 static irqreturn_t battery_isr(int irq, void *data)
 {
 	struct battery_info *info = data;
@@ -2684,8 +2577,6 @@ static __devinit int samsung_battery_probe(struct platform_device *pdev)
 #if defined(CONFIG_MACH_GD2)
 	info->is_hdmi_attached = false;
 #endif
-	info->ps_status = 0;
-	info->ps_changed = 0;
 
 	/* LPM charging state */
 	info->lpm_state = lpcharge;
@@ -2736,22 +2627,6 @@ static __devinit int samsung_battery_probe(struct platform_device *pdev)
 	info->psy_ac.properties = samsung_power_props;
 	info->psy_ac.num_properties = ARRAY_SIZE(samsung_power_props);
 	info->psy_ac.get_property = samsung_ac_get_property;
-
- 	info->psy_ps.name = "ps";
-	info->psy_ps.type = POWER_SUPPLY_TYPE_POWER_SHARING;
-	info->psy_ps.supplied_to = supply_list;
-	info->psy_ps.num_supplicants = ARRAY_SIZE(supply_list);
-	info->psy_ps.properties = sec_ps_props;
-	info->psy_ps.num_properties = ARRAY_SIZE(sec_ps_props);
-	info->psy_ps.get_property = sec_ps_get_property;
-	info->psy_ps.set_property = sec_ps_set_property;
-
-	ret = power_supply_register(&pdev->dev, &info->psy_ps);
-	if (ret) {
-		dev_err(info->dev,
-			"%s: Failed to Register psy_ps\n", __func__);
-		goto err_psy_reg_ps;
-	}
 
 	ret = power_supply_register(&pdev->dev, &info->psy_bat);
 	if (ret) {
@@ -2849,8 +2724,6 @@ err_psy_reg_ac:
 err_psy_reg_usb:
 	power_supply_unregister(&info->psy_bat);
 err_psy_reg_bat:
-	power_supply_unregister(&info->psy_ps);
-err_psy_reg_ps:
 	s3c_adc_release(info->adc_client);
 	wake_lock_destroy(&info->monitor_wake_lock);
 	wake_lock_destroy(&info->emer_wake_lock);
@@ -2886,7 +2759,6 @@ static int __devexit samsung_battery_remove(struct platform_device *pdev)
 	cancel_work_sync(&info->error_work);
 	cancel_work_sync(&info->monitor_work);
 
-	power_supply_unregister(&info->psy_ps);
 	power_supply_unregister(&info->psy_bat);
 	power_supply_unregister(&info->psy_usb);
 	power_supply_unregister(&info->psy_ac);
