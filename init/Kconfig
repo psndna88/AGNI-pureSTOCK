@@ -60,6 +60,22 @@ config EXPERIMENTAL
 	  you say Y here, you will be offered the choice of using features or
 	  drivers that are currently considered to be in the alpha-test phase.
 
+config ZEN_INTERACTIVE
+	bool "Tune kernel for interactivity (experimental)"
+	default n
+	help
+	  Tunes the kernel for responsiveness at the cost of throughput and power usage.
+
+	  --- VM ---
+	    Mem dirty before bg writeback..: 10 %  -> 20 %
+	    Mem dirty before sync writeback: 20 %  -> 50 %
+
+	  --- CPU Scheduler ---
+	    Scheduling latency.............:  6    ->  3    ms
+	    Minimal granularity............:  0.75 ->  0.3  ms
+	    Wakeup granularity.............:  1    ->  0.5  ms
+	    CPU migration cost.............:  0.5  ->  0.25 ms
+
 config BROKEN
 	bool
 
