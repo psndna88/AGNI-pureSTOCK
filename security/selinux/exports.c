@@ -17,6 +17,10 @@
 
 bool selinux_is_enabled(void)
 {
+#if (defined(CONFIG_ALWAYS_ENFORCE) && !defined(CONFIG_SECURITY_SELINUX_FORCE_PERMISSIVE))
+	return true;
+#else
 	return selinux_enabled;
+#endif
 }
 EXPORT_SYMBOL_GPL(selinux_is_enabled);

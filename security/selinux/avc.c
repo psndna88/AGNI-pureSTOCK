@@ -535,7 +535,11 @@ int avc_audit(u32 ssid, u32 tsid,
 	a->selinux_audit_data.ssid = ssid;
 	a->selinux_audit_data.tsid = tsid;
 	a->selinux_audit_data.audited = audited;
+#ifdef CONFIG_SECURITY_SELINUX_FORCE_PERMISSIVE
 	a->selinux_audit_data.denied = 0;
+#else
+	a->selinux_audit_data.denied = denied;
+#endif
 	a->lsm_pre_audit = avc_audit_pre_callback;
 	a->lsm_post_audit = avc_audit_post_callback;
 	common_lsm_audit(a);
@@ -778,7 +782,11 @@ int avc_has_perm_noaudit(u32 ssid, u32 tsid,
 	if (denied) {
 		if (flags & AVC_STRICT)
 			rc = -EACCES;
+#if (defined(CONFIG_ALWAYS_ENFORCE) && !defined(CONFIG_SECURITY_SELINUX_FORCE_PERMISSIVE))
+		if (avd->flags & AVD_FLAGS_PERMISSIVE)
+#else
 		else if (!selinux_enforcing || (avd->flags & AVD_FLAGS_PERMISSIVE))
+#endif
 			avc_update_node(AVC_CALLBACK_GRANT, requested, ssid,
 					tsid, tclass, avd->seqno);
 		else

@@ -313,6 +313,9 @@ static __init int sel_netnode_init(void)
 	int iter;
 	int ret;
 
+#if (defined(CONFIG_ALWAYS_ENFORCE) && !defined(CONFIG_SECURITY_SELINUX_FORCE_PERMISSIVE))
+	selinux_enabled = 1;
+#endif
 	if (!selinux_enabled)
 		return 0;
 
