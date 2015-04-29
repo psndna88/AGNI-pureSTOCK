@@ -31,6 +31,7 @@
 #define WM8994_FLL_SRC_MCLK2    2
 #define WM8994_FLL_SRC_LRCLK    3
 #define WM8994_FLL_SRC_BCLK     4
+#define WM8994_FLL_SRC_INTERNAL 5
 
 enum wm8994_vmid_mode {
 	WM8994_VMID_NORMAL,

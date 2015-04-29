@@ -95,6 +95,7 @@ enum {
 	ADC_DOCK_PLAY_PAUSE_KEY = 0x0d,
 	ADC_SMARTDOCK		= 0x10, /* 0x10000 40.2K ohm */
 	ADC_AUDIODOCK		= 0x12, /* 0x10010 64.9K ohm */
+	ADC_POWER_SHARING	= 0x14, /* 0x10100 102K ohm */
 	ADC_CEA936ATYPE1_CHG	= 0x17,	/* 0x10111 200K ohm */
 	ADC_JIG_USB_OFF		= 0x18, /* 0x11000 255K ohm */
 	ADC_JIG_USB_ON		= 0x19, /* 0x11001 301K ohm */
@@ -501,6 +502,10 @@ static ssize_t max77693_muic_show_device(struct device *dev,
 		return sprintf(buf, "Smart Dock+USB\n");
 	case CABLE_TYPE_AUDIODOCK_MUIC:
 		return sprintf(buf, "Audio Dock\n");
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	case CABLE_TYPE_POWER_SHARING_MUIC:
+		return sprintf(buf, "Power Sharing cable\n");
+#endif /* CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
 	default:
 		break;
 	}
@@ -1256,6 +1261,41 @@ int max7693_muic_cp_usb_state(void)
 EXPORT_SYMBOL(max7693_muic_cp_usb_state);
 #endif
 
+static int max77693_muic_set_chgdeten(struct max77693_muic_info *info,
+				bool enable)
+{
+	int ret = 0, val;
+	const u8 reg = MAX77693_MUIC_REG_CDETCTRL1;
+	const u8 mask = CHGDETEN_MASK;
+	const u8 shift = CHGDETEN_SHIFT;
+	u8 cdetctrl1;
+
+	val = (enable ? 1 : 0);
+
+	ret = max77693_update_reg(info->muic, reg, (val << shift), mask);
+	if (ret)
+		pr_err("%s fail to read reg[0x%02x], ret(%d)\n",
+				__func__, reg, ret);
+
+	max77693_read_reg(info->muic, reg, &cdetctrl1);
+	pr_info("%s:%s CDETCTRL1:0x%02x\n", DEV_NAME, __func__, cdetctrl1);
+
+	return ret;
+
+}
+
+static int max77693_muic_enable_chgdet(struct max77693_muic_info *info)
+{
+	pr_info("%s:%s\n", DEV_NAME, __func__);
+	return max77693_muic_set_chgdeten(info, true);
+}
+
+static int max77693_muic_disable_chgdet(struct max77693_muic_info *info)
+{
+	pr_info("%s:%s\n", DEV_NAME, __func__);
+	return max77693_muic_set_chgdeten(info, false);
+}
+
 static int max77693_muic_set_usb_path(struct max77693_muic_info *info, int path)
 {
 	struct i2c_client *client = info->muic;
@@ -1777,7 +1817,17 @@ static void max77693_otg_control(struct max77693_muic_info *info, int enable)
 			MAX77693_CHG_REG_CHG_CNFG_00, chg_cnfg_00);
 
 		mdelay(50);
-
+#if defined(CONFIG_MACH_T0_KOR_SKT) || defined(CONFIG_MACH_T0_KOR_KT) \
+		|| defined(CONFIG_MACH_T0_KOR_LGT)
+		/* [MAX77693] Workaround to get rid of reading dummy(0x00) */
+		/* disable charger detection again */
+		max77693_read_reg(info->max77693->muic,
+			MAX77693_MUIC_REG_CDETCTRL1, &cdetctrl1);
+		cdetctrl1 &= ~(1 << 0);
+		max77693_write_reg(info->max77693->muic,
+			MAX77693_MUIC_REG_CDETCTRL1, cdetctrl1);
+		mdelay(10);
+#endif
 		/* enable charger detection */
 		max77693_read_reg(info->max77693->muic,
 			MAX77693_MUIC_REG_CDETCTRL1, &cdetctrl1);
@@ -2169,6 +2219,17 @@ static int max77693_muic_handle_attach(struct max77693_muic_info *info,
 		}
 		break;
 #endif /* CONFIG_MUIC_MAX77693_SUPPORT_OTG_AUDIO_DOCK */
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	case CABLE_TYPE_POWER_SHARING_MUIC:
+		if (adc != ADC_POWER_SHARING) {
+			pr_warn("%s:%s assume Power Sharing detach\n", DEV_NAME,
+				__func__);
+			info->cable_type = CABLE_TYPE_NONE_MUIC;
+			max77693_muic_set_charging_type(info, false);
+			max77693_muic_enable_chgdet(info);
+		}
+		break;
+#endif /* CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
 	default:
 		break;
 	}
@@ -2239,6 +2300,35 @@ static int max77693_muic_handle_attach(struct max77693_muic_info *info,
 			max77693_muic_attach_dock_type(info, adc);
 		break;
 #endif /* CONFIG_MUIC_MAX77693_SUPPORT_OTG_AUDIO_DOCK */
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	case ADC_POWER_SHARING:
+		pr_info("%s:%s Power sharing\n", DEV_NAME, __func__);
+
+		if (chgtyp == CHGTYP_NO_VOLTAGE) {
+			if (info->cable_type == CABLE_TYPE_POWER_SHARING_MUIC) {
+				pr_info("%s:%s: duplicated(PS)\n", DEV_NAME, __func__);
+				break;
+			}
+			info->cable_type = CABLE_TYPE_POWER_SHARING_MUIC;
+			ret = max77693_muic_disable_chgdet(info);
+			if (ret)
+				pr_err("%s:%s cannot enable chgdet(%d)\n", DEV_NAME,
+					__func__, ret);
+
+			ret = max77693_muic_set_charging_type(info, false);
+			if (ret)
+				pr_err("%s:%s cannot set charging type(%d)\n", DEV_NAME,
+					__func__, ret);
+		} else if (chgtyp == CHGTYP_USB ||
+			   chgtyp == CHGTYP_DOWNSTREAM_PORT ||
+			   chgtyp == CHGTYP_DEDICATED_CHGR ||
+			   chgtyp == CHGTYP_500MA || chgtyp == CHGTYP_1A) {
+			dev_info(info->dev, "%s: PS charging pump\n",
+				 __func__);
+			ret = max77693_muic_set_charging_type(info, false);
+		}
+		break;
+#endif /* CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
 	case ADC_JIG_UART_OFF:
 		max77693_muic_handle_jig_uart(info, vbvolt);
 #if defined(CONFIG_MACH_T0_CHN_CMCC)
@@ -2545,6 +2635,19 @@ static int max77693_muic_handle_detach(struct max77693_muic_info *info, int irq)
 		if (mdata->mhl_cb && info->is_mhl_ready)
 			mdata->mhl_cb(MAX77693_MUIC_DETACHED);
 		break;
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	case CABLE_TYPE_POWER_SHARING_MUIC:
+		dev_info(info->dev, "%s: Power Sharing\n", __func__);
+		info->cable_type = CABLE_TYPE_NONE_MUIC;
+		ret = max77693_muic_set_charging_type(info, false);
+		if (ret)
+			info->cable_type = CABLE_TYPE_POWER_SHARING_MUIC;
+		ret = max77693_muic_enable_chgdet(info);
+		if (ret)
+			pr_err("%s:%s cannot enable chgdet(%d)\n", DEV_NAME,
+				__func__, ret);
+		break;
+#endif /* CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
 	case CABLE_TYPE_UNKNOWN_MUIC:
 		dev_info(info->dev, "%s: UNKNOWN\n", __func__);
 		info->cable_type = CABLE_TYPE_NONE_MUIC;
@@ -2606,7 +2709,11 @@ static int max77693_muic_filter_dev(struct max77693_muic_info *info,
 #if !defined(CONFIG_MUIC_MAX77693_SUPPORT_OTG_AUDIO_DOCK)
 	case ADC_AUDIODOCK:
 #endif /* !CONFIG_MUIC_MAX77693_SUPPORT_OTG_AUDIO_DOCK */
-	case (ADC_AUDIODOCK + 1) ... (ADC_CEA936ATYPE1_CHG - 1):
+	case ADC_AUDIODOCK + 1:
+#if !defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	case ADC_POWER_SHARING:
+#endif /* !CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE */
+	case (ADC_POWER_SHARING + 1) ... (ADC_CEA936ATYPE1_CHG - 1):
 		dev_warn(info->dev, "%s: unsupported ADC(0x%02x)\n",
 				__func__, adc);
 		intr = INT_DETACH;
@@ -2631,6 +2738,9 @@ static int max77693_muic_filter_dev(struct max77693_muic_info *info,
 				case CABLE_TYPE_SMARTDOCK_TA_MUIC:
 				case CABLE_TYPE_SMARTDOCK_USB_MUIC:
 				case CABLE_TYPE_AUDIODOCK_MUIC:
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+				case CABLE_TYPE_POWER_SHARING_MUIC:
+#endif /* CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE) */
 					intr = INT_DETACH;
 					break;
 				default:

@@ -1480,6 +1480,10 @@ static ssize_t enable_store(struct device *pdev, struct device_attribute *attr,
 			if (is_ncm_ready(f->name))
 				set_ncm_device_descriptor(&cdev->desc);
 		}
+		strncpy(manufacturer_string, "SAMSUNG",
+			 sizeof(manufacturer_string) - 1);
+		strncpy(product_string, "SAMSUNG_Android",
+			sizeof(product_string) - 1);
 
 #endif
 		cdev->desc.bDeviceSubClass = device_desc.bDeviceSubClass;

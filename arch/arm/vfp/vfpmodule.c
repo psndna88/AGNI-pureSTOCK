@@ -17,8 +17,6 @@
 #include <linux/sched.h>
 #include <linux/smp.h>
 #include <linux/init.h>
-#include <linux/uaccess.h>
-#include <linux/user.h>
 
 #include <asm/cputype.h>
 #include <asm/thread_notify.h>
@@ -440,7 +438,9 @@ static void vfp_enable(void *unused)
 	set_copro_access(access | CPACC_FULL(10) | CPACC_FULL(11));
 }
 
-#ifdef CONFIG_CPU_PM
+#ifdef CONFIG_PM
+#include <linux/syscore_ops.h>
+
 static int vfp_pm_suspend(void)
 {
 	struct thread_info *ti = current_thread_info();
@@ -476,33 +476,19 @@ static void vfp_pm_resume(void)
 	fmxr(FPEXC, fmrx(FPEXC) & ~FPEXC_EN);
 }
 
-static int vfp_cpu_pm_notifier(struct notifier_block *self, unsigned long cmd,
-	void *v)
-{
-	switch (cmd) {
-	case CPU_PM_ENTER:
-		vfp_pm_suspend();
-		break;
-	case CPU_PM_ENTER_FAILED:
-	case CPU_PM_EXIT:
-		vfp_pm_resume();
-		break;
-	}
-	return NOTIFY_OK;
-}
-
-static struct notifier_block vfp_cpu_pm_notifier_block = {
-	.notifier_call = vfp_cpu_pm_notifier,
+static struct syscore_ops vfp_pm_syscore_ops = {
+	.suspend	= vfp_pm_suspend,
+	.resume		= vfp_pm_resume,
 };
 
 static void vfp_pm_init(void)
 {
-	cpu_pm_register_notifier(&vfp_cpu_pm_notifier_block);
+	register_syscore_ops(&vfp_pm_syscore_ops);
 }
 
 #else
 static inline void vfp_pm_init(void) { }
-#endif /* CONFIG_CPU_PM */
+#endif /* CONFIG_PM */
 
 /*
  * Ensure that the VFP state stored in 'thread->vfpstate' is up to date
@@ -537,93 +523,6 @@ void vfp_flush_hwstate(struct thread_info *thread)
 }
 
 /*
- * Save the current VFP state into the provided structures and prepare
- * for entry into a new function (signal handler).
- */
-int vfp_preserve_user_clear_hwstate(struct user_vfp __user *ufp,
-				    struct user_vfp_exc __user *ufp_exc)
-{
-	struct thread_info *thread = current_thread_info();
-	struct vfp_hard_struct *hwstate = &thread->vfpstate.hard;
-	int err = 0;
-
-	/* Ensure that the saved hwstate is up-to-date. */
-	vfp_sync_hwstate(thread);
-
-	/*
-	 * Copy the floating point registers. There can be unused
-	 * registers see asm/hwcap.h for details.
-	 */
-	err |= __copy_to_user(&ufp->fpregs, &hwstate->fpregs,
-			      sizeof(hwstate->fpregs));
-	/*
-	 * Copy the status and control register.
-	 */
-	__put_user_error(hwstate->fpscr, &ufp->fpscr, err);
-
-	/*
-	 * Copy the exception registers.
-	 */
-	__put_user_error(hwstate->fpexc, &ufp_exc->fpexc, err);
-	__put_user_error(hwstate->fpinst, &ufp_exc->fpinst, err);
-	__put_user_error(hwstate->fpinst2, &ufp_exc->fpinst2, err);
-
-	if (err)
-		return -EFAULT;
-
-	/* Ensure that VFP is disabled. */
-	vfp_flush_hwstate(thread);
-
-	/*
-	 * As per the PCS, clear the length and stride bits for function
-	 * entry.
-	 */
-	hwstate->fpscr &= ~(FPSCR_LENGTH_MASK | FPSCR_STRIDE_MASK);
-	return 0;
-}
-
-/* Sanitise and restore the current VFP state from the provided structures. */
-int vfp_restore_user_hwstate(struct user_vfp __user *ufp,
-			     struct user_vfp_exc __user *ufp_exc)
-{
-	struct thread_info *thread = current_thread_info();
-	struct vfp_hard_struct *hwstate = &thread->vfpstate.hard;
-	unsigned long fpexc;
-	int err = 0;
-
-	/* Disable VFP to avoid corrupting the new thread state. */
-	vfp_flush_hwstate(thread);
-
-	/*
-	 * Copy the floating point registers. There can be unused
-	 * registers see asm/hwcap.h for details.
-	 */
-	err |= __copy_from_user(&hwstate->fpregs, &ufp->fpregs,
-				sizeof(hwstate->fpregs));
-	/*
-	 * Copy the status and control register.
-	 */
-	__get_user_error(hwstate->fpscr, &ufp->fpscr, err);
-
-	/*
-	 * Sanitise and restore the exception registers.
-	 */
-	__get_user_error(fpexc, &ufp_exc->fpexc, err);
-
-	/* Ensure the VFP is enabled. */
-	fpexc |= FPEXC_EN;
-
-	/* Ensure FPINST2 is invalid and the exception flag is cleared. */
-	fpexc &= ~(FPEXC_EX | FPEXC_FP2V);
-	hwstate->fpexc = fpexc;
-
-	__get_user_error(hwstate->fpinst, &ufp_exc->fpinst, err);
-	__get_user_error(hwstate->fpinst2, &ufp_exc->fpinst2, err);
-
-	return err ? -EFAULT : 0;
-}
-
-/*
  * VFP hardware can lose all context when a CPU goes offline.
  * As we will be running in SMP mode with CPU hotplug, we will save the
  * hardware state at every thread switch.  We clear our held state when
@@ -637,9 +536,9 @@ int vfp_restore_user_hwstate(struct user_vfp __user *ufp,
 static int vfp_hotplug(struct notifier_block *b, unsigned long action,
 	void *hcpu)
 {
-	if (action == CPU_DYING || action == CPU_DYING_FROZEN)
-		vfp_current_hw_state[(long)hcpu] = NULL;
-	else if (action == CPU_STARTING || action == CPU_STARTING_FROZEN)
+	if (action == CPU_DYING || action == CPU_DYING_FROZEN) {
+		vfp_force_reload((long)hcpu, current_thread_info());
+	} else if (action == CPU_STARTING || action == CPU_STARTING_FROZEN)
 		vfp_enable(NULL);
 	return NOTIFY_OK;
 }

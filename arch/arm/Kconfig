@@ -222,6 +222,7 @@ source "kernel/Kconfig.freezer"
 
 config AGNI_PURECM_MODE
 	bool "Support AGNi pureCM configuration"
+	select NETFILTER_XT_TARGET_IDLETIMER
 	help
 	  This enables required configurations for cyanogenmod based roms
 
