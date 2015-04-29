@@ -1480,10 +1480,6 @@ static ssize_t enable_store(struct device *pdev, struct device_attribute *attr,
 			if (is_ncm_ready(f->name))
 				set_ncm_device_descriptor(&cdev->desc);
 		}
-		strncpy(manufacturer_string, "SAMSUNG",
-			 sizeof(manufacturer_string) - 1);
-		strncpy(product_string, "SAMSUNG_Android",
-			sizeof(product_string) - 1);
 
 #endif
 		cdev->desc.bDeviceSubClass = device_desc.bDeviceSubClass;
@@ -1669,8 +1665,13 @@ static int android_bind(struct usb_composite_dev *cdev)
 	device_desc.iProduct = id;
 
 	/* Default strings - should be updated by userspace */
+#ifdef CONFIG_AGNI_PURECM_MODE
 	strncpy(manufacturer_string, "Android", sizeof(manufacturer_string) - 1);
 	strncpy(product_string, "Android", sizeof(product_string) - 1);
+#else
+	strncpy(manufacturer_string, "SAMSUNG", sizeof(manufacturer_string) - 1);
+	strncpy(product_string, "SAMSUNG_Android", sizeof(product_string) - 1);
+#endif
 
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	sprintf(serial_string,
