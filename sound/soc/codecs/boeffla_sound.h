@@ -24,7 +24,7 @@
 void Boeffla_sound_hook_wm8994_pcm_probe(struct snd_soc_codec *codec_pointer);
 unsigned int Boeffla_sound_hook_wm8994_write(unsigned int reg, unsigned int value);
 
-
+static int boeffla_sound;		// boeffla sound master switch
 /*****************************************/
 // Definitions
 /*****************************************/

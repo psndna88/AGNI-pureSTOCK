@@ -224,10 +224,10 @@ static int wm8994_write(struct snd_soc_codec *codec, unsigned int reg,
 #endif
 
 #if defined CONFIG_SND_BOEFFLA && defined CONFIG_SND_WOLFSON_SOUND_CONTROL
-	if (!sound_control_hook_wm8994_write(reg, value)) {
+	if ((boeffla_sound == ON) && !(sound_control)) {
 		value = Boeffla_sound_hook_wm8994_write(reg, value);
 	}
-	if (!Boeffla_sound_hook_wm8994_write(reg, value)) {
+	if ((sound_control) && !(boeffla_sound == ON)) {
 		value = sound_control_hook_wm8994_write(reg, value);
 	}
 #endif

@@ -71,7 +71,6 @@ static struct snd_soc_codec *codec;
 static struct wm8994_priv *wm8994;
 
 // internal sound control variables
-static int sound_control;		// sound control master switch
 static int debug_level;			// debug level for logging into kernel log
 
 static int headphone_l, headphone_r;	// headphone volume left/right
