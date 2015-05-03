@@ -424,6 +424,11 @@ static ssize_t store_scaling_max_freq
 	if (ret != 1)
 		return -EINVAL;
 
+#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_M3)
+	if ((new_policy.max == 1920000) || (new_policy.max == 2000000))
+		return -EINVAL;
+#endif
+
 	ret = __cpufreq_set_policy(policy, &new_policy);
 	policy->user_policy.max = policy->max;
 
