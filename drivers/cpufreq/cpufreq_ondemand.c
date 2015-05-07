@@ -139,7 +139,6 @@ static struct dbs_tuners {
 	.down_differential = DEF_FREQUENCY_DOWN_DIFFERENTIAL,
 	.ignore_nice = 0,
 	.powersave_bias = 0,
-	.io_is_busy = 1,
 	.freq_step = 100,
 };
 
