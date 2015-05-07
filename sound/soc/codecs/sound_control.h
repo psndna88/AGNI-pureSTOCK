@@ -100,7 +100,7 @@ enum {
 #define STEREO_3D_GAIN_MAX	31
 
 // headphone levels
-#define HEADPHONE_DEFAULT_WOLF 	50
+#define HEADPHONE_DEFAULT_WOLF 	57
 
 #define HEADPHONE_MAX 		63
 #define HEADPHONE_MIN 		0
