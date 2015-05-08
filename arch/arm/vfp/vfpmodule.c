@@ -483,71 +483,8 @@ void vfp_flush_hwstate(struct thread_info *thread)
 {
 	unsigned int cpu = get_cpu();
 
-	/*
-	 * If the thread we're interested in is the current owner of the
-	 * hardware VFP state, then we need to save its state.
-	 */
-int vfp_preserve_user_clear_hwstate(struct user_vfp __user *ufp,
-				    struct user_vfp_exc __user *ufp_exc)
-{
-	struct thread_info *thread = current_thread_info();
-	struct vfp_hard_struct *hwstate = &thread->vfpstate.hard;
-	int err = 0;
+	vfp_force_reload(cpu, thread);
 
-	/* Ensure that the saved hwstate is up-to-date. */
-	vfp_sync_hwstate(thread);
-
-	/*
-	 * Copy the floating point registers. There can be unused
-	 * registers see asm/hwcap.h for details.
-	 */
-	err |= __copy_to_user(&ufp->fpregs, &hwstate->fpregs,
-			      sizeof(hwstate->fpregs));
-	/*
-	 * Copy the status and control register.
-	 */
-	__put_user_error(hwstate->fpscr, &ufp->fpscr, err);
-
-	/*
-	 * Copy the exception registers.
-	 */
-	__put_user_error(hwstate->fpexc, &ufp_exc->fpexc, err);
-	__put_user_error(hwstate->fpinst, &ufp_exc->fpinst, err);
-	__put_user_error(hwstate->fpinst2, &ufp_exc->fpinst2, err);
-
-	if (err)
-		return -EFAULT;
-	return 0;
-}
-
-/* Sanitise and restore the current VFP state from the provided structures. */
-int vfp_restore_user_hwstate(struct user_vfp __user *ufp,
-			     struct user_vfp_exc __user *ufp_exc)
-{
-	struct thread_info *thread = current_thread_info();
-	struct vfp_hard_struct *hwstate = &thread->vfpstate.hard;
-	unsigned long fpexc;
-	int err = 0;
-
-	vfp_flush_hwstate(thread);
-
-		/*
-		 * Set the context to NULL to force a reload the next time
-		 * the thread uses the VFP.
-		 */
-	}
-	vfp_current_hw_state[cpu] = NULL;
-
-#ifdef CONFIG_SMP
-	/*
-	 * For SMP we still have to take care of the case where the thread
-	 * migrates to another CPU and then back to the original CPU on which
-	 * the last VFP user is still the same thread. Mark the thread VFP
-	 * state as belonging to a non-existent CPU so that the saved one will
-	 * be reloaded in the above case.
-	 */
-	thread->vfpstate.hard.cpu = NR_CPUS;
-#endif
 	put_cpu();
 }
 
