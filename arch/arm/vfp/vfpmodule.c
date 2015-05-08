@@ -483,8 +483,32 @@ void vfp_flush_hwstate(struct thread_info *thread)
 {
 	unsigned int cpu = get_cpu();
 
-	vfp_force_reload(cpu, thread);
+	/*
+	 * If the thread we're interested in is the current owner of the
+	 * hardware VFP state, then we need to save its state.
+	 */
+	if (vfp_current_hw_state[cpu] == &thread->vfpstate) {
+		u32 fpexc = fmrx(FPEXC);
 
+		fmxr(FPEXC, fpexc & ~FPEXC_EN);
+
+		/*
+		 * Set the context to NULL to force a reload the next time
+		 * the thread uses the VFP.
+		 */
+	}
+	vfp_current_hw_state[cpu] = NULL;
+
+#ifdef CONFIG_SMP
+	/*
+	 * For SMP we still have to take care of the case where the thread
+	 * migrates to another CPU and then back to the original CPU on which
+	 * the last VFP user is still the same thread. Mark the thread VFP
+	 * state as belonging to a non-existent CPU so that the saved one will
+	 * be reloaded in the above case.
+	 */
+	thread->vfpstate.hard.cpu = NR_CPUS;
+#endif
 	put_cpu();
 }
 
@@ -503,7 +527,8 @@ static int vfp_hotplug(struct notifier_block *b, unsigned long action,
 	void *hcpu)
 {
 	if (action == CPU_DYING || action == CPU_DYING_FROZEN) {
-		vfp_force_reload((long)hcpu, current_thread_info());
+		unsigned int cpu = (long)hcpu;
+		vfp_current_hw_state[cpu] = NULL;
 	} else if (action == CPU_STARTING || action == CPU_STARTING_FROZEN)
 		vfp_enable(NULL);
 	return NOTIFY_OK;
