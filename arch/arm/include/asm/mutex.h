@@ -14,7 +14,6 @@
  * on the locking slowpaths.
  */
 #if __LINUX_ARM_ARCH__ < 6
-/* On pre-ARMv6 hardware the swp based implementation is the most efficient. */
 #include <asm-generic/mutex-xchg.h>
 #else
 #include <asm-generic/mutex-dec.h>
