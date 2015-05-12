@@ -1,3 +1,0 @@
-config EXYNOS_MEDIA_MONITOR
-        bool
-        default y

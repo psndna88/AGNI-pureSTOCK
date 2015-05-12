@@ -117,4 +117,3 @@ config VIDEO_SAMSUNG_MEMSIZE_TVOUT
 	default "16384"
 endif
 
-source "drivers/media/video/samsung/media_monitor/Kconfig"

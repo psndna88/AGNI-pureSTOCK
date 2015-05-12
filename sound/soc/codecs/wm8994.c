@@ -44,10 +44,6 @@
 #include "boeffla_sound.h"
 #endif
 
-#ifdef CONFIG_SND_WOLFSON_SOUND_CONTROL
-#include "sound_control.h"
-#endif
-
 #define WM1811_JACKDET_MODE_NONE  0x0000
 #define WM1811_JACKDET_MODE_JACK  0x0100
 #define WM1811_JACKDET_MODE_MIC   0x0080
@@ -132,10 +128,7 @@ static void wm8958_micd_set_rate(struct snd_soc_codec *codec)
 			    WM8958_MICD_RATE_MASK, val);
 }
 
-#if defined CONFIG_SND_BOEFFLA && !defined CONFIG_SND_WOLFSON_SOUND_CONTROL
-static
-#endif
-int wm8994_readable(struct snd_soc_codec *codec, unsigned int reg)
+static int wm8994_readable(struct snd_soc_codec *codec, unsigned int reg)
 {
 	struct wm8994_priv *wm8994 = snd_soc_codec_get_drvdata(codec);
 	struct wm8994 *control = codec->control_data;
@@ -176,10 +169,7 @@ int wm8994_readable(struct snd_soc_codec *codec, unsigned int reg)
 	return wm8994_access_masks[reg].readable != 0;
 }
 
-#if defined CONFIG_SND_BOEFFLA && !defined CONFIG_SND_WOLFSON_SOUND_CONTROL
-static
-#endif
-int wm8994_volatile(struct snd_soc_codec *codec, unsigned int reg)
+static int wm8994_volatile(struct snd_soc_codec *codec, unsigned int reg)
 {
 	if (reg >= WM8994_CACHE_SIZE)
 		return 1;
@@ -215,21 +205,8 @@ static int wm8994_write(struct snd_soc_codec *codec, unsigned int reg,
 	}
 #endif
 
-#if defined CONFIG_SND_BOEFFLA && !defined CONFIG_SND_WOLFSON_SOUND_CONTROL
+#if defined CONFIG_SND_BOEFFLA
 	value = Boeffla_sound_hook_wm8994_write(reg, value);
-#endif
-
-#if defined CONFIG_SND_WOLFSON_SOUND_CONTROL && !defined CONFIG_SND_BOEFFLA
-	value = sound_control_hook_wm8994_write(reg, value);
-#endif
-
-#if defined CONFIG_SND_BOEFFLA && defined CONFIG_SND_WOLFSON_SOUND_CONTROL
-	if ((boeffla_sound == ON) && !(sound_control)) {
-		value = Boeffla_sound_hook_wm8994_write(reg, value);
-	}
-	if ((sound_control) && !(boeffla_sound == ON)) {
-		value = sound_control_hook_wm8994_write(reg, value);
-	}
 #endif
 
 	if (!wm8994_volatile(codec, reg)) {
@@ -242,10 +219,7 @@ static int wm8994_write(struct snd_soc_codec *codec, unsigned int reg,
 	return wm8994_reg_write(codec->control_data, reg, value);
 }
 
-#if defined CONFIG_SND_BOEFFLA && !defined CONFIG_SND_WOLFSON_SOUND_CONTROL
-static
-#endif
-unsigned int wm8994_read(struct snd_soc_codec *codec,
+static unsigned int wm8994_read(struct snd_soc_codec *codec,
 				unsigned int reg)
 {
 	unsigned int val;
@@ -4302,10 +4276,6 @@ static int wm8994_codec_probe(struct snd_soc_codec *codec)
 	
 #ifdef CONFIG_SND_BOEFFLA
 	Boeffla_sound_hook_wm8994_pcm_probe(codec);
-#endif
-
-#ifdef CONFIG_SND_WOLFSON_SOUND_CONTROL
-	sound_control_hook_wm8994_pcm_probe(codec);
 #endif
 
 	return 0;
