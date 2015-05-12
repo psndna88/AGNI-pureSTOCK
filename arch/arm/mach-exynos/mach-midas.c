@@ -194,10 +194,6 @@ struct s3cfb_extdsp_lcd {
 #include <linux/i2c/tc370-touchkey.h>
 #endif
 
-#ifdef CONFIG_KEXEC_HARDBOOT
-#include <asm/kexec.h>
-#endif
-
 #if defined(CONFIG_MACH_GC1)
 #include <mach/gc1-jack.h>
 #endif
@@ -2334,10 +2330,7 @@ static struct i2c_board_info i2c_devs30[] __initdata = {
 
 #endif /* CONFIG_FELICA */
 
-/* Exclude the last 4 kB to preserve the kexec hardboot page. */
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
-#define RAM_CONSOLE_START 0x40000000
-#define RAM_CONSOLE_SIZE  (SZ_1M-SZ_4K)
 static struct resource ram_console_resource[] = {
 	{
 		.flags = IORESOURCE_MEM,
@@ -3915,20 +3908,6 @@ static struct s5p_platform_tvout hdmi_tvout_data __initdata = {
 #endif
 #endif
 
-static void __init midas_reserve(void)
-{
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
-	if (memblock_remove(RAM_CONSOLE_START, RAM_CONSOLE_SIZE) == 0) {
-		ram_console_resource[0].start = RAM_CONSOLE_START;
-		ram_console_resource[0].end   = RAM_CONSOLE_START+RAM_CONSOLE_SIZE-1;
-	}
-#endif
-
-#ifdef CONFIG_KEXEC_HARDBOOT
-	memblock_remove(KEXEC_HB_PAGE_ADDR, SZ_4K);
-#endif
-}
-
 #if defined(CONFIG_CMA)
 static unsigned long fbmem_start;
 static unsigned long fbmem_size;
@@ -5314,7 +5293,6 @@ static void __init exynos_init_reserve(void)
 
 MACHINE_START(SMDK4412, "SMDK4x12")
 	.boot_params	= S5P_PA_SDRAM + 0x100,
-	.reserve	= midas_reserve,
 	.init_irq	= exynos4_init_irq,
 	.map_io		= midas_map_io,
 	.init_machine	= midas_machine_init,

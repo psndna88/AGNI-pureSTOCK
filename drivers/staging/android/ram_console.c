@@ -20,9 +20,6 @@
 #include <linux/proc_fs.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
-#ifdef CONFIG_KEXEC_HARDBOOT
-#include <linux/io.h>
-#endif
 #include <linux/platform_data/ram_console.h>
 
 #ifdef CONFIG_ANDROID_RAM_CONSOLE_ERROR_CORRECTION
@@ -362,11 +359,7 @@ static int ram_console_driver_probe(struct platform_device *pdev)
 	start = res->start;
 	printk(KERN_INFO "ram_console: got buffer at %zx, size %zx\n",
 	       start, buffer_size);
-#ifdef CONFIG_KEXEC_HARDBOOT
-	buffer = ioremap(res->start, buffer_size);
-#else
 	buffer = phys_to_virt(res->start);
-#endif
 	if (buffer == NULL) {
 		printk(KERN_ERR "ram_console: failed to map memory\n");
 		return -ENOMEM;
