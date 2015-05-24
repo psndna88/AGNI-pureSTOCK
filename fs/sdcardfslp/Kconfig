@@ -1,0 +1,6 @@
+config SDCARD_FS_LP
+	tristate "sdcard file system"
+	depends on EXPERIMENTAL && SDCARD_FS
+	default y
+	help
+	  sdcardfslp is a sdcardfs dedicated for Android 5.x
