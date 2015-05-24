@@ -255,6 +255,33 @@ int exynos_cpufreq_get_level(unsigned int freq, unsigned int *level)
 }
 EXPORT_SYMBOL_GPL(exynos_cpufreq_get_level);
 
+int exynos_cpufreq_get_level_ret(unsigned int freq)
+{
+	struct cpufreq_frequency_table *table;
+	unsigned int i;
+
+	if (!exynos_cpufreq_init_done)
+		return -EINVAL;
+
+	table = cpufreq_frequency_get_table(0);
+	if (!table) {
+		pr_err("%s: Failed to get the cpufreq table\n", __func__);
+		return -EINVAL;
+	}
+
+	for (i = exynos_info->max_support_idx;
+		(table[i].frequency != CPUFREQ_TABLE_END); i++) {
+		if (table[i].frequency == freq) {
+			return i;
+		}
+	}
+
+	pr_err("%s: %u KHz is an unsupported cpufreq\n", __func__, freq);
+
+	return -EINVAL;
+}
+EXPORT_SYMBOL_GPL(exynos_cpufreq_get_level_ret);
+
 atomic_t exynos_cpufreq_lock_count;
 
 int exynos_cpufreq_lock(unsigned int nId,
@@ -690,6 +717,8 @@ static struct notifier_block exynos_cpufreq_notifier = {
 	.notifier_call = exynos_cpufreq_notifier_event,
 };
 
+extern unsigned int intelli_plug_active;
+
 static int exynos_cpufreq_policy_notifier_call(struct notifier_block *this,
 				unsigned long code, void *data)
 {
@@ -697,9 +726,36 @@ static int exynos_cpufreq_policy_notifier_call(struct notifier_block *this,
 
 	switch (code) {
 	case CPUFREQ_ADJUST:
-		if ((!strnicmp(policy->governor->name, "powersave", CPUFREQ_NAME_LEN))
-		|| (!strnicmp(policy->governor->name, "performance", CPUFREQ_NAME_LEN))
-		|| (!strnicmp(policy->governor->name, "userspace", CPUFREQ_NAME_LEN))) {
+		/*
+		 * arter97: add intelli_plug hook here;
+		 * if the selected governor has its own hotplugging implemented, disable intelli_plug,
+		 * if not, enable intelli_plug.
+		 */
+		if ((!strnicmp(policy->governor->name, "lulzactiveq",	CPUFREQ_NAME_LEN))
+		 || (!strnicmp(policy->governor->name, "pegasusq",	CPUFREQ_NAME_LEN))
+		 || (!strnicmp(policy->governor->name, "pegasusqplus",	CPUFREQ_NAME_LEN))
+		 || (!strnicmp(policy->governor->name, "performance",	CPUFREQ_NAME_LEN)) /* add performance	governor as an exception */
+		 || (!strnicmp(policy->governor->name, "powersave",	CPUFREQ_NAME_LEN)) /* add powersave	governor as an exception */
+		 || (!strnicmp(policy->governor->name, "userspace",	CPUFREQ_NAME_LEN)) /* add userspace	governor as an exception */
+		 || (!strnicmp(policy->governor->name, "yankasusq",	CPUFREQ_NAME_LEN))
+		 || (!strnicmp(policy->governor->name, "zzmoove",	CPUFREQ_NAME_LEN))
+ 		 || (!strnicmp(policy->governor->name, "pegasusqpluso",	CPUFREQ_NAME_LEN))) {
+			if (intelli_plug_active) {
+				printk(KERN_DEBUG "disabling intelli_plug for governor: %s\n",
+								policy->governor->name);
+				intelli_plug_active = 0;
+			}
+		} else {
+			if (!intelli_plug_active) {
+				printk(KERN_DEBUG "enabling intelli_plug for governor: %s\n",
+								policy->governor->name);
+				intelli_plug_active = 1;
+			}
+		} /* intelli_plug */
+
+		if ((!strnicmp(policy->governor->name, "powersave",	CPUFREQ_NAME_LEN))
+		 || (!strnicmp(policy->governor->name, "performance",	CPUFREQ_NAME_LEN))
+		 || (!strnicmp(policy->governor->name, "userspace",	CPUFREQ_NAME_LEN))) {
 			printk(KERN_DEBUG "cpufreq governor is changed to %s\n",
 							policy->governor->name);
 			exynos_cpufreq_lock_disable = true;
