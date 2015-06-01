@@ -359,13 +359,6 @@ config SUSPEND_TIME
 	  keeps statistics on the time spent in suspend in
 	  /sys/kernel/debug/suspend_time
 
-config SPEEDUP_KEYRESUME
-	bool "Speed up late resume"
-	depends on SUSPEND
-	default y
-	---help---
-	  Speed up system resume
-
 config CPU_PM
 	bool
 	depends on SUSPEND || CPU_IDLE
