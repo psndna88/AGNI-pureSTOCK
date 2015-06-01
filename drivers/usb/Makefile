@@ -51,4 +51,9 @@ obj-$(CONFIG_USB_SPEEDTOUCH)	+= atm/
 obj-$(CONFIG_USB_MUSB_HDRC)	+= musb/
 obj-$(CONFIG_USB_RENESAS_USBHS)	+= renesas_usbhs/
 obj-$(CONFIG_USB_OTG_UTILS)	+= otg/
+
+ifeq ($(CONFIG_AGNI_PURECM_MODE), y)
+obj-$(CONFIG_USB_GADGET)	+= gadget_cm/
+else
 obj-$(CONFIG_USB_GADGET)	+= gadget/
+endif

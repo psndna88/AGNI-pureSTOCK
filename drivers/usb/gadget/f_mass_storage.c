@@ -2518,7 +2518,16 @@ static int do_scsi_command(struct fsg_common *common)
 		common->data_size_from_cmnd =
 			get_unaligned_be16(&common->cmnd[7]);
 		reply = check_command(common, 10, DATA_DIR_TO_HOST,
+#if defined(CONFIG_USB_CDFS_SUPPORT)
+#ifdef _SUPPORT_MAC_
 				      (0xf<<6) | (1<<1), 1,
+#else
+				      (7<<6) | (1<<1), 1,
+#endif
+#else
+				      (7<<6) | (1<<1), 1,
+#endif
+
 				      "READ TOC");
 		if (reply == 0)
 			reply = do_read_toc(common, bh);

@@ -155,15 +155,6 @@ static char serial_string[256];
 #endif
 #include "u_ether.c"
 
-#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
-int g_rndis;
-int is_rndis_use(void)
-{
-	return g_rndis;
-}
-EXPORT_SYMBOL_GPL(is_rndis_use);
-#endif
-
 /* String Table */
 static struct usb_string strings_dev[] = {
 	[STRING_MANUFACTURER_IDX].s = manufacturer_string,
@@ -1365,10 +1356,6 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 	char buf[256], *b;
 	int err;
 
-#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
-	g_rndis = 0;
-#endif
-
 	mutex_lock(&dev->mutex);
 
 	if (dev->enabled) {
@@ -1409,9 +1396,6 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 					pr_err(
 					"android_usb: Cannot enable '%s'",
 					name);
-			}
-			if (!strcmp(name,"rndis")) {
-				g_rndis = 1;
 			}
 #endif
 		}
@@ -1480,11 +1464,6 @@ static ssize_t enable_store(struct device *pdev, struct device_attribute *attr,
 			if (is_ncm_ready(f->name))
 				set_ncm_device_descriptor(&cdev->desc);
 		}
-		strncpy(manufacturer_string, "SAMSUNG",
-			 sizeof(manufacturer_string) - 1);
-		strncpy(product_string, "SAMSUNG_Android",
-			sizeof(product_string) - 1);
-
 #endif
 		cdev->desc.bDeviceSubClass = device_desc.bDeviceSubClass;
 		cdev->desc.bDeviceProtocol = device_desc.bDeviceProtocol;
@@ -1669,13 +1648,8 @@ static int android_bind(struct usb_composite_dev *cdev)
 	device_desc.iProduct = id;
 
 	/* Default strings - should be updated by userspace */
-#ifdef CONFIG_AGNI_PURECM_MODE
-	strncpy(manufacturer_string, "Android", sizeof(manufacturer_string) - 1);
-	strncpy(product_string, "Android", sizeof(product_string) - 1);
-#else
 	strncpy(manufacturer_string, "SAMSUNG", sizeof(manufacturer_string) - 1);
 	strncpy(product_string, "SAMSUNG_Android", sizeof(product_string) - 1);
-#endif
 
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	sprintf(serial_string,
