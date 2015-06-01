@@ -704,7 +704,7 @@ static ssize_t store_cpu_online_bias_count(struct kobject *a, struct attribute *
 	return count;
 }
 
-static ssize_t store_cpu_online_bias_up_threshold(struct kobject *a, 
+static ssize_t store_cpu_online_bias_up_threshold(struct kobject *a,
 					      struct attribute *b,
 					      const char *buf, size_t count)
 {
@@ -720,7 +720,7 @@ static ssize_t store_cpu_online_bias_up_threshold(struct kobject *a,
 	return count;
 }
 
-static ssize_t store_cpu_online_bias_down_threshold(struct kobject *a, 
+static ssize_t store_cpu_online_bias_down_threshold(struct kobject *a,
 					      struct attribute *b,
 					      const char *buf, size_t count)
 {
@@ -808,7 +808,7 @@ static ssize_t store_dvfs_debug(struct kobject *a, struct attribute *b,
 	return count;
 }
 
-static ssize_t store_up_threshold_at_min_freq(struct kobject *a, 
+static ssize_t store_up_threshold_at_min_freq(struct kobject *a,
 					      struct attribute *b,
 					      const char *buf, size_t count)
 {
@@ -824,7 +824,7 @@ static ssize_t store_up_threshold_at_min_freq(struct kobject *a,
 	return count;
 }
 
-static ssize_t store_up_threshold_at_fast_down(struct kobject *a, 
+static ssize_t store_up_threshold_at_fast_down(struct kobject *a,
 					      struct attribute *b,
 					      const char *buf, size_t count)
 {
@@ -1266,7 +1266,7 @@ static int check_down(void)
 	max_rq_avg = (max_rq_avg * 100) >> FSHIFT;
 
 	if ((max_freq <= down_freq && max_rq_avg <= down_rq)
-		|| (online >= (dbs_tuners_ins.cpu_online_bias_count + 1) 
+		|| (online >= (dbs_tuners_ins.cpu_online_bias_count + 1)
 		    && max_avg_load < dbs_tuners_ins.cpu_online_bias_down_threshold)) {
 		printk(KERN_ERR "[HOTPLUG OUT] %s %d<=%d && %d<%d\n",
 			__func__, max_freq, down_freq, max_rq_avg, down_rq);
@@ -1278,13 +1278,13 @@ static int check_down(void)
 }
 
 static bool arter97_prev_lock = false;
+extern unsigned long avg_nr_running(void);
 
 static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 {
-	unsigned int max_load_freq;
-
 	struct cpufreq_policy *policy;
 	unsigned int j;
+	unsigned int max_load = 0;
 	int num_hist = hotplug_historyplus->num_hist;
 	int max_hotplug_rate = max(dbs_tuners_ins.cpu_up_rate,
 				   dbs_tuners_ins.cpu_down_rate);
@@ -1302,28 +1302,25 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	int hp_s_delayc = this_dbs_info->flex_hotplug_sample_delay_count;
 
 	if(hp_s_delay > 0 && hp_s_delay != hp_s_delayc) {
-		hotplug_historyplus->usage[num_hist].freq = 
-			(hotplug_historyplus->usage[num_hist].freq * 
-			(hp_s_delayc - hp_s_delay) + policy->cur) / 
+		hotplug_historyplus->usage[num_hist].freq =
+			(hotplug_historyplus->usage[num_hist].freq *
+			(hp_s_delayc - hp_s_delay) + policy->cur) /
 			(hp_s_delayc - hp_s_delay + 1);
 	} else
 #endif
-		
+
 	hotplug_historyplus->usage[num_hist].freq = policy->cur;
-	
+
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
 	if(hp_s_delay <= 1){
 #endif
-		
+
 	hotplug_historyplus->usage[num_hist].rq_avg = avg_nr_running();
 	++hotplug_historyplus->num_hist;
-	
+
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
 	}
 #endif
-
-	/* Get Absolute Load - in terms of freq */
-	max_load_freq = 0;
 
 	/*
 	 *  firelock by arter97
@@ -1349,8 +1346,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		cputime64_t cur_wall_time, cur_idle_time;
 		cputime64_t prev_wall_time, prev_idle_time;
 		unsigned int idle_time, wall_time;
-		unsigned int load, load_freq;
-		int freq_avg;
+		unsigned int load_cpu;
 
 		j_dbs_info = &per_cpu(od_cpu_dbs_info, j);
 		prev_wall_time = j_dbs_info->prev_cpu_wall;
@@ -1386,45 +1382,40 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		if (unlikely(!wall_time || wall_time < idle_time))
 			continue;
 
-		load = 100 * (wall_time - idle_time) / wall_time;
+		load_cpu = 100 * (wall_time - idle_time) / wall_time;
 
 		/* keep load of each CPUs and combined load across all CPUs */
 		if (cpu_online(j))
-			load_each[j] = load;
-		total_load += load;
+			load_each[j] = load_cpu;
+		total_load += load_cpu;
 
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
 		if(hp_s_delay > 0 && hp_s_delay != hp_s_delayc)
-		  hotplug_historyplus->usage[num_hist].load[j] = 
-			(hotplug_historyplus->usage[num_hist].load[j] * 
-			(hp_s_delayc - hp_s_delay) + load) / 
+		  hotplug_historyplus->usage[num_hist].load[j] =
+			(hotplug_historyplus->usage[num_hist].load[j] *
+			(hp_s_delayc - hp_s_delay) + load_cpu) /
 			(hp_s_delayc - hp_s_delay + 1);
 		else
 #endif
-		hotplug_historyplus->usage[num_hist].load[j] = load;
+		hotplug_historyplus->usage[num_hist].load[j] = load_cpu;
 
-		freq_avg = __cpufreq_driver_getavg(policy, j);
-		if (freq_avg <= 0)
-			freq_avg = policy->cur;
-
-		load_freq = load * freq_avg;
-		if (load_freq > max_load_freq)
-			max_load_freq = load_freq;
+		if (load_cpu > max_load)
+			max_load = load_cpu;
 	}
 
 	/* calculate the average load across all related CPUs */
 	avg_load = total_load / num_online_cpus();
-	
+
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
 	if(hp_s_delay > 0 && hp_s_delay != hp_s_delayc)
-		hotplug_historyplus->usage[num_hist].avg_load = 
-		(hotplug_historyplus->usage[num_hist].avg_load * 
-		(hp_s_delayc - hp_s_delay) + avg_load) / 
+		hotplug_historyplus->usage[num_hist].avg_load =
+		(hotplug_historyplus->usage[num_hist].avg_load *
+		(hp_s_delayc - hp_s_delay) + avg_load) /
 		(hp_s_delayc - hp_s_delay + 1);
 	else
 #endif
 	hotplug_historyplus->usage[num_hist].avg_load = avg_load;
-	
+
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
 	if(hp_s_delay <= 1) {
 #endif
@@ -1443,7 +1434,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 #endif
 	up_threshold = dbs_tuners_ins.up_threshold;
 
-	if (max_load_freq > up_threshold * policy->cur) {
+	if (max_load > up_threshold) {
 		int target, inc;
 		target = 0; inc = 0;
 
@@ -1452,10 +1443,10 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 				     - dbs_tuners_ins.freq_step_dec * 2) / 100;
 
 		/* for multiple freq_step */
-		if (max_load_freq > (up_threshold + dbs_tuners_ins.up_threshold_diff * 2)
+		if (max_load > (up_threshold + dbs_tuners_ins.up_threshold_diff * 2)
 			* policy->cur)
 			inc = policy->max * dbs_tuners_ins.freq_step / 100;
-		else if (max_load_freq > (up_threshold + dbs_tuners_ins.up_threshold_diff)
+		else if (max_load > (up_threshold + dbs_tuners_ins.up_threshold_diff)
 			* policy->cur)
 			inc = policy->max * (dbs_tuners_ins.freq_step
 					- dbs_tuners_ins.freq_step_dec) / 100;
@@ -1473,7 +1464,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 				dbs_tuners_ins.lcdfreq_kick_in_down_left =
 				  dbs_tuners_ins.lcdfreq_kick_in_down_delay;
 				_lcdfreq_lock(0);
-			} else 
+			} else
 				dbs_tuners_ins.lcdfreq_kick_in_down_left--;
 		}
 #endif
@@ -1492,20 +1483,20 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	if(hp_s_delay > 0 && hp_s_delay != hp_s_delayc)
 		return;
 	else {
-		/* 
-		 * Recalculate max_load_freq based on the averaged histoic of 
+		/*
+		 * Recalculate max_load based on the averaged histoic of
 		 * the previous normalized samples instead of the current sample.
 		 */
-		max_load_freq = policy->min;
+		max_load = policy->min;
 
 		for_each_cpu(j, policy->cpus) {
 			unsigned int load_freq;
 
-			load_freq = hotplug_historyplus->usage[num_hist].load[j] * 
+			load_freq = hotplug_historyplus->usage[num_hist].load[j] *
 				    hotplug_historyplus->usage[num_hist].freq;
 
-			if (load_freq > max_load_freq)
-				max_load_freq = load_freq;
+			if (load_freq > max_load)
+				max_load = load_freq;
 		}
 	}
 #endif
@@ -1522,15 +1513,12 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	else
 		up_threshold = dbs_tuners_ins.up_threshold;
 
-	if (max_load_freq <
-	    (up_threshold - dbs_tuners_ins.down_differential) *
-	    policy->cur) {
+	if (max_load <
+	    up_threshold - dbs_tuners_ins.down_differential) {
 		unsigned int freq_next;
 		unsigned int down_thres;
 
-		freq_next = max_load_freq /
-			(up_threshold -
-			 dbs_tuners_ins.down_differential);
+		freq_next = max_load * policy->max / 100;
 
 		/* No longer fully busy, reset rate_mult */
 		this_dbs_info->rate_mult = 1;
@@ -1575,26 +1563,26 @@ static void do_dbs_timer(struct work_struct *work)
 	dbs_check_cpu(dbs_info);
 
 	delay = usecs_to_jiffies(dbs_tuners_ins.sampling_rate * dbs_info->rate_mult);
-	
+
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
 	if (dbs_info->flex_duration) {
 		mutex_lock(&flex_mutex);
-		
-		if(dbs_info->cur_policy->cur < dbs_tuners_ins.flex_max_freq && 
+
+		if(dbs_info->cur_policy->cur < dbs_tuners_ins.flex_max_freq &&
 		   dbs_info->cur_policy->cur < dbs_info->cur_policy->max ) {
 			delay = usecs_to_jiffies(dbs_tuners_ins.flex_sampling_rate);
 
 			if (--dbs_info->flex_duration < dbs_tuners_ins.flex_duration)
 				dbs_tuners_ins.flex_duration = dbs_info->flex_duration;
-			    
-			if (dbs_info->flex_hotplug_sample_delay > 0) 
+
+			if (dbs_info->flex_hotplug_sample_delay > 0)
 				--dbs_info->flex_hotplug_sample_delay;
 		} else {
 			dbs_info->flex_duration = 0;
 			dbs_tuners_ins.flex_duration = 0;
 			dbs_info->flex_hotplug_sample_delay = 0;
 		}
-		
+
 		mutex_unlock(&flex_mutex);
 	}
 #endif /* CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE */
@@ -1609,6 +1597,89 @@ static void do_dbs_timer(struct work_struct *work)
 	queue_delayed_work_on(cpu, dvfs_workqueueplus, &dbs_info->work, delay);
 	mutex_unlock(&dbs_info->timer_mutex);
 }
+
+#if defined (CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE) && !defined (CONFIG_CPU_FREQ_GOV_PEGASUSQ)
+int cpufreq_ondemand_flexrate_request(unsigned int rate_us, unsigned int duration)
+{
+	struct cpufreq_policy *policy = cpufreq_cpu_get(0);
+	unsigned int cpu = policy->cpu;
+	struct cpu_dbs_info_s *dbs_info = &per_cpu(od_cpu_dbs_info, 0);
+	unsigned int sample_overflow = 0;
+	bool now = 0;
+
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+	/* hijack flexrate request as a touch lcdfreq boost */
+	if(dbs_tuners_ins.lcdfreq_enable) {
+		_lcdfreq_lock(0);
+		dbs_tuners_ins.lcdfreq_kick_in_down_left =
+				  dbs_tuners_ins.lcdfreq_kick_in_down_delay;
+	}
+#endif
+
+	if (!flexrate_enabled)
+		return 0;
+
+	if (forced_rate)
+		rate_us = forced_rate;
+
+	if (rate_us >= dbs_tuners_ins.sampling_rate)
+		return 0;
+
+	if (policy->cur >= dbs_tuners_ins.flex_max_freq)
+		return 0;
+
+	mutex_lock(&flex_mutex);
+	if (rate_us >= dbs_tuners_ins.flex_sampling_rate &&
+	    duration <= dbs_tuners_ins.flex_duration)
+		goto out;
+
+	duration = min(max_duration, duration);
+	if (rate_us > 0 && rate_us < min_sampling_rate)
+		rate_us = min_sampling_rate;
+
+	if (rate_us == 0 || duration == 0) {
+		dbs_info->flex_duration = 0;
+		goto out;
+	}
+
+	dbs_tuners_ins.flex_sampling_rate = rate_us;
+	dbs_tuners_ins.flex_duration = max(dbs_info->flex_duration, duration);
+
+	dbs_info->flex_duration = dbs_tuners_ins.flex_duration;
+
+	if(dbs_info->flex_duration){
+		sample_overflow = dbs_info->flex_hotplug_sample_delay;
+		dbs_info->flex_hotplug_sample_delay_count =
+			dbs_tuners_ins.sampling_rate / dbs_tuners_ins.flex_sampling_rate;
+		dbs_info->flex_hotplug_sample_delay =
+			dbs_info->flex_hotplug_sample_delay_count - sample_overflow;
+		if(dbs_info->flex_hotplug_sample_delay < 0)
+			     dbs_info->flex_hotplug_sample_delay = 0;
+	} else {
+		dbs_info->flex_hotplug_sample_delay_count = 0;
+		dbs_info->flex_hotplug_sample_delay = 0;
+	}
+
+	flexrate_num_effective++;
+
+	mutex_unlock(&flex_mutex);
+	mutex_lock(&dbs_info->timer_mutex);
+
+	cancel_delayed_work_sync(&dbs_info->work);
+	schedule_delayed_work_on(cpu, &dbs_info->work, 1);
+
+	mutex_unlock(&dbs_info->timer_mutex);
+
+	return 0;
+out:
+	mutex_unlock(&flex_mutex);
+
+	return 0;
+}
+
+EXPORT_SYMBOL_GPL(cpufreq_ondemand_flexrate_request);
+
+#endif
 
 static inline void dbs_timer_init(struct cpu_dbs_info_s *dbs_info)
 {
