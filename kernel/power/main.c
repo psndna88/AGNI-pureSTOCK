@@ -377,7 +377,9 @@ power_attr(wake_unlock);
 
 #ifdef CONFIG_DVFS_LIMIT
 int cpufreq_max_limit_val = -1;
+#ifndef CONFIG_AGNI_PURECM_MODE
 int cpufreq_max_limit_coupled = SCALING_MAX_UNDEFINED; /* Yank555.lu - not yet defined at startup */
+#endif
 static int cpufreq_min_limit_val = -1;
 DEFINE_MUTEX(cpufreq_limit_mutex);
 
@@ -405,10 +407,15 @@ static ssize_t cpufreq_table_show(struct kobject *kobj,
 		min_freq = policy->min_freq;
 		max_freq = policy->max_freq;
 	#else /* /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min&max_freq */
+#ifndef CONFIG_AGNI_PURECM_MODE
 		/*    min_freq = policy->cpuinfo.min_freq;
  		max_freq = policy->cpuinfo.max_freq;*/
      		min_freq = policy->min; /* Yank555.lu :                                            */
      		max_freq = policy->max; /*   use govenor's min/max scaling to limit the freq table */
+#else
+		min_freq = policy->cpuinfo.min_freq;
+		max_freq = policy->cpuinfo.max_freq;
+#endif
 	#endif
 	}
 
@@ -471,8 +478,9 @@ static ssize_t cpufreq_max_limit_store(struct kobject *kobj,
 	unsigned int cpufreq_level;
 	int lock_ret;
 	ssize_t ret = -EINVAL;
+#ifndef CONFIG_AGNI_PURECM_MODE
 	struct cpufreq_policy *policy;
-
+#endif
 	mutex_lock(&cpufreq_limit_mutex);
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -483,6 +491,21 @@ static ssize_t cpufreq_max_limit_store(struct kobject *kobj,
 	if (val == -1) { /* Unlock request */
 		if (cpufreq_max_limit_val != -1) {
 			exynos_cpufreq_upper_limit_free(DVFS_LOCK_ID_USER);
+#ifdef CONFIG_AGNI_PURECM_MODE
+			cpufreq_max_limit_val = -1;
+		} else /* Already unlocked */
+			printk(KERN_ERR "%s: Unlock request is ignored\n",
+				__func__);
+	} else { /* Lock request */
+		if (get_cpufreq_level((unsigned int)val, &cpufreq_level)
+		    == VALID_LEVEL) {
+			if (cpufreq_max_limit_val != -1)
+				/* Unlock the previous lock */
+				exynos_cpufreq_upper_limit_free(
+					DVFS_LOCK_ID_USER);
+			lock_ret = exynos_cpufreq_upper_limit(
+					DVFS_LOCK_ID_USER, cpufreq_level);
+#else
 			/* Yank555.lu - unlock now means set lock to scaling max to support powersave mode properly */      
    			/* cpufreq_max_limit_val = -1; */
       			policy = cpufreq_cpu_get(0);
@@ -504,6 +527,7 @@ static ssize_t cpufreq_max_limit_store(struct kobject *kobj,
         			cpufreq_max_limit_coupled = SCALING_MAX_COUPLED; /* if no limit existed, we're booting, couple */
       				}
       				lock_ret = exynos_cpufreq_upper_limit(DVFS_LOCK_ID_USER, cpufreq_level);
+#endif
 			/* ret of exynos_cpufreq_upper_limit is meaningless.
 			   0 is fail? success? */
 			cpufreq_max_limit_val = val;

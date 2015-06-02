@@ -404,6 +404,7 @@ static ssize_t store_##file_name					\
 
 store_one(scaling_min_freq, min);
 
+#ifndef CONFIG_AGNI_PURECM_MODE
 /* Yank555.lu - while storing scaling_max also set cpufreq_max_limit accordingly */
 /* store_one(scaling_max_freq, max); */
 static ssize_t store_scaling_max_freq
@@ -454,6 +455,9 @@ static ssize_t store_scaling_max_freq
 
 	return ret ? ret : count;
 }
+#else
+store_one(scaling_max_freq, max);
+#endif
 
 /**
  * show_cpuinfo_cur_freq - current CPU frequency as detected by hardware
@@ -1706,8 +1710,12 @@ static int __cpufreq_set_policy(struct cpufreq_policy *data,
 	memcpy(&policy->cpuinfo, &data->cpuinfo,
 				sizeof(struct cpufreq_cpuinfo));
 
+#ifdef CONFIG_AGNI_PURECM_MODE
+	if (policy->min > data->max || policy->max < data->min) {
+#else
 	if (policy->min > data->user_policy.max
 		|| policy->max < data->user_policy.min) {
+#endif
 		ret = -EINVAL;
 		goto error_out;
 	}
