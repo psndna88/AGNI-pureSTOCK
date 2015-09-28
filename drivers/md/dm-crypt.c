@@ -1587,7 +1587,7 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	unsigned long long tmpll;
 	int ret;
 
-	if (argc != 5) {
+	if (argc < 5) {
 		ti->error = "Not enough arguments";
 		return -EINVAL;
 	}
@@ -1655,6 +1655,13 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		goto bad;
 	}
 	cc->start = tmpll;
+
+	if (argc > 5) {
+		if (argc > 6 || sscanf(argv[5], "%llu", &tmpll) != 1 || tmpll != 0) {
+			ti->error = "Additional arguments are unsupported";
+			goto bad;
+		}
+	}
 
 	ret = -ENOMEM;
 #if 1
