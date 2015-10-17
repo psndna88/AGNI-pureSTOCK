@@ -55,6 +55,8 @@
 #define TOTAL_BLKS(sbi)	(TOTAL_SEGS(sbi) << sbi->log_blocks_per_seg)
 
 #define MAX_BLKADDR(sbi)	(SEG0_BLKADDR(sbi) + TOTAL_BLKS(sbi))
+#define SEGMENT_SIZE(sbi)	(1ULL << (sbi->log_blocksize +		\
+					sbi->log_blocks_per_seg))
 
 #define START_BLOCK(sbi, segno)	(SEG0_BLKADDR(sbi) +			\
 	 (GET_R2L_SEGNO(FREE_I(sbi), segno) << sbi->log_blocks_per_seg))
@@ -161,6 +163,7 @@ struct seg_entry {
 	 */
 	unsigned short ckpt_valid_blocks;
 	unsigned char *ckpt_valid_map;
+	unsigned char *discard_map;
 	unsigned char type;		/* segment type like CURSEG_XXX_TYPE */
 	unsigned long long mtime;	/* modification time of the segment */
 };
@@ -334,7 +337,8 @@ static inline void __set_free(struct f2fs_sb_info *sbi, unsigned int segno)
 	clear_bit(segno, free_i->free_segmap);
 	free_i->free_segments++;
 
-	next = find_next_bit(free_i->free_segmap, MAIN_SEGS(sbi), start_segno);
+	next = find_next_bit(free_i->free_segmap,
+			start_segno + sbi->segs_per_sec, start_segno);
 	if (next >= start_segno + sbi->segs_per_sec) {
 		clear_bit(secno, free_i->free_secmap);
 		free_i->free_sections++;
