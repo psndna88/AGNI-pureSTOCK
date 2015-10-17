@@ -159,7 +159,7 @@ config USB_NET_AX88179_178A
 	depends on USB_USBNET
 	select CRC32
 	select PHYLIB
-	default n
+	default y
 	help
 	  This option adds support for ASIX AX88179 based USB 3.0/2.0
 	  to Gigabit Ethernet adapters.
