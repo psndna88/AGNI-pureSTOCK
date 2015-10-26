@@ -888,7 +888,11 @@ extern uint dhd_force_tx_queueing;
 #define CUSTOM_LISTEN_INTERVAL 		LISTEN_INTERVAL
 #endif /* CUSTOM_LISTEN_INTERVAL */
 
+#ifdef CONFIG_AGNI_PURECM_MODE
 #define DEFAULT_SUSPEND_BCN_LI_DTIM		5
+#else
+#define DEFAULT_SUSPEND_BCN_LI_DTIM		3
+#endif
 #ifndef CUSTOM_SUSPEND_BCN_LI_DTIM
 #define CUSTOM_SUSPEND_BCN_LI_DTIM		DEFAULT_SUSPEND_BCN_LI_DTIM
 #endif
@@ -922,7 +926,11 @@ extern uint dhd_force_tx_queueing;
 
 #define MAX_DTIM_SKIP_BEACON_INTERVAL	100 /* max allowed associated AP beacon for DTIM skip */
 #ifndef MAX_DTIM_ALLOWED_INTERVAL
+#ifdef CONFIG_AGNI_PURECM_MODE
 #define MAX_DTIM_ALLOWED_INTERVAL 900 /* max allowed total beacon interval for DTIM skip */
+#else
+#define MAX_DTIM_ALLOWED_INTERVAL 600 /* max allowed total beacon interval for DTIM skip */
+#endif
 #endif
 #define NO_DTIM_SKIP 1
 #ifdef SDTEST

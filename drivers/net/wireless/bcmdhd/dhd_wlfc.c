@@ -627,7 +627,11 @@ _dhd_wlfc_prec_drop(dhd_pub_t *dhdp, int prec, void* p, bool bPktInQ)
 	void *pout = NULL;
 
 	ASSERT(dhdp && p);
+#ifdef CONFIG_AGNI_PURECM_MODE
 	ASSERT(prec >= 0 && prec < WLFC_PSQ_PREC_COUNT);
+#else
+	ASSERT(prec >= 0 && prec <= WLFC_PSQ_PREC_COUNT);
+#endif
 
 	ctx = (athost_wl_status_info_t*)dhdp->wlfc_state;
 

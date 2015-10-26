@@ -3686,7 +3686,9 @@ wl_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
 			wait_cnt--;
 			OSL_SLEEP(10);
 		}
+#ifdef CONFIG_AGNI_PURECM_MODE
 		wl_clr_drv_status(cfg, DISCONNECTING, dev);
+#endif
 	}
 
 	/* Clean BSSID */
@@ -3958,7 +3960,11 @@ wl_cfg80211_disconnect(struct wiphy *wiphy, struct net_device *dev,
 	RETURN_EIO_IF_NOT_UP(cfg);
 	act = *(bool *) wl_read_prof(cfg, dev, WL_PROF_ACT);
 	curbssid = wl_read_prof(cfg, dev, WL_PROF_BSSID);
+#ifdef CONFIG_AGNI_PURECM_MODE
 	if (act || wl_get_drv_status(cfg, CONNECTING, dev)) {
+#else
+	if (act) {
+#endif
 		/*
 		* Cancel ongoing scan to sync up with sme state machine of cfg80211.
 		*/
@@ -3968,7 +3974,9 @@ wl_cfg80211_disconnect(struct wiphy *wiphy, struct net_device *dev,
 			wl_notify_escan_complete(cfg, dev, true, true);
 		}
 #endif /* ESCAN_RESULT_PATCH */
+#ifdef CONFIG_AGNI_PURECM_MODE
 		wl_clr_drv_status(cfg, CONNECTING, dev);
+#endif
 		wl_set_drv_status(cfg, DISCONNECTING, dev);
 		scbval.val = reason_code;
 		memcpy(&scbval.ea, curbssid, ETHER_ADDR_LEN);
@@ -4428,10 +4436,12 @@ wl_cfg80211_get_key(struct wiphy *wiphy, struct net_device *dev,
 	s32 wsec;
 	s32 err = 0;
 	s32 bssidx;
+#ifdef CONFIG_AGNI_PURECM_MODE
 	union {
 		int32 index;
 		uint8 tsc[DOT11_WPA_KEY_RSC_LEN];
 	} u;
+#endif
 	if (wl_cfgp2p_find_idx(cfg, dev, &bssidx) != BCME_OK) {
 		WL_ERR(("Find p2p index from dev(%p) failed\n", dev));
 		return BCME_ERROR;
@@ -4440,13 +4450,16 @@ wl_cfg80211_get_key(struct wiphy *wiphy, struct net_device *dev,
 	RETURN_EIO_IF_NOT_UP(cfg);
 	memset(&key, 0, sizeof(key));
 	key.index = key_idx;
+#ifdef CONFIG_AGNI_PURECM_MODE
 	swap_key_from_BE(&key);
 	if ((err = wldev_ioctl(dev, WLC_GET_KEY, &key, sizeof(key), false))) {
 		return err;
 	}
+#endif
 	swap_key_to_BE(&key);
 	memset(&params, 0, sizeof(params));
 	params.key_len = (u8) min_t(u8, DOT11_MAX_KEY_SIZE, key.len);
+#ifdef CONFIG_AGNI_PURECM_MODE
 	params.key = key.data;
 
 	u.index = key.index;
@@ -4455,6 +4468,9 @@ wl_cfg80211_get_key(struct wiphy *wiphy, struct net_device *dev,
 	}
 	params.seq = u.tsc;
 	params.seq_len = DOT11_WPA_KEY_RSC_LEN;
+#else
+	memcpy(params.key, key.data, params.key_len);
+#endif
 	err = wldev_iovar_getint_bsscfg(dev, "wsec", &wsec, bssidx);
 	if (unlikely(err)) {
 		WL_ERR(("WLC_GET_WSEC error (%d)\n", err));
@@ -6806,11 +6822,17 @@ wl_cfg80211_change_station(
 {
 	int err;
 
+#ifdef CONFIG_AGNI_PURECM_MODE
 	WL_DBG(("SCB_AUTHORIZE mac_addr:"MACDBG" sta_flags_mask:0x%x "
 				"sta_flags_set:0x%x iface:%s \n", MAC2STRDBG(mac),
 				params->sta_flags_mask, params->sta_flags_set, dev->name));
+#else
+	struct bcm_cfg80211 *cfg = wiphy_priv(wiphy);
+	struct net_device *primary_ndev = bcmcfg_to_prmry_ndev(cfg);
+#endif
 
 	/* Processing only authorize/de-authorize flag for now */
+#ifdef CONFIG_AGNI_PURECM_MODE
 	if (!(params->sta_flags_mask & BIT(NL80211_STA_FLAG_AUTHORIZED))) {
 		WL_ERR(("WLC_SCB_AUTHORIZE sta_flags_mask not set \n"));
 		return -ENOTSUPP;
@@ -6824,6 +6846,19 @@ wl_cfg80211_change_station(
 	}
 
 	err = wldev_ioctl(dev, WLC_SCB_AUTHORIZE, mac, ETH_ALEN, true);
+#else
+	if (!(params->sta_flags_mask & BIT(NL80211_STA_FLAG_AUTHORIZED)))
+		return -ENOTSUPP;
+
+	if (!(params->sta_flags_set & BIT(NL80211_STA_FLAG_AUTHORIZED))) {
+		err = wldev_ioctl(primary_ndev, WLC_SCB_DEAUTHORIZE, mac, ETH_ALEN, true);
+		if (err)
+			WL_ERR(("WLC_SCB_DEAUTHORIZE error (%d)\n", err));
+		return err;
+	}
+
+	err = wldev_ioctl(primary_ndev, WLC_SCB_AUTHORIZE, mac, ETH_ALEN, true);
+#endif
 	if (err)
 		WL_ERR(("WLC_SCB_AUTHORIZE error (%d)\n", err));
 	return err;
@@ -6847,6 +6882,7 @@ wl_cfg80211_start_ap(
 	if (dev == bcmcfg_to_prmry_ndev(cfg)) {
 		WL_DBG(("Start AP req on primary iface: Softap\n"));
 		dev_role = NL80211_IFTYPE_AP;
+#ifdef CONFIG_AGNI_PURECM_MODE
 		if (!cfg->ap_info) {
 			if ((cfg->ap_info = kzalloc(sizeof(struct ap_info), GFP_KERNEL))) {
 				WL_ERR(("%s: struct ap_info re-allocated\n", __FUNCTION__));
@@ -6856,6 +6892,7 @@ wl_cfg80211_start_ap(
 				goto fail;
 			}
 		}
+#endif
 	}
 #if defined(WL_ENABLE_P2P_IF)
 	else if (dev == cfg->p2p_net) {
@@ -8456,6 +8493,7 @@ wl_bss_roaming_done(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 #endif /* WLFBT */
 	printk("wl_bss_roaming_done succeeded to " MACDBG "\n",
 		MAC2STRDBG((u8*)(&e->addr)));
+#ifdef CONFIG_AGNI_PURECM_MODE
 	if (memcmp(curbssid, connect_req_bssid, ETHER_ADDR_LEN) != 0) {
 		WL_DBG(("BSSID Mismatch, so indicate roam to cfg80211\n"));
 		cfg80211_roamed(ndev,
@@ -8466,6 +8504,15 @@ wl_bss_roaming_done(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 			conn_info->req_ie, conn_info->req_ie_len,
 			conn_info->resp_ie, conn_info->resp_ie_len, GFP_KERNEL);
 	}
+#else
+	cfg80211_roamed(ndev,
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 39)) || defined(WL_COMPAT_WIRELESS)
+		notify_channel,
+#endif
+		curbssid,
+		conn_info->req_ie, conn_info->req_ie_len,
+		conn_info->resp_ie, conn_info->resp_ie_len, GFP_KERNEL);
+#endif
 	WL_DBG(("Report roaming result\n"));
 
 	wl_set_drv_status(cfg, CONNECTED, ndev);

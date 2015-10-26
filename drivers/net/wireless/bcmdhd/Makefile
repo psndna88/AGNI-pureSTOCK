@@ -86,6 +86,11 @@ ifeq ($(CONFIG_BROADCOM_WIFI_RESERVED_MEM),y)
   DHDCFLAGS += -DSTATIC_WL_PRIV_STRUCT
 endif
 
+ifeq ($(CONFIG_AGNI_PURECM_MODE),n)
+# DTIM listen interval in suspend mode(0 means follow AP's DTIM period)
+DHDCFLAGS += -DCUSTOM_SUSPEND_BCN_LI_DTIM=0
+endif
+
 # Ioctl timeout 5000ms
 DHDCFLAGS += -DIOCTL_RESP_TIMEOUT=5000
 
@@ -113,8 +118,10 @@ DHDCFLAGS += -DUSE_INITIAL_SHORT_DWELL_TIME
 # SKB TAILPAD to avoid out of boundary memory access
 DHDCFLAGS += -DDHDENABLE_TAILPAD
 
+ifeq ($(CONFIG_AGNI_PURECM_MODE),y)
 # DTIM skip interval
 DHDCFLAGS += -DCUSTOM_SUSPEND_BCN_LI_DTIM=2 -DMAX_DTIM_ALLOWED_INTERVAL=600
+endif
 
 ##############################
 # Android Platform Definition

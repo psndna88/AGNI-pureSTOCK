@@ -113,11 +113,16 @@ void* wifi_platform_prealloc(wifi_adapter_info_t *adapter, int section, unsigned
 			if (size != 0L)
 				bzero(alloc_ptr, size);
 			return alloc_ptr;
+#ifdef CONFIG_AGNI_PURECM_MODE
 		} else {
 			DHD_ERROR(("%s: failed to alloc static mem section %d\n",
 				__FUNCTION__, section));
+#endif
 		}
 	}
+#ifndef CONFIG_AGNI_PURECM_MODE
+	DHD_ERROR(("%s: failed to alloc static mem section %d\n", __FUNCTION__, section));
+#endif
 
 	return NULL;
 }

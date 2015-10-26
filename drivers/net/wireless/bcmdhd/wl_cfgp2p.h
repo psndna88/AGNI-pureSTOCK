@@ -78,7 +78,11 @@ struct p2p_saved_ie {
 };
 
 struct p2p_bss {
+#ifdef CONFIG_AGNI_PURECM_MODE
 	s32 bssidx;
+#else
+	u32 bssidx;
+#endif
 	struct net_device *dev;
 	struct p2p_saved_ie saved_ie;
 	void *private_data;

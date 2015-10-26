@@ -927,7 +927,11 @@ dhdsdio_clk_kso_enab(dhd_bus_t *bus, bool on)
 		cmp_val = SBSDIO_FUNC1_SLEEPCSR_KSO_MASK |  SBSDIO_FUNC1_SLEEPCSR_DEVON_MASK;
 		bmask = cmp_val;
 
+#ifdef CONFIG_AGNI_PURECM_MODE
 		OSL_SLEEP(5);
+#else
+		OSL_SLEEP(3);
+#endif
 	} else {
 		/* Put device to sleep, turn off  KSO  */
 		cmp_val = 0;
@@ -3345,6 +3349,7 @@ dhdsdio_doiovar(dhd_bus_t *bus, const bcm_iovar_t *vi, uint32 actionid, const ch
 	DHD_TRACE(("%s: Enter, action %d name %s params %p plen %d arg %p len %d val_size %d\n",
 	           __FUNCTION__, actionid, name, params, plen, arg, len, val_size));
 
+#ifdef CONFIG_AGNI_PURECM_MODE
 	/* Some ioctls use the bus */
 	dhd_os_sdlock(bus->dhd);
 
@@ -3352,11 +3357,20 @@ dhdsdio_doiovar(dhd_bus_t *bus, const bcm_iovar_t *vi, uint32 actionid, const ch
 		DHD_ERROR(("%s: error %d on len %d\n", __FUNCTION__, bcmerror, len));
 		goto exit;
 	}
+#else
+	if ((bcmerror = bcm_iovar_lencheck(vi, arg, len, IOV_ISSET(actionid))) != 0)
+		goto exit;
+#endif
 
 	if (plen >= (int)sizeof(int_val))
 		bcopy(params, &int_val, sizeof(int_val));
 
 	bool_val = (int_val != 0) ? TRUE : FALSE;
+
+#ifndef CONFIG_AGNI_PURECM_MODE
+	/* Some ioctls use the bus */
+	dhd_os_sdlock(bus->dhd);
+#endif
 
 	/* Check if dongle is in reset. If so, only allow DEVRESET iovars */
 	if (bus->dhd->dongle_reset && !(actionid == IOV_SVAL(IOV_DEVRESET) ||
