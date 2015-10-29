@@ -1385,12 +1385,6 @@ static void max77693_softreg_work(struct work_struct *work)
 		return;
 	#endif
 
-	#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_KONALTE_USA_ATT)
-	cable_type_test = max77693_get_cable_type(chg_data);
-	if (cable_type_test == POWER_SUPPLY_TYPE_USB)
-		return;
-	#endif
-
 	mutex_lock(&chg_data->ops_lock);
 
 	max77693_read_reg(chg_data->max77693->i2c,

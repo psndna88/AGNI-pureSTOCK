@@ -44,7 +44,14 @@ static ssize_t power_supply_show_property(struct device *dev,
 	static char *type_text[] = {
 		"Unknown", "Battery", "UPS", "Mains", "USB",
 		"USB_DCP", "USB_CDP", "USB_ACA",
-		"DOCK", "MISC", "WIRELESS", "OTG"
+#if defined (CONFIG_CHARGER_MAX77693_BAT)
+		"MISC", "CARDOCK", "WIRELESS", "UARTOFF", "OTG",
+#else
+		"DOCK", "MISC", "WIRELESS", "CARDOCK", "UARTOFF", "OTG",
+#endif
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+		"POWER_SHARING"
+#endif
 	};
 	static char *status_text[] = {
 		"Unknown", "Charging", "Discharging", "Not charging", "Full"

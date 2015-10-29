@@ -1172,13 +1172,28 @@ static void battery_charge_control(struct battery_info *info,
 	current_time = ktime_to_timespec(ktime);
 
 	if ((info->cable_type != POWER_SUPPLY_TYPE_BATTERY) &&
-		(chg_curr > 0)) {
-		info->siop_charge_current = chg_curr * info->siop_lv / 100;
+		(chg_curr > 0) && (info->siop_state == true)) {
 
-		if(info->siop_charge_current < info->pdata->chg_curr_usb)
-			chg_curr = info->pdata->chg_curr_usb;
-		else
-			chg_curr = info->siop_charge_current;
+		switch (info->siop_lv) {
+		case SIOP_LV1:
+			info->siop_charge_current =
+				info->pdata->chg_curr_siop_lv1;
+			break;
+		case SIOP_LV2:
+			info->siop_charge_current =
+				info->pdata->chg_curr_siop_lv2;
+			break;
+		case SIOP_LV3:
+			info->siop_charge_current =
+				info->pdata->chg_curr_siop_lv3;
+			break;
+		default:
+			info->siop_charge_current =
+				info->pdata->chg_curr_usb;
+			break;
+		}
+
+		chg_curr = MIN(chg_curr, info->siop_charge_current);
 		pr_info("%s: siop state, level(%d), cc(%d)\n",
 				__func__, info->siop_lv, chg_curr);
 	}
@@ -1767,6 +1782,12 @@ charge_ok:
 #endif
 		if (!info->pdata->suspend_chging)
 			wake_lock(&info->charge_wake_lock);
+#if defined(CONFIG_MACH_KONA)
+		if(mhl_connected==true)
+			battery_charge_control(info,info->pdata->chg_curr_mhl,
+				info->pdata->chg_curr_mhl);
+		else
+#endif
 #ifdef CONFIG_CHARGE_LEVEL
 		battery_charge_control(info, ac_level, ac_level);
 #else
@@ -1829,7 +1850,6 @@ charge_ok:
 #endif
 			break;
 		case CABLE_TYPE_SMARTDOCK_TA_MUIC:
-		case CABLE_TYPE_SMARTDOCK_MUIC:
 			if (info->cable_sub_type == ONLINE_SUB_TYPE_SMART_OTG) {
 #ifdef CONFIG_CHARGE_LEVEL
 				charge_info_level = ac_level;
@@ -1963,7 +1983,9 @@ monitor_finish:
 						info->charge_start_time));
 	if (info->event_state != EVENT_STATE_CLEAR)
 		pr_cont(", e(%d, 0x%04x)", info->event_state, info->event_type);
-	pr_cont(", op(%d)", info->siop_lv);
+	if (info->siop_state)
+		pr_cont(", op(%d, %d)", info->siop_state, info->siop_lv);
+
 	pr_cont("\n");
 
 	/* check current_avg */
@@ -1993,8 +2015,8 @@ monitor_finish:
 		info->prev_battery_health != info->battery_health ||
 		info->prev_charge_virt_state != info->charge_virt_state ||
 		info->prev_battery_soc != info->battery_soc) {
-		pr_info("%s: update wakelock(%d)\n", __func__, HZ);
-		wake_lock_timeout(&info->update_wake_lock, HZ);
+		pr_info("%s: update wakelock(%d)\n", __func__, 3 * HZ);
+		wake_lock_timeout(&info->update_wake_lock, 3 * HZ);
 	}
 	info->prev_cable_type = info->cable_type;
 	info->prev_battery_health = info->battery_health;
@@ -2010,10 +2032,10 @@ skip_updating_status:
 		(info->cable_type == POWER_SUPPLY_TYPE_BATTERY)) {
 		pr_info("%s: lpm with battery, maybe power off\n", __func__);
 		wake_lock_timeout(&info->monitor_wake_lock,
-					msecs_to_jiffies(3000));
+					msecs_to_jiffies(10000));
 	} else {
 		wake_lock_timeout(&info->monitor_wake_lock,
-					msecs_to_jiffies(300));
+					msecs_to_jiffies(1000));
 	}
 
 	mutex_unlock(&info->mon_lock);
@@ -2165,6 +2187,13 @@ static enum power_supply_property samsung_battery_props[] = {
 static enum power_supply_property samsung_power_props[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 };
+
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+static enum power_supply_property sec_ps_props[] = {
+	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_ONLINE,
+};
+#endif
 
 static int samsung_battery_get_property(struct power_supply *ps,
 					enum power_supply_property psp,
@@ -2382,6 +2411,110 @@ static int samsung_ac_get_property(struct power_supply *ps,
 	return 0;
 }
 
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+static int sec_ps_set_property(struct power_supply *ps,
+				enum power_supply_property psp,
+				const union power_supply_propval *val)
+{
+	struct battery_info *info =
+		container_of(ps, struct battery_info, psy_ps);
+	union power_supply_propval value;
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_STATUS:
+		if (val->intval == 0) {
+			if (info->ps_enable == true) {
+				info->ps_enable = val->intval;
+					dev_info(info->dev,
+						"%s: power sharing cable set (%d)\n", __func__, info->ps_enable);
+				value.intval = POWER_SUPPLY_TYPE_POWER_SHARING;
+				info->psy_charger->set_property(info->psy_charger,
+				POWER_SUPPLY_PROP_ONLINE, &value);
+			}
+		} else if ((val->intval == 1) && (info->ps_status == true)) {
+			info->ps_enable = val->intval;
+				dev_info(info->dev,
+					"%s: power sharing cable set (%d)\n", __func__, info->ps_enable);
+			value.intval = POWER_SUPPLY_TYPE_POWER_SHARING;
+			info->psy_charger->set_property(info->psy_charger,
+			POWER_SUPPLY_PROP_ONLINE, &value);
+		} else {
+			dev_err(info->dev,
+				"%s: invalid setting (%d) ps_status (%d)\n",
+				__func__, val->intval, info->ps_status);
+		}
+		break;
+	case POWER_SUPPLY_PROP_ONLINE:
+		if (val->intval == POWER_SUPPLY_TYPE_POWER_SHARING) {
+			info->ps_status = true;
+			info->ps_enable = true;
+			info->ps_changed = true;
+			dev_info(info->dev,
+				"%s: power sharing cable plugin (%d)\n", __func__, info->ps_status);
+			wake_lock(&info->monitor_wake_lock);
+			schedule_work(&info->monitor_work);
+		} else {
+			info->ps_status = false;
+			dev_info(info->dev,
+				"%s: power sharing cable plugout (%d)\n", __func__, info->ps_status);
+			wake_lock(&info->monitor_wake_lock);
+			schedule_work(&info->monitor_work);
+		}
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int sec_ps_get_property(struct power_supply *ps,
+			       enum power_supply_property psp,
+			       union power_supply_propval *val)
+{
+	struct battery_info *info =
+		container_of(ps, struct battery_info, psy_ps);
+	union power_supply_propval value;
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_STATUS:
+		if (info->ps_enable)
+			val->intval = 1;
+		else
+			val->intval = 0;
+		break;
+	case POWER_SUPPLY_PROP_ONLINE:
+		if (info->ps_status) {
+			if ((info->ps_enable == true) && (info->ps_changed == true)) {
+				info->ps_changed = false;
+
+				value.intval = POWER_SUPPLY_TYPE_POWER_SHARING;
+				info->psy_charger->set_property(info->psy_charger,
+				POWER_SUPPLY_PROP_ONLINE, &value);
+			}
+			val->intval = 1;
+		} else {
+			if (info->ps_enable == true) {
+				info->ps_enable = false;
+				dev_info(info->dev,
+					"%s: power sharing cable disconnected! ps disable (%d)\n",
+					__func__, info->ps_enable);
+
+				value.intval = POWER_SUPPLY_TYPE_POWER_SHARING;
+				info->psy_charger->set_property(info->psy_charger,
+				POWER_SUPPLY_PROP_ONLINE, &value);
+			}
+			val->intval = 0;
+		}
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+#endif
+
 static irqreturn_t battery_isr(int irq, void *data)
 {
 	struct battery_info *info = data;
@@ -2425,7 +2558,7 @@ static __devinit int samsung_battery_probe(struct platform_device *pdev)
 	char *temper_src_name[] = { "fuelgauge", "ap adc",
 					"ext adc", "unknown"
 	};
-	char *vf_src_name[] = { "adc", "charger irq", "gpio", "adc_gpio", "unknown"
+	char *vf_src_name[] = { "adc", "charger irq", "gpio", "unknown"
 	};
 	pr_info("%s: battery init\n", __func__);
 
@@ -2554,13 +2687,16 @@ static __devinit int samsung_battery_probe(struct platform_device *pdev)
 	info->led_state = BATT_LED_DISCHARGING;
 	info->monitor_count = 0;
 	info->slate_mode = 0;
-	info->siop_lv = 100;
 #ifdef CONFIG_FAST_BOOT
 	info->dup_power_off = false;
 	info->suspend_check = false;
 #endif
 #if defined(CONFIG_MACH_GD2)
 	info->is_hdmi_attached = false;
+#endif
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	info->ps_status = 0;
+	info->ps_changed = 0;
 #endif
 
 	/* LPM charging state */
@@ -2612,6 +2748,24 @@ static __devinit int samsung_battery_probe(struct platform_device *pdev)
 	info->psy_ac.properties = samsung_power_props;
 	info->psy_ac.num_properties = ARRAY_SIZE(samsung_power_props);
 	info->psy_ac.get_property = samsung_ac_get_property;
+
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	info->psy_ps.name = "ps";
+	info->psy_ps.type = POWER_SUPPLY_TYPE_POWER_SHARING;
+	info->psy_ps.supplied_to = supply_list;
+	info->psy_ps.num_supplicants = ARRAY_SIZE(supply_list);
+	info->psy_ps.properties = sec_ps_props;
+	info->psy_ps.num_properties = ARRAY_SIZE(sec_ps_props);
+	info->psy_ps.get_property = sec_ps_get_property;
+	info->psy_ps.set_property = sec_ps_set_property;
+
+	ret = power_supply_register(&pdev->dev, &info->psy_ps);
+	if (ret) {
+		dev_err(info->dev,
+			"%s: Failed to Register psy_ps\n", __func__);
+		goto err_psy_reg_ps;
+	}
+#endif
 
 	ret = power_supply_register(&pdev->dev, &info->psy_bat);
 	if (ret) {
@@ -2709,6 +2863,10 @@ err_psy_reg_ac:
 err_psy_reg_usb:
 	power_supply_unregister(&info->psy_bat);
 err_psy_reg_bat:
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	power_supply_unregister(&info->psy_ps);
+err_psy_reg_ps:
+#endif
 	s3c_adc_release(info->adc_client);
 	wake_lock_destroy(&info->monitor_wake_lock);
 	wake_lock_destroy(&info->emer_wake_lock);
@@ -2744,6 +2902,9 @@ static int __devexit samsung_battery_remove(struct platform_device *pdev)
 	cancel_work_sync(&info->error_work);
 	cancel_work_sync(&info->monitor_work);
 
+#if defined(CONFIG_MUIC_MAX77693_SUPPORT_PS_CABLE)
+	power_supply_unregister(&info->psy_ps);
+#endif
 	power_supply_unregister(&info->psy_bat);
 	power_supply_unregister(&info->psy_usb);
 	power_supply_unregister(&info->psy_ac);
