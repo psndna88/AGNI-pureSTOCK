@@ -51,14 +51,14 @@
 
 #ifdef CONFIG_CHARGE_LEVEL
 #include "linux/charge_level.h"
-
 int ac_level 		= AC_CHARGE_LEVEL_DEFAULT;    // Set AC default charge level
 int usb_level  		= USB_CHARGE_LEVEL_DEFAULT; // Set USB default charge level
 int wireless_level	= WIRELESS_CHARGE_LEVEL_DEFAULT; // Set wireless default charge level
 char charge_info_text[30];	// Info text to be shown in config app
+#endif
+
 int charge_info_level;		// Actual charge current, negotiated between charger and device
 unsigned int charge_info_cable_type = POWER_SUPPLY_TYPE_BATTERY;	// Actual charger type, default is none
-#endif
 
 static char *supply_list[] = {
 	"battery",
