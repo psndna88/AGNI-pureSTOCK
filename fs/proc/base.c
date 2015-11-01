@@ -1915,7 +1915,7 @@ static int proc_fd_info(struct inode *inode, struct path *path, char *info)
 
 			fdt = files_fdtable(files);
 			f_flags = file->f_flags & ~O_CLOEXEC;
-			if (close_on_exec(fd, fdt))
+			if (FD_ISSET(fd, fdt->close_on_exec))
 				f_flags |= O_CLOEXEC;
 
 			if (path) {
