@@ -202,9 +202,10 @@ static int get_ed_from_ready_q(struct ed **get_ed, bool	is_periodic)
 			} else {
 				otg_list_pop(qlist);
 				periodic_trans_ready_q.entity_num--;
-#ifdef CONFIG_AGNI_PURECM_MODE
+/* otg: when removing ED from readyQ also set flag */
+//#ifdef CONFIG_AGNI_PURECM_MODE
 				get_ed[0]->ed_status.is_in_transfer_ready_q = false;
-#endif
+//#endif
 			}
 			return USB_ERR_SUCCESS;
 
@@ -233,7 +234,10 @@ static int get_ed_from_ready_q(struct ed **get_ed, bool	is_periodic)
 			} else {
 				otg_list_pop(qlist);
 				nonperiodic_trans_ready_q.entity_num--;
+/* otg: when removing ED from readyQ also set flag */
+//#ifdef CONFIG_AGNI_PURECM_MODE
 				get_ed[0]->ed_status.is_in_transfer_ready_q = false;
+//#endif
 			}
 			return USB_ERR_SUCCESS;
 		} else
