@@ -59,9 +59,11 @@
 #include "f_mtp.c"
 #endif
 #include "f_accessory.c"
+#ifdef CONFIG_USB_HID_KBD_MOUSE_ROLE
 #include "f_hid.h"
 #include "f_hid_android_keyboard.c"
 #include "f_hid_android_mouse.c"
+#endif
 #define USB_ETH_RNDIS y
 #include "f_rndis.c"
 #include "rndis.c"
@@ -1087,6 +1089,7 @@ static struct android_usb_function audio_source_function = {
 	.attributes	= audio_source_function_attributes,
 };
 
+#ifdef CONFIG_USB_HID_KBD_MOUSE_ROLE
 static int hid_function_init(struct android_usb_function *f, struct usb_composite_dev *cdev)
 {
 	return ghid_setup(cdev->gadget, 2);
@@ -1121,6 +1124,7 @@ static struct android_usb_function hid_function = {
 	.cleanup	= hid_function_cleanup,
 	.bind_config	= hid_function_bind_config,
 };
+#endif
 
 static struct android_usb_function *supported_functions[] = {
 	&adb_function,
@@ -1131,15 +1135,14 @@ static struct android_usb_function *supported_functions[] = {
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	&ncm_function,
 #endif
-#ifdef CONFIG_USB_ANDROID_SAMSUNG_SIDESYNC
-	&conn_gadget_function,
-#endif
 	&mass_storage_function,
 	&accessory_function,
 	&diag_function,
 	&dm_function,
 	&audio_source_function,
+#ifdef CONFIG_USB_HID_KBD_MOUSE_ROLE
 	&hid_function,
+#endif
 	NULL
 };
 
@@ -1335,8 +1338,10 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 		}
 	}
 
+#ifdef CONFIG_USB_HID_KBD_MOUSE_ROLE
 	/* HID driver always enabled, it's the whole point of this kernel patch */
 	android_enable_function(dev, "hid");
+#endif
 
 	mutex_unlock(&dev->mutex);
 

@@ -1025,6 +1025,14 @@ config USB_G_ANDROID
 	  The functions can be configured via a board file and may be
 	  enabled and disabled dynamically.
 
+config USB_HID_KBD_MOUSE_ROLE
+	depends on USB_G_ANDROID
+	bool "USB HID Keyboard/Mouse ROLE support"
+	default y
+	help
+	   Implement USB HID Keyboard/Mouse ROLE support for Android device (https://github.com/pelya/android-keyboard-gadget)
+           Needs supported APK from: https://raw.githubusercontent.com/pelya/android-keyboard-gadget/master/USB-Keyboard.apk
+
 config USB_ANDROID_SAMSUNG_COMPOSITE
 	boolean "Samsung Composite function"
 	depends on USB_G_ANDROID && !AGNI_PURECM_MODE

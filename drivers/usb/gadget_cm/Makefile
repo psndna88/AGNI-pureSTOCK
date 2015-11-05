@@ -51,8 +51,12 @@ g_dbgp-y			:= dbgp.o
 g_nokia-y			:= nokia.o
 g_webcam-y			:= webcam.o
 g_ncm-y				:= ncm.o
+ifeq ($(CONFIG_USB_HID_KBD_MOUSE_ROLE), y)
 g_android-y			:= android.o f_hid.o
+else
+g_android-y			:= android.o
 g_slp-y				:= slp.o
+endif
 
 obj-$(CONFIG_USB_ZERO)		+= g_zero.o
 obj-$(CONFIG_USB_AUDIO)		+= g_audio.o
