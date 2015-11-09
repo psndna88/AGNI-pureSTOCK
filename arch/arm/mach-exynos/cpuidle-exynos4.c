@@ -90,7 +90,7 @@ struct check_device_op {
 };
 
 #ifdef CONFIG_MACH_MIDAS
-unsigned int log_en = 0;
+unsigned int log_en = 1;
 #else
 unsigned int log_en;
 #endif

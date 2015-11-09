@@ -22,7 +22,7 @@
 #include <linux/mfd/max77693.h>
 #include <linux/mfd/max77693-private.h>
 
-#define SEC_DEBUG_VIB 0
+#define SEC_DEBUG_VIB
 
 struct max77693_haptic_data {
 	struct max77693_dev *max77693;
@@ -104,7 +104,7 @@ static void haptic_enable(struct timed_output_dev *tout_dev, int value)
 			HRTIMER_MODE_REL);
 	}
 	spin_unlock_irqrestore(&hap_data->lock, flags);
-#if SEC_DEBUG_VIB
+#ifdef SEC_DEBUG_VIB
 	printk(KERN_DEBUG "[VIB] haptic_enable is called\n");
 #endif
 }
@@ -184,7 +184,7 @@ static void haptic_work(struct work_struct *work)
 
 		hap_data->running = false;
 	}
-#if SEC_DEBUG_VIB
+#ifdef SEC_DEBUG_VIB
 	printk(KERN_DEBUG "[VIB] haptic_work is called\n");
 #endif
 	return;
@@ -226,7 +226,7 @@ void vibtonz_en(bool en)
 
 		g_hap_data->running = false;
 	}
-#if SEC_DEBUG_VIB
+#ifdef SEC_DEBUG_VIB
 	printk(KERN_DEBUG "[VIB] vibtonz_en is called\n");
 #endif
 }
@@ -256,7 +256,7 @@ void vibtonz_pwm(int nForce)
 		prev_duty = pwm_duty;
 		pwm_config(g_hap_data->pwm, pwm_duty, pwm_period);
 	}
-#if SEC_DEBUG_VIB
+#ifdef SEC_DEBUG_VIB
 	printk(KERN_DEBUG "[VIB] vibtonz_pwm is called(%d)\n", nForce);
 #endif
 }
