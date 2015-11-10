@@ -97,7 +97,8 @@ static inline void bfq_update_budget(struct bfq_entity *next_in_service)
  * Shift for timestamp calculations.  This actually limits the maximum
  * service allowed in one timestamp delta (small shift values increase it),
  * the maximum total weight that can be used for the queues in the system
- * (big shift values increase it), and the period of virtual time wraparounds.
+ * (big shift values increase it), and the period of virtual time
+ * wraparounds.
  */
 #define WFQ_SERVICE_SHIFT	22
 
@@ -329,8 +330,18 @@ up:
 	goto up;
 }
 
+static void bfq_weights_tree_add(struct bfq_data *bfqd,
+				 struct bfq_entity *entity,
+				 struct rb_root *root);
+
+static void bfq_weights_tree_remove(struct bfq_data *bfqd,
+				    struct bfq_entity *entity,
+				    struct rb_root *root);
+
+
 /**
- * bfq_active_insert - insert an entity in the active tree of its group/device.
+ * bfq_active_insert - insert an entity in the active tree of its
+ *                     group/device.
  * @st: the service tree of the entity.
  * @entity: the entity being inserted.
  *
@@ -344,6 +355,11 @@ static void bfq_active_insert(struct bfq_service_tree *st,
 {
 	struct bfq_queue *bfqq = bfq_entity_to_bfqq(entity);
 	struct rb_node *node = &entity->rb_node;
+#ifdef CONFIG_CGROUP_BFQIO
+	struct bfq_sched_data *sd = NULL;
+	struct bfq_group *bfqg = NULL;
+	struct bfq_data *bfqd = NULL;
+#endif
 
 	bfq_insert(&st->active, entity);
 
@@ -354,17 +370,36 @@ static void bfq_active_insert(struct bfq_service_tree *st,
 
 	bfq_update_active_tree(node);
 
+#ifdef CONFIG_CGROUP_BFQIO
+	sd = entity->sched_data;
+	bfqg = container_of(sd, struct bfq_group, sched_data);
+	BUG_ON(!bfqg);
+	bfqd = (struct bfq_data *)bfqg->bfqd;
+#endif
 	if (bfqq != NULL)
 		list_add(&bfqq->bfqq_list, &bfqq->bfqd->active_list);
+#ifdef CONFIG_CGROUP_BFQIO
+	else { /* bfq_group */
+		BUG_ON(!bfqd);
+		bfq_weights_tree_add(bfqd, entity, &bfqd->group_weights_tree);
+	}
+	if (bfqg != bfqd->root_group) {
+		BUG_ON(!bfqg);
+		BUG_ON(!bfqd);
+		bfqg->active_entities++;
+		if (bfqg->active_entities == 2)
+			bfqd->active_numerous_groups++;
+	}
+#endif
 }
 
 /**
  * bfq_ioprio_to_weight - calc a weight from an ioprio.
  * @ioprio: the ioprio value to convert.
  */
-static unsigned short bfq_ioprio_to_weight(int ioprio)
+static inline unsigned short bfq_ioprio_to_weight(int ioprio)
 {
-	WARN_ON(ioprio < 0 || ioprio >= IOPRIO_BE_NR);
+	BUG_ON(ioprio < 0 || ioprio >= IOPRIO_BE_NR);
 	return IOPRIO_BE_NR - ioprio;
 }
 
@@ -376,9 +411,9 @@ static unsigned short bfq_ioprio_to_weight(int ioprio)
  * 0 is used as an escape ioprio value for weights (numerically) equal or
  * larger than IOPRIO_BE_NR
  */
-static unsigned short bfq_weight_to_ioprio(int weight)
+static inline unsigned short bfq_weight_to_ioprio(int weight)
 {
-	WARN_ON(weight < BFQ_MIN_WEIGHT || weight > BFQ_MAX_WEIGHT);
+	BUG_ON(weight < BFQ_MIN_WEIGHT || weight > BFQ_MAX_WEIGHT);
 	return IOPRIO_BE_NR - weight < 0 ? 0 : IOPRIO_BE_NR - weight;
 }
 
@@ -433,6 +468,11 @@ static void bfq_active_extract(struct bfq_service_tree *st,
 {
 	struct bfq_queue *bfqq = bfq_entity_to_bfqq(entity);
 	struct rb_node *node;
+#ifdef CONFIG_CGROUP_BFQIO
+	struct bfq_sched_data *sd = NULL;
+	struct bfq_group *bfqg = NULL;
+	struct bfq_data *bfqd = NULL;
+#endif
 
 	node = bfq_find_deepest(&entity->rb_node);
 	bfq_extract(&st->active, entity);
@@ -440,8 +480,31 @@ static void bfq_active_extract(struct bfq_service_tree *st,
 	if (node != NULL)
 		bfq_update_active_tree(node);
 
+#ifdef CONFIG_CGROUP_BFQIO
+	sd = entity->sched_data;
+	bfqg = container_of(sd, struct bfq_group, sched_data);
+	BUG_ON(!bfqg);
+	bfqd = (struct bfq_data *)bfqg->bfqd;
+#endif
 	if (bfqq != NULL)
 		list_del(&bfqq->bfqq_list);
+#ifdef CONFIG_CGROUP_BFQIO
+	else { /* bfq_group */
+		BUG_ON(!bfqd);
+		bfq_weights_tree_remove(bfqd, entity,
+					&bfqd->group_weights_tree);
+	}
+	if (bfqg != bfqd->root_group) {
+		BUG_ON(!bfqg);
+		BUG_ON(!bfqd);
+		BUG_ON(!bfqg->active_entities);
+		bfqg->active_entities--;
+		if (bfqg->active_entities == 1) {
+			BUG_ON(!bfqd->active_numerous_groups);
+			bfqd->active_numerous_groups--;
+		}
+	}
+#endif
 }
 
 /**
@@ -537,21 +600,41 @@ __bfq_entity_update_weight_prio(struct bfq_service_tree *old_st,
 
 	if (entity->ioprio_changed) {
 		struct bfq_queue *bfqq = bfq_entity_to_bfqq(entity);
+		unsigned short prev_weight, new_weight;
+		struct bfq_data *bfqd = NULL;
+		struct rb_root *root;
+#ifdef CONFIG_CGROUP_BFQIO
+		struct bfq_sched_data *sd;
+		struct bfq_group *bfqg;
+#endif
+
+		if (bfqq != NULL)
+			bfqd = bfqq->bfqd;
+#ifdef CONFIG_CGROUP_BFQIO
+		else {
+			sd = entity->my_sched_data;
+			bfqg = container_of(sd, struct bfq_group, sched_data);
+			BUG_ON(!bfqg);
+			bfqd = (struct bfq_data *)bfqg->bfqd;
+			BUG_ON(!bfqd);
+		}
+#endif
 
 		BUG_ON(old_st->wsum < entity->weight);
 		old_st->wsum -= entity->weight;
 
 		if (entity->new_weight != entity->orig_weight) {
+			if (entity->new_weight < BFQ_MIN_WEIGHT ||
+			    entity->new_weight > BFQ_MAX_WEIGHT) {
+				printk(KERN_CRIT "update_weight_prio: "
+						 "new_weight %d\n",
+					entity->new_weight);
+				BUG();
+			}
 			entity->orig_weight = entity->new_weight;
 			entity->ioprio =
 				bfq_weight_to_ioprio(entity->orig_weight);
-		} else if (entity->new_ioprio != entity->ioprio) {
-			entity->ioprio = entity->new_ioprio;
-			entity->orig_weight =
-					bfq_ioprio_to_weight(entity->ioprio);
-		} else
-			entity->new_weight = entity->orig_weight =
-				bfq_ioprio_to_weight(entity->ioprio);
+		}
 
 		entity->ioprio_class = entity->new_ioprio_class;
 		entity->ioprio_changed = 0;
@@ -564,8 +647,31 @@ __bfq_entity_update_weight_prio(struct bfq_service_tree *old_st,
 		 * when entity->finish <= old_st->vtime).
 		 */
 		new_st = bfq_entity_service_tree(entity);
-		entity->weight = entity->orig_weight *
-			(bfqq != NULL ? bfqq->raising_coeff : 1);
+
+		prev_weight = entity->weight;
+		new_weight = entity->orig_weight *
+			     (bfqq != NULL ? bfqq->wr_coeff : 1);
+		/*
+		 * If the weight of the entity changes, remove the entity
+		 * from its old weight counter (if there is a counter
+		 * associated with the entity), and add it to the counter
+		 * associated with its new weight.
+		 */
+		if (prev_weight != new_weight) {
+			root = bfqq ? &bfqd->queue_weights_tree :
+				      &bfqd->group_weights_tree;
+			bfq_weights_tree_remove(bfqd, entity, root);
+		}
+		entity->weight = new_weight;
+		/*
+		 * Add the entity to its weights tree only if it is
+		 * not associated with a weight-raised queue.
+		 */
+		if (prev_weight != new_weight &&
+		    (bfqq ? bfqq->wr_coeff == 1 : 1))
+			/* If we get here, root has been initialized. */
+			bfq_weights_tree_add(bfqd, entity, root);
+
 		new_st->wsum += entity->weight;
 
 		if (new_st != old_st)
@@ -576,7 +682,8 @@ __bfq_entity_update_weight_prio(struct bfq_service_tree *old_st,
 }
 
 /**
- * bfq_bfqq_served - update the scheduler status after selection for service.
+ * bfq_bfqq_served - update the scheduler status after selection for
+ *                   service.
  * @bfqq: the queue being served.
  * @served: bytes to transfer.
  *
@@ -715,7 +822,7 @@ static void bfq_activate_entity(struct bfq_entity *entity)
  * and if the caller did not specify @requeue, put it on the idle tree.
  *
  * Return %1 if the caller should update the entity hierarchy, i.e.,
- * if the entity was under service or if it was the next_in_service for
+ * if the entity was in service or if it was the next_in_service for
  * its sched_data; return %0 otherwise.
  */
 static int __bfq_deactivate_entity(struct bfq_entity *entity, int requeue)
@@ -771,7 +878,7 @@ static void bfq_deactivate_entity(struct bfq_entity *entity, int requeue)
 			/*
 			 * The parent entity is still backlogged, and
 			 * we don't need to update it as it is still
-			 * under service.
+			 * in service.
 			 */
 			break;
 
@@ -812,7 +919,7 @@ update:
  * active tree of the device is not empty.
  *
  * NOTE: this hierarchical implementation updates vtimes quite often,
- * we may end up with reactivated tasks getting timestamps after a
+ * we may end up with reactivated processes getting timestamps after a
  * vtime skip done because we needed a ->first_active entity on some
  * intermediate node.
  */
@@ -835,8 +942,8 @@ static void bfq_update_vtime(struct bfq_service_tree *st)
  *
  * This function searches the first schedulable entity, starting from the
  * root of the tree and going on the left every time on this side there is
- * a subtree with at least one eligible (start >= vtime) entity.  The path
- * on the right is followed only if a) the left subtree contains no eligible
+ * a subtree with at least one eligible (start >= vtime) entity. The path on
+ * the right is followed only if a) the left subtree contains no eligible
  * entities and b) no eligible entity has been found yet.
  */
 static struct bfq_entity *bfq_first_active_entity(struct bfq_service_tree *st)
@@ -1021,8 +1128,22 @@ static void bfq_del_bfqq_busy(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 
 	BUG_ON(bfqd->busy_queues == 0);
 	bfqd->busy_queues--;
-	if (bfqq->raising_coeff > 1)
-		bfqd->raised_busy_queues--;
+
+	if (!bfqq->dispatched) {
+		bfq_weights_tree_remove(bfqd, &bfqq->entity,
+					&bfqd->queue_weights_tree);
+		if (!blk_queue_nonrot(bfqd->queue)) {
+			BUG_ON(!bfqd->busy_in_flight_queues);
+			bfqd->busy_in_flight_queues--;
+			if (bfq_bfqq_constantly_seeky(bfqq)) {
+				BUG_ON(!bfqd->
+					const_seeky_busy_in_flight_queues);
+				bfqd->const_seeky_busy_in_flight_queues--;
+			}
+		}
+	}
+	if (bfqq->wr_coeff > 1)
+		bfqd->wr_busy_queues--;
 
 	bfq_deactivate_bfqq(bfqd, bfqq, requeue);
 }
@@ -1041,6 +1162,17 @@ static void bfq_add_bfqq_busy(struct bfq_data *bfqd, struct bfq_queue *bfqq)
 
 	bfq_mark_bfqq_busy(bfqq);
 	bfqd->busy_queues++;
-	if (bfqq->raising_coeff > 1)
-		bfqd->raised_busy_queues++;
+
+	if (!bfqq->dispatched) {
+		if (bfqq->wr_coeff == 1)
+			bfq_weights_tree_add(bfqd, &bfqq->entity,
+					     &bfqd->queue_weights_tree);
+		if (!blk_queue_nonrot(bfqd->queue)) {
+			bfqd->busy_in_flight_queues++;
+			if (bfq_bfqq_constantly_seeky(bfqq))
+				bfqd->const_seeky_busy_in_flight_queues++;
+		}
+	}
+	if (bfqq->wr_coeff > 1)
+		bfqd->wr_busy_queues++;
 }
