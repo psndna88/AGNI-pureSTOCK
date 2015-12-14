@@ -163,12 +163,16 @@ enum {
 #define TSP_CMD_PARAM_NUM 8
 #endif /* SEC_TSP_FACTORY_TEST */
 
+#ifndef CONFIG_AGNI_PURECM_MODE
 /* Touch booster */
 #if defined(CONFIG_EXYNOS4_CPUFREQ) &&\
 	defined(CONFIG_BUSFREQ_OPP)
 #define TOUCH_BOOSTER			1
 #define TOUCH_BOOSTER_OFF_TIME		100
 #define TOUCH_BOOSTER_CHG_TIME		200
+#else
+#define TOUCH_BOOSTER			0
+#endif
 #else
 #define TOUCH_BOOSTER			0
 #endif
