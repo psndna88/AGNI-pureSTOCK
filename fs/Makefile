@@ -83,7 +83,11 @@ obj-$(CONFIG_BFS_FS)		+= bfs/
 obj-$(CONFIG_ISO9660_FS)	+= isofs/
 obj-$(CONFIG_HFSPLUS_FS)	+= hfsplus/ # Before hfs to find wrapped HFS+
 obj-$(CONFIG_HFS_FS)		+= hfs/
+ifeq ($(CONFIG_AGNI_PURECM_MODE),y)
+obj-$(CONFIG_ECRYPT_FS)		+= ecryptfs_cm/
+else
 obj-$(CONFIG_ECRYPT_FS)		+= ecryptfs/
+endif
 obj-$(CONFIG_SDCARD_FS)		+= sdcardfs/
 obj-$(CONFIG_SDCARD_FS_JB)	+= sdcardfsjb/
 obj-$(CONFIG_SDCARD_FS_LP)	+= sdcardfslp/
