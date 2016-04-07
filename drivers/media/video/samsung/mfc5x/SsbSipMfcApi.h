@@ -41,7 +41,11 @@
 #define SAMSUNG_MFC_DEV_NAME           "/dev/s3c-mfc"
 
 #if defined(CONFIG_CPU_EXYNOS4212) || defined(CONFIG_CPU_EXYNOS4412)
+#if defined(CONFIG_AGNI_PURECM_MODE)
 #define SUPPORT_SLICE_ENCODING        0 // originally 1, but we're missing matching userspace
+#else
+#define SUPPORT_SLICE_ENCODING        1
+#endif
 #else
 #define SUPPORT_SLICE_ENCODING        0
 #endif
