@@ -1914,7 +1914,7 @@ endchoice
 
 config CMDLINE_FIXUP
        bool "Append missing parameter to bootloader kernel arguments"
-       depends on MACH_M0 && !AGNI_PURECM_MODE
+       depends on MACH_MIDAS && !AGNI_PURECM_MODE
        default y
        help
          The missing parameter will be appended to the

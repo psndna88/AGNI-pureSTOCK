@@ -72,7 +72,7 @@ static void battery_error_control(struct battery_info *info);
 
 /* Get LP charging mode state */
 unsigned int lpcharge;
-#if defined (CONFIG_MACH_M0) && defined (CONFIG_AGNI_PURECM_MODE)
+#if !defined (CONFIG_MACH_T0) && defined (CONFIG_AGNI_PURECM_MODE)
 static int battery_get_lpm_state(char *str)
 {
 	if (strncmp(str, "1", 1) == 0)
