@@ -24,13 +24,13 @@ echo "Building N7105 CM .....";
 ./build_kernel_CM_n7105.sh && sleep 10 && rm .config;
 mv BUILT_*/ ../BUILT_OUTPUTS/
 
-#echo "Building I605 ....."; # dropped support
-#./build_kernel_i605.sh && sleep 10 && rm .config;
-#mv BUILT_*/ ../BUILT_OUTPUTS/
+echo "Building I605 .....";
+./build_kernel_i605.sh && sleep 10 && rm .config;
+mv BUILT_*/ ../BUILT_OUTPUTS/
 
-#echo "Building I605 CM ....."; # dropped support
-#./build_kernel_CM_i605.sh && sleep 10 && rm .config;
-#mv BUILT_*/ ../BUILT_OUTPUTS/
+echo "Building I605 CM .....";
+./build_kernel_CM_i605.sh && sleep 10 && rm .config;
+mv BUILT_*/ ../BUILT_OUTPUTS/
 
 echo "Building I9300 .....";
 ./build_kernel_i9300.sh && sleep 10 && rm .config;
