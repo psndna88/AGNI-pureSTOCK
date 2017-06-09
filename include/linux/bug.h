@@ -2,6 +2,7 @@
 #define _LINUX_BUG_H
 
 #include <asm/bug.h>
+#include <linux/compiler.h>
 
 enum bug_trap_type {
 	BUG_TRAP_TYPE_NONE = 0,
@@ -35,4 +36,10 @@ static inline enum bug_trap_type report_bug(unsigned long bug_addr,
 }
 
 #endif	/* CONFIG_GENERIC_BUG */
+
+#ifdef CONFIG_PANIC_ON_DATA_CORRUPTION
+#define PANIC_CORRUPTION 1
+#else
+#define PANIC_CORRUPTION 0
+#endif  /* CONFIG_PANIC_ON_DATA_CORRUPTION */
 #endif	/* _LINUX_BUG_H */

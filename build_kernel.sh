@@ -1,29 +1,41 @@
 #!/bin/sh
 export KERNELDIR=`readlink -f .`
-CROSS_COMPILE=/Working_Directory/android_prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
+. ~/WORKING_DIRECTORY/AGNi_stamp_STOCK.sh
+#. ~/WORKING_DIRECTORY/gcc-4.9-uber_arm-eabi.sh
+. ~/WORKING_DIRECTORY/gcc-6.x-uber_arm-eabi.sh
 
-export KBUILD_BUILD_USER=AGNi
-export KBUILD_BUILD_HOST=PSN-pureSTOCK
+echo ""
+echo " Cross-compiling AGNi P3100 pureSTOCK-KK-4.1.2 kernel ..."
+echo ""
 
+cd $KERNELDIR/
 
 if [ ! -f $KERNELDIR/.config ];
 then
-  make defconfig android_espresso_omap4430_r04_user_defconfig
+    make agni_p3100_defconfig
 fi
 
-. $KERNELDIR/.config
+mv .git .git-halt
+make -j3 || exit 1
+mv .git-halt .git
 
-export ARCH=arm
 
-cd $KERNELDIR/
-nice -n 10 make -j4 || exit 1
+rm -rf $KERNELDIR/BUILT-P3100
+mkdir -p $KERNELDIR/BUILT-P3100/lib/modules
 
-mkdir -p $KERNELDIR/BUILT/lib/modules
+echo ""
+echo "BEGINING SGX540 PVR KM COMPILATION ..........."
+cd $KERNELDIR/pvr_source/eurasiacon/build/linux2/omap4430_android
+make clean
+make TARGET_PRODUCT="blaze_tablet" BUILD=release TARGET_SGX=540 PLATFORM_VERSION=4.1.2 || exit
+mv $KERNELDIR/pvr_source/eurasiacon/binary2_540_120_omap4430_android_release/target/*.ko $KERNELDIR/BUILT-P3100/lib/modules/
+make clean
+rm -rf $KERNELDIR/pvr_source/eurasiacon/binary2_540_120_omap4430_android_release
 
-rm $KERNELDIR/BUILT/lib/modules/*
-rm $KERNELDIR/BUILT/zImage
+mv $KERNELDIR/arch/arm/boot/zImage $KERNELDIR/BUILT-P3100/
+cd $KERNELDIR; find -name '*.ko' -exec mv -v {} $KERNELDIR/BUILT-P3100/lib/modules/ \;
 
-find -name '*.ko' -exec cp -av {} $KERNELDIR/BUILT/lib/modules/ \;
-/Working_Directory/android_prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-strip --strip-unneeded $KERNELDIR/BUILT/lib/modules/*
-cp $KERNELDIR/arch/arm/boot/zImage $KERNELDIR/BUILT/
+
+echo ""
+echo "AGNi pureSTOCK-KK-4.1.2 has been built for P3100 !!!"
 
